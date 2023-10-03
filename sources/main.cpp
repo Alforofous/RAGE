@@ -6,6 +6,14 @@ static void error_callback(int error, const char *description)
 	fprintf(stderr, "Error: %s\n", description);
 }
 
+class RAGE_window
+{
+public:
+	RAGE_window();
+private:
+
+};
+
 int main(void)
 {
 	if (glfwInit() == GLFW_FALSE)
