@@ -1,28 +1,20 @@
-#include "GLFW/glfw3.h"
 #include <stdio.h>
+#include "RAGE.hpp"
 
 static void error_callback(int error, const char *description)
 {
 	fprintf(stderr, "Error: %s\n", description);
 }
 
-class RAGE_window
-{
-public:
-	RAGE_window();
-private:
-
-};
-
 int main(void)
 {
+	RAGE *rage = new RAGE();
 	if (glfwInit() == GLFW_FALSE)
 		return (1);
-	GLFWmonitor	*primary_monitor = glfwGetPrimaryMonitor();
-	const GLFWvidmode *mode = glfwGetVideoMode(primary_monitor);
-	GLFWwindow	*glfw_window = glfwCreateWindow(mode->width, mode->height, "RAGE", NULL, NULL);
+	if (rage->window->Init() == -1)
+		return (1);
 	glfwSetErrorCallback(error_callback);
-	while (!glfwWindowShouldClose(glfw_window))
+	while (!glfwWindowShouldClose(rage->window->window))
 	{
 		glfwPollEvents();
 	}
