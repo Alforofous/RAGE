@@ -6,6 +6,7 @@ set(SOURCES_DIRECTORY "./sources/")
 
 set(SOURCES
 	main.cpp
+	RAGE_window.cpp
 )
 
 list(TRANSFORM SOURCES PREPEND ${SOURCES_DIRECTORY})
