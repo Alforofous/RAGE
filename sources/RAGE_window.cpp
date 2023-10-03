@@ -12,6 +12,7 @@ int RAGE_window::Init()
 	window = glfwCreateWindow(mode->width, mode->height, "RAGE", NULL, NULL);
 	if (window == NULL)
 		return (-1);
+	return (1);
 }
 
 RAGE_window::~RAGE_window()

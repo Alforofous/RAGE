@@ -5,8 +5,9 @@
 class RAGE
 {
 public:
+	RAGE_window	*window;
 	RAGE();
-	RAGE_window *window;
+	void exit_program(char *exit_message, int exit_code);
 private:
 
 };
