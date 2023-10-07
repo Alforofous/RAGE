@@ -25,8 +25,8 @@ set(
 
 set(
 	SHADERS
-	test.frag
-	test.vert
+	fragment_test.glsl
+	vertex_test.glsl
 )
 
 set(GLAD_C_FILE libraries/glad/glad.c)
