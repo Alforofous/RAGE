@@ -47,7 +47,7 @@ static const struct
 {
 	{ -0.6f, -0.4f, 1.f, 0.f, 0.f },
 	{  1.6f, -0.4f, 0.f, 1.f, 0.f },
-	{   0.f,  0.6f, 0.f, 0.f, 1.f }
+	{  0.0f,  0.6f, 0.f, 0.f, 1.f }
 };
 
 static void error_callback(int error, const char *description)
@@ -93,7 +93,7 @@ int main(void)
 
 	// NOTE: OpenGL error checks have been omitted for brevity
 
-	ShaderLoader shaderLoader("C:/Users/david/Workspace/RAGE/shaders/test.vert", "C:/Users/david/Workspace/RAGE/shaders/test.frag");
+	ShaderLoader shaderLoader("../shaders/vertex_test.glsl", "../shaders/fragment_test.glsl");
 
 	glGenBuffers(1, &vertex_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
@@ -111,20 +111,18 @@ int main(void)
 	glVertexAttribPointer(vcol_location, 3, GL_FLOAT, GL_FALSE,
 		sizeof(vertices[0]), (void *)(sizeof(float) * 2));
 
+	int	width;
+	int	height;
+	glfwGetFramebufferSize(window, &width, &height);
+	glViewport(0, 0, width, height);
+	float ratio = width / (float)height;
+	glm::mat4 projection_matrix = glm::ortho(-ratio, ratio, -1.0f, 1.0f, 1.0f, -1.0f);
 	while (!glfwWindowShouldClose(window))
 	{
-		float ratio;
-		int width, height;
 		glm::mat4 matrix(1.0f);
-
-		glfwGetFramebufferSize(window, &width, &height);
-		ratio = width / (float)height;
-
-		glViewport(0, 0, width, height);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		matrix = glm::rotate(matrix, (float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 1.0f));
-		glm::mat4 projection_matrix = glm::ortho(-ratio, ratio, -1.0f, 1.0f, 1.0f, -1.0f);
+		matrix = glm::rotate(matrix, (float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.3f));
 		glm::mat4 product_matrix = matrix * projection_matrix;
 
 		glUniformMatrix4fv(mvp_location, 1, GL_FALSE, glm::value_ptr(product_matrix));
