@@ -14,6 +14,9 @@ set(
 	utility_functions.cpp
 	RAGE.cpp
 	RAGE_window.cpp
+	RAGE_camera.cpp
+	RAGE_object.cpp
+	RAGE_transform.cpp
 )
 
 set(
@@ -21,6 +24,9 @@ set(
 	RAGE.hpp
 	RAGE_window.hpp
 	ShaderLoader.hpp
+	RAGE_camera.hpp
+	RAGE_object.hpp
+	RAGE_transform.hpp
 )
 
 set(

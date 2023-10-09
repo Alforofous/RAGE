@@ -9,7 +9,7 @@ int RAGE_window::Init()
 	mode = glfwGetVideoMode(primary_monitor);
 	if (mode == NULL)
 		return (-1);
-	glfw_window = glfwCreateWindow(mode->width, mode->height, "RAGE", NULL, NULL);
+	glfw_window = glfwCreateWindow(mode->width / 2, mode->height / 2, "RAGE", NULL, NULL);
 	if (glfw_window == NULL)
 		return (-1);
 	return (1);
