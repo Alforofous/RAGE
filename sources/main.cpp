@@ -1,9 +1,10 @@
-/*
+
 #define GLFW_INCLUDE_NONE
 #include "RAGE.hpp"
 #include "glad/glad.h"
 #include "glm/glm.hpp"
 #include <iostream>
+#include "ShaderLoader.hpp"
 
 static void error_callback(int error, const char *description)
 {
@@ -17,19 +18,39 @@ int main(void)
 		return (1);
 	if (rage->window->Init() == -1)
 		return (1);
+
+	/*Load GL*/
 	glfwSetErrorCallback(error_callback);
+	glfwMakeContextCurrent(rage->window->glfw_window);
+	gladLoadGL();
+
+	/*Load shaders*/
+	ShaderLoader shaderLoader("../shaders/vertex_test.glsl", "../shaders/fragment_test.glsl");
+
+	/*Load viewport and start using shader program*/
 	glViewport(0, 0, rage->window->mode->width, rage->window->mode->height);
-	while (!glfwWindowShouldClose(rage->window->window))
+	glUseProgram(shaderLoader.hProgram);
+
+	/*Set GLSL variable locations*/
+	int resolutionLocation = glGetUniformLocation(shaderLoader.hProgram, "u_resolution");
+
+	int width;
+	int height;
+	while (!glfwWindowShouldClose(rage->window->glfw_window))
 	{
-		glClearColor(1.0f, 0.3f, 0.3f, 1.0f);
+		glfwGetWindowSize(rage->window->glfw_window, &width, &height);
+		glUniform2f(resolutionLocation, (float)width, (float)height);
 		glClear(GL_COLOR_BUFFER_BIT);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
 		glfwPollEvents();
-		glfwSwapBuffers(rage->window->window);
+		glfwSwapBuffers(rage->window->glfw_window);
 	}
+	delete rage;
 	glfwTerminate();
 	return (0);
 }
-*/
+
+/*
 
 #define GLFW_INCLUDE_NONE
 #include "glad/glad.h"
@@ -102,6 +123,7 @@ int main(void)
 	mvp_location = glGetUniformLocation(shaderLoader.hProgram, "MVP");
 	vpos_location = glGetAttribLocation(shaderLoader.hProgram, "vPos");
 	vcol_location = glGetAttribLocation(shaderLoader.hProgram, "vCol");
+	GLint resolution = glGetAttribLocation(shaderLoader.hProgram, "u_resolution");
 	glUseProgram(shaderLoader.hProgram);
 
 	glEnableVertexAttribArray(vpos_location);
@@ -119,6 +141,7 @@ int main(void)
 	glm::mat4 projection_matrix = glm::ortho(-ratio, ratio, -1.0f, 1.0f, 1.0f, -1.0f);
 	while (!glfwWindowShouldClose(window))
 	{
+		glUniform2f(resolution, (float)width, (float)height);
 		glm::mat4 matrix(1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -137,3 +160,4 @@ int main(void)
 	glfwTerminate();
 	exit(EXIT_SUCCESS);
 }
+*/

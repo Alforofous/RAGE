@@ -3,7 +3,7 @@
 class RAGE_window
 {
 public:
-	GLFWwindow			*window;
+	GLFWwindow			*glfw_window;
 	GLFWmonitor			*primary_monitor;
 	const GLFWvidmode	*mode;
 	~RAGE_window();
