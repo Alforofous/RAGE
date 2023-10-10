@@ -28,11 +28,14 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 		rage->camera->MoveLocaly(glm::vec3(0.0f, 0.0f, -1.0f));
 }
 
+#include <nanogui/nanogui.h>
+
 int main(void)
 {
-	RAGE	*rage = new RAGE();
+	RAGE	*rage;
 	if (glfwInit() == GLFW_FALSE)
 		return (1);
+	rage = new RAGE();
 	if (rage->window->Init() == -1)
 		return (1);
 
@@ -43,7 +46,7 @@ int main(void)
 	glfwSetCursorPosCallback(rage->window->glfw_window, cursor_position_callback);
 	glfwSetMouseButtonCallback(rage->window->glfw_window, mouse_button_callback);
 	glfwMakeContextCurrent(rage->window->glfw_window);
-	gladLoadGL();
+	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
 	/*Load shaders*/
 	ShaderLoader shaderLoader("../shaders/vertex_test.glsl", "../shaders/fragment_test.glsl");

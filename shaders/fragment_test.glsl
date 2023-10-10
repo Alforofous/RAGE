@@ -74,9 +74,8 @@ void main()
 	uv = uv * u_resolution / 100.0;
 
 	vec3	camPos = u_camera_position;
-	vec3	rayDir = get_ray(60.0f);
+	vec3	rayDir = vec3(uv.x, uv.y, 1.0);// get_ray(60.0f);
 	vec3	color = rayDir;
-
 	
 	Ray marched = march(camPos, rayDir);
 
