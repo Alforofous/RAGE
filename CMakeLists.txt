@@ -12,12 +12,13 @@ set(
 	SOURCES
 	main.cpp
 	utility_functions.cpp
+	set_callbacks.cpp
 	RAGE.cpp
 	RAGE_window.cpp
 	RAGE_camera.cpp
 	RAGE_object.cpp
 	RAGE_transform.cpp
-	set_callbacks.cpp
+	RAGE_gui.cpp
 )
 
 set(
@@ -28,6 +29,7 @@ set(
 	RAGE_camera.hpp
 	RAGE_object.hpp
 	RAGE_transform.hpp
+	RAGE_gui.hpp
 )
 
 set(
