@@ -17,6 +17,7 @@ set(
 	RAGE_camera.cpp
 	RAGE_object.cpp
 	RAGE_transform.cpp
+	set_callbacks.cpp
 )
 
 set(
