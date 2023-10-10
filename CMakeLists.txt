@@ -13,6 +13,7 @@ set(
 	main.cpp
 	utility_functions.cpp
 	set_callbacks.cpp
+	set_shader_variable_values.cpp
 	RAGE.cpp
 	RAGE_window.cpp
 	RAGE_camera.cpp
@@ -25,7 +26,7 @@ set(
 	INCLUDES
 	RAGE.hpp
 	RAGE_window.hpp
-	ShaderLoader.hpp
+	RAGE_shader.hpp
 	RAGE_camera.hpp
 	RAGE_object.hpp
 	RAGE_transform.hpp

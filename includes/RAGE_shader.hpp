@@ -8,22 +8,21 @@
 #include <string>
 #include <sstream>
 
-class ShaderLoader
+class RAGE_shader
 {
 public:
-	ShaderLoader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader);
-	~ShaderLoader();
-	GLuint hProgram;
-
+	GLuint	hProgram;
+	RAGE_shader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader);
+	~RAGE_shader();
+	std::map<std::string, int> variable_location;
+	void InitVariableLocations();
 private:
 	std::string ReadFile(const std::string& filePath);
 	GLuint CompileShader(GLuint type, const std::string& source);
 	void CreateShader(const std::string& vertexShader, const std::string& fragmentShader);
 };
 
-
-inline 
-ShaderLoader::ShaderLoader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader)
+inline RAGE_shader::RAGE_shader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader)
 {
 	std::string vertexShader = ReadFile(filePathVertexShader);
 	std::string fragmentShader = ReadFile(filePathFragmentShader);
@@ -31,9 +30,9 @@ ShaderLoader::ShaderLoader(const std::string& filePathVertexShader, const std::s
 	glUseProgram(hProgram);
 }
 
+#include "RAGE.hpp"
 
-inline 
-ShaderLoader::~ShaderLoader()
+inline RAGE_shader::~RAGE_shader()
 {
 	if (hProgram != 0)
 	{
@@ -41,8 +40,8 @@ ShaderLoader::~ShaderLoader()
 	}
 }
 
-inline 
-std::string ShaderLoader::ReadFile(const std::string& filePath) {
+inline std::string RAGE_shader::ReadFile(const std::string& filePath)
+{
 	std::ifstream fs(filePath, std::ios::in);
 
 	if (!fs.is_open()) {
@@ -61,8 +60,7 @@ std::string ShaderLoader::ReadFile(const std::string& filePath) {
 	return buffer.str();
 }
 
-inline 
-GLuint ShaderLoader::CompileShader(GLuint type, const std::string& source)
+inline GLuint RAGE_shader::CompileShader(GLuint type, const std::string& source)
 {
 	GLuint hShader = glCreateShader(type);
 
@@ -77,7 +75,7 @@ GLuint ShaderLoader::CompileShader(GLuint type, const std::string& source)
 	{
 		int length;
 		glGetShaderiv(hShader, GL_INFO_LOG_LENGTH, &length);
-		char* infoLog = (char*)alloca(length * sizeof(char));
+		char* infoLog = (char*)malloc(length * sizeof(char));
 		glGetShaderInfoLog(hShader, length, &length, infoLog);
 		std::cout << "Failed to compile shader!"
 			<< (type == GL_VERTEX_SHADER ? "vertex" : "fragment")
@@ -90,8 +88,7 @@ GLuint ShaderLoader::CompileShader(GLuint type, const std::string& source)
 	return hShader;
 }
 
-inline 
-void ShaderLoader::CreateShader(const std::string& vertexShader, const std::string& fragmentShader)
+inline void RAGE_shader::CreateShader(const std::string& vertexShader, const std::string& fragmentShader)
 {
 	GLuint vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
 	GLuint fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
@@ -110,7 +107,7 @@ void ShaderLoader::CreateShader(const std::string& vertexShader, const std::stri
 	{
 		int length;
 		glGetShaderiv(hProgram, GL_INFO_LOG_LENGTH, &length);
-		char* infoLog = (char*)alloca(length * sizeof(char));
+		char* infoLog = (char*)malloc(length * sizeof(char));
 		glGetShaderInfoLog(hProgram, length, &length, infoLog);
 		std::cout << "Failed to link vertex and fragment shader!"
 			<< std::endl;
@@ -124,4 +121,18 @@ void ShaderLoader::CreateShader(const std::string& vertexShader, const std::stri
 	glDeleteShader(fs);
 }
 
+//Initializes all the variables that shader uses and maps them into map<string, int>
+inline void RAGE_shader::InitVariableLocations()
+{
+	char	*variable_names[] =
+	{
+		"u_resolution",
+		"u_camera_position",
+		"u_camera_direction"
+	};
+	for each (char * variable_name in variable_names)
+	{
+		variable_location[variable_name] = glGetUniformLocation(hProgram, variable_name);
+	}
+}
 #endif

@@ -10,27 +10,28 @@ int main(void)
 	if (rage->window->Init() == -1)
 		return (1);
 
-	set_callbacks(rage);
 	glfwMakeContextCurrent(rage->window->glfw_window);
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-	ShaderLoader shaderLoader("../shaders/vertex_test.glsl", "../shaders/fragment_test.glsl");
+	rage->gui = new RAGE_gui(rage->window->glfw_window);
 
-	rage->nanogui_screen = new Screen();
-	rage->nanogui_screen->initialize(rage->window->glfw_window, true);
+	set_callbacks(rage);
 
 	bool bvar = true;
-	FormHelper *gui = new FormHelper(rage->nanogui_screen);
+	FormHelper *gui = new FormHelper(rage->gui->nano_screen);
 	ref<Window> nanoguiWindow = gui->addWindow(Eigen::Vector2i(10, 10), "Form helper example");
 	gui->addGroup("Basic types");
 	gui->addVariable("bool", bvar)->setTooltip("Test tooltip.");
 
-	rage->nanogui_screen->setVisible(true);
-	rage->nanogui_screen->performLayout();
+	rage->gui->nano_screen->setVisible(true);
+	rage->gui->nano_screen->performLayout();
 
 	/*Set GLSL variable locations*/
-	int resolutionLocation = glGetUniformLocation(shaderLoader.hProgram, "u_resolution");
-	int cameraPositionLocation = glGetUniformLocation(shaderLoader.hProgram, "u_camera_position");
-	int cameraDirectionLocation = glGetUniformLocation(shaderLoader.hProgram, "u_camera_direction");
+	rage->shader = new RAGE_shader("../shaders/vertex_test.glsl", "../shaders/fragment_test.glsl");
+	rage->shader->InitVariableLocations();
+
+	Widget	*widget = new Widget(rage->gui->nano_screen);
+	TextBox	textBox(widget, "Test");
+	textBox.setEnabled(true);
 
 	int width;
 	int height;
@@ -40,24 +41,14 @@ int main(void)
 		glfwPollEvents();
 		glfwGetWindowSize(rage->window->glfw_window, &width, &height);
 		glViewport(0, 0, width, height);
-		glUseProgram(shaderLoader.hProgram);
+		glUseProgram(rage->shader->hProgram);
 		glm::vec3 camera_rotation = rage->camera->GetRotation();
 		if (rage->camera->rotating_mode == true)
 			 rage->camera->SetRotation(camera_rotation + glm::vec3(0.1f, 0.0f, 0.0f));
-		glm::vec3 camera_direction;
-		camera_direction.x = cos(glm::radians(camera_rotation.y)) * cos(glm::radians(camera_rotation.x));
-		camera_direction.y = sin(glm::radians(camera_rotation.x));
-		camera_direction.z = sin(glm::radians(camera_rotation.y)) * cos(glm::radians(camera_rotation.x));
-		camera_direction = glm::vec3(0.0f, 0.0f, -1.0f);
-		glm::vec3 camera_position = rage->camera->GetPosition();
-		glUniform2f(resolutionLocation, (float)width, (float)height);
-		glUniform3f(cameraPositionLocation, camera_position.x, camera_position.y, camera_position.z);
-		glUniform3f(cameraDirectionLocation, camera_direction.x, camera_direction.y, camera_direction.z);
-		glClearColor(0.03f, 0.04f, 0.07f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		set_shader_variable_values(rage);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
-		rage->nanogui_screen->drawContents();
-		rage->nanogui_screen->drawWidgets();
+		rage->gui->nano_screen->drawContents();
+		rage->gui->nano_screen->drawWidgets();
 		glfwSwapBuffers(rage->window->glfw_window);
 	}
 	return (0);

@@ -8,24 +8,24 @@
 
 #include "RAGE_window.hpp"
 #include "RAGE_camera.hpp"
-
-#include "ShaderLoader.hpp"
+#include "RAGE_gui.hpp"
+#include "RAGE_shader.hpp"
 
 #include <iostream>
-
-using namespace nanogui;
 
 class RAGE
 {
 public:
 	RAGE_window	*window;
 	RAGE_camera	*camera;
+	RAGE_shader	*shader;
+	RAGE_gui	*gui;
 
 	RAGE();
 	~RAGE();
-	Screen *nanogui_screen;
 private:
 	void exit_program(char *exit_message, int exit_code);
 };
 
 void set_callbacks(RAGE *rage);
+void set_shader_variable_values(void *content);
