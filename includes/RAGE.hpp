@@ -8,10 +8,13 @@
 
 #include "RAGE_window.hpp"
 #include "RAGE_camera.hpp"
-#include "RAGE_gui.hpp"
 #include "RAGE_shader.hpp"
+#include "RAGE_gui.hpp"
+#include "RAGE_scene_view.hpp"
 
 #include <iostream>
+
+using namespace nanogui;
 
 class RAGE
 {

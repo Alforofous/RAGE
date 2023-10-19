@@ -1,5 +1,4 @@
-#include "RAGE_window.hpp"
-#include "GLFW/glfw3.h"
+#include "RAGE.hpp"
 
 int RAGE_window::Init()
 {

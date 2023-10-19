@@ -20,6 +20,7 @@ set(
 	RAGE_object.cpp
 	RAGE_transform.cpp
 	RAGE_gui.cpp
+	RAGE_scene_view.cpp
 )
 
 set(
@@ -31,6 +32,7 @@ set(
 	RAGE_object.hpp
 	RAGE_transform.hpp
 	RAGE_gui.hpp
+	RAGE_scene_view.hpp
 )
 
 set(
