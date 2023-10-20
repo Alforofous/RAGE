@@ -71,3 +71,24 @@ RAGE_scene_view::RAGE_scene_view(Widget *parent) : nanogui::GLCanvas(parent), mR
 	base_shader->uploadAttrib("position", positions);
 	base_shader->uploadAttrib("color", colors);
 }
+
+void RAGE_scene_view::drawGL()
+{
+	using namespace nanogui;
+
+	base_shader->bind();
+
+	Matrix4f mvp;
+	mvp.setIdentity();
+	float fTime = (float)glfwGetTime();
+	mvp.topLeftCorner<3, 3>() = Eigen::Matrix3f(Eigen::AngleAxisf(mRotation[0] * fTime, Vector3f::UnitX()) *
+		Eigen::AngleAxisf(mRotation[1] * fTime, Vector3f::UnitY()) *
+		Eigen::AngleAxisf(mRotation[2] * fTime, Vector3f::UnitZ())) * 0.25f;
+
+	base_shader->setUniform("modelViewProj", mvp);
+
+	glEnable(GL_DEPTH_TEST);
+	/* Draw 12 triangles starting at index 0 */
+	base_shader->drawIndexed(GL_TRIANGLES, 0, 12);
+	glDisable(GL_DEPTH_TEST);
+}
