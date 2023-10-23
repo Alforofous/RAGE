@@ -4,7 +4,6 @@
 #include "GLFW/glfw3.h"
 #include "glad/glad.h"
 #include "glm/glm.hpp"
-#include "nanogui/nanogui.h"
 
 #include "RAGE_window.hpp"
 #include "RAGE_camera.hpp"
@@ -13,8 +12,6 @@
 #include "RAGE_scene_view.hpp"
 
 #include <iostream>
-
-using namespace nanogui;
 
 class RAGE
 {

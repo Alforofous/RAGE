@@ -5,6 +5,10 @@ double clockToMilliseconds(clock_t ticks)
 	return (ticks / (double)CLOCKS_PER_SEC) * 1000.0;
 }
 
+#include"imgui.h"
+#include"imgui_impl_glfw.h"
+#include"imgui_impl_opengl3.h"
+
 int main(void)
 {
 	RAGE	*rage;
@@ -16,7 +20,7 @@ int main(void)
 		return (1);
 
 	glfwMakeContextCurrent(rage->window->glfw_window);
-	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+	gladLoadGL();
 
 	rage->gui = new RAGE_gui(rage->window->glfw_window);
 	set_callbacks(rage);
@@ -37,14 +41,11 @@ int main(void)
 			 rage->camera->SetRotation(camera_rotation + glm::vec3(0.1f, 0.0f, 0.0f));
 		set_shader_variable_values(rage);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
-		rage->gui->nano_screen->drawWidgets();
-		rage->gui->nano_screen->drawContents();
 		glfwSwapBuffers(rage->window->glfw_window);
 
 		clock_t endFrame = clock();
 
 		double deltaTime = clockToMilliseconds(endFrame - beginFrame);
-		rage->gui->debug_text_box->setValue(std::to_string((int)deltaTime) + "ms\nTEST");
 	}
 	return (0);
 }
