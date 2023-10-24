@@ -23,7 +23,6 @@ RAGE_gui::~RAGE_gui()
 
 void RAGE_gui::draw(RAGE *rage)
 {
-
 	bool drawTriangle = true;
 	float size = 1.0f;
 	float color[4] = { 0.8f, 0.3f, 0.02f, 1.0f };
@@ -31,18 +30,16 @@ void RAGE_gui::draw(RAGE *rage)
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
+
+	std::string	deltaTimeString = "Elapsed time: " + std::to_string((int)rage->deltaTime) + "ms";
 	
-	// ImGUI window creation
-	ImGui::Begin("My name is window, ImGUI window");
-	// Text that appears in the window
-	ImGui::Text("Hello there adventurer!");
-	// Checkbox that appears in the window
+	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+	ImGui::SetWindowPos(ImVec2(0, 0));
+	ImGui::SetWindowSize(ImVec2(0, 0));
+	ImGui::Text(&deltaTimeString[0]);
 	ImGui::Checkbox("Draw Triangle", &drawTriangle);
-	// Slider that appears in the window
 	ImGui::SliderFloat("Size", &size, 0.5f, 2.0f);
-	// Fancy color editor that appears in the window
 	ImGui::ColorEdit4("Color", color);
-	// Ends the window
 	ImGui::End();
 
 	ImGui::Render();

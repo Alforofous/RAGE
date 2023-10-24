@@ -20,6 +20,7 @@ public:
 	RAGE_camera	*camera;
 	RAGE_shader	*shader;
 	RAGE_gui	*gui;
+	double		deltaTime;
 
 	RAGE();
 	~RAGE();

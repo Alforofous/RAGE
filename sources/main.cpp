@@ -42,7 +42,7 @@ int main(void)
 
 		clock_t endFrame = clock();
 
-		double deltaTime = clockToMilliseconds(endFrame - beginFrame);
+		rage->deltaTime = clockToMilliseconds(endFrame - beginFrame);
 	}
 	return (0);
 }
