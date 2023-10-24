@@ -5,10 +5,6 @@ double clockToMilliseconds(clock_t ticks)
 	return (ticks / (double)CLOCKS_PER_SEC) * 1000.0;
 }
 
-#include"imgui.h"
-#include"imgui_impl_glfw.h"
-#include"imgui_impl_opengl3.h"
-
 int main(void)
 {
 	RAGE	*rage;
@@ -22,8 +18,8 @@ int main(void)
 	glfwMakeContextCurrent(rage->window->glfw_window);
 	gladLoadGL();
 
-	rage->gui = new RAGE_gui(rage->window->glfw_window);
 	set_callbacks(rage);
+	rage->gui = new RAGE_gui(rage->window->glfw_window);
 
 	/*Set GLSL variable locations*/
 	rage->shader = new RAGE_shader("../shaders/vertex_test.glsl", "../shaders/fragment_test.glsl");
@@ -41,6 +37,7 @@ int main(void)
 			 rage->camera->SetRotation(camera_rotation + glm::vec3(0.1f, 0.0f, 0.0f));
 		set_shader_variable_values(rage);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
+		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
 
 		clock_t endFrame = clock();

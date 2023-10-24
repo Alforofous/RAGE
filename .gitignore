@@ -2,3 +2,4 @@ build/
 
 libraries/*
 !libraries/compressed
+desktop.ini
