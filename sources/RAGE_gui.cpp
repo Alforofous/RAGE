@@ -33,7 +33,7 @@ void RAGE_gui::draw(RAGE *rage)
 
 	std::string	deltaTimeString = "Elapsed time: " + std::to_string((int)rage->deltaTime) + "ms";
 	
-	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground);
 	ImGui::SetWindowPos(ImVec2(0, 0));
 	ImGui::SetWindowSize(ImVec2(0, 0));
 	ImGui::Text(&deltaTimeString[0]);

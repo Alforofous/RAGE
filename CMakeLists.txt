@@ -54,6 +54,6 @@ list(APPEND PROJECT_INCLUDES
 	${LIBRARY_INCLUDE_DIRECTORIES}
 )
 
-add_executable(RAGE ${SOURCES} ${INCLUDES})
+add_executable(RAGE ${SOURCES} ${INCLUDES} ${SHADERS})
 target_include_directories(RAGE PRIVATE ${PROJECT_INCLUDES})
 target_link_libraries(RAGE project_libraries)

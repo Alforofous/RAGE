@@ -5,8 +5,10 @@
 class RAGE_camera : public RAGE_object
 {
 public:
+	glm::mat4	m_view;
 	RAGE_camera();
-	void MoveLocaly(glm::vec3 move);
+	void move_localy(glm::vec3 move);
+	void update_view();
 	bool rotating_mode;
 private:
 	glm::vec3	m_forward;
