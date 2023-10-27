@@ -20,7 +20,7 @@ public:
 	RAGE_camera	*camera;
 	RAGE_shader	*shader;
 	RAGE_gui	*gui;
-	double		deltaTime;
+	double		delta_time;
 
 	RAGE();
 	~RAGE();
@@ -28,5 +28,6 @@ private:
 	void exit_program(char *exit_message, int exit_code);
 };
 
-void set_callbacks(RAGE *rage);
-void set_shader_variable_values(void *content);
+void	set_callbacks(RAGE *rage);
+void	set_shader_variable_values(void *content);
+double	clockToMilliseconds(clock_t ticks);

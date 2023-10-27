@@ -12,15 +12,16 @@
 class RAGE_shader
 {
 public:
-	GLuint	hProgram;
+	GLuint						hProgram;
+	std::map<std::string, int>	variable_location;
+
 	RAGE_shader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader);
 	~RAGE_shader();
-	std::map<std::string, int> variable_location;
 	void InitVariableLocations();
 private:
-	std::string ReadFile(const std::string& filePath);
-	GLuint CompileShader(GLuint type, const std::string& source);
-	void CreateShader(const std::string& vertexShader, const std::string& fragmentShader);
+	std::string	ReadFile(const std::string& filePath);
+	GLuint		CompileShader(GLuint type, const std::string& source);
+	void		CreateShader(const std::string& vertexShader, const std::string& fragmentShader);
 };
 
 inline RAGE_shader::RAGE_shader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader)
@@ -85,7 +86,6 @@ inline GLuint RAGE_shader::CompileShader(GLuint type, const std::string& source)
 		glDeleteShader(hShader);
 		return static_cast<GLuint>(0);
 	}
-
 	return hShader;
 }
 
@@ -93,7 +93,8 @@ inline void RAGE_shader::CreateShader(const std::string& vertexShader, const std
 {
 	GLuint vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
 	GLuint fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
-	if (vs == 0 || fs == 0) { return; }
+	if (vs == 0 || fs == 0)
+		return;
 
 	hProgram = glCreateProgram();
 

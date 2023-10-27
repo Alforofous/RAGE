@@ -31,12 +31,16 @@ void RAGE_gui::draw(RAGE *rage)
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	std::string	deltaTimeString = "Elapsed time: " + std::to_string((int)rage->deltaTime) + "ms";
+	std::string	deltaTimeString = "Elapsed time: " + std::to_string((int)rage->delta_time) + "ms";
+
+	double fps = 1000 / rage->delta_time;
+	std::string	fpsString = "FPS: " + std::to_string((int)fps);
 	
 	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground);
 	ImGui::SetWindowPos(ImVec2(0, 0));
 	ImGui::SetWindowSize(ImVec2(0, 0));
 	ImGui::Text(&deltaTimeString[0]);
+	ImGui::Text(&fpsString[0]);
 	ImGui::Checkbox("Draw Triangle", &drawTriangle);
 	ImGui::SliderFloat("Size", &size, 0.5f, 2.0f);
 	ImGui::ColorEdit4("Color", color);
