@@ -1,5 +1,7 @@
 build/
 
-libraries/*
-!libraries/compressed
+libraries/glfw
+libraries/glm
+libraries/imgui
+libraries/glad
 desktop.ini

@@ -11,21 +11,28 @@
 #include "RAGE_gui.hpp"
 #include "RAGE_scene_view.hpp"
 
+#include "vertex_array.hpp"
+#include "vertex_array_buffer.hpp"
+#include "element_array_buffer.hpp"
 #include <iostream>
 
 class RAGE
 {
 public:
-	RAGE_window	*window;
-	RAGE_camera	*camera;
-	RAGE_shader	*shader;
-	RAGE_gui	*gui;
-	double		delta_time;
+	RAGE_window				*window;
+	RAGE_camera				*camera;
+	RAGE_shader				*shader;
+	RAGE_gui				*gui;
+	vertex_array			*vertex_array_object;
+	vertex_array_buffer		*vertex_array_buffer_object;
+	element_array_buffer	*element_array_buffer_object;
+	double					delta_time;
 
 	RAGE();
 	~RAGE();
+
+	void	init_gl_objects(GLfloat *vertices, GLuint *indices);
 private:
-	void exit_program(char *exit_message, int exit_code);
 };
 
 void	set_callbacks(RAGE *rage);

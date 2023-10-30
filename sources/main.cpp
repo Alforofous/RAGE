@@ -45,26 +45,7 @@ int main(void)
 
 	rage->shader->InitVariableLocations();
 
-	GLuint	vertex_array_object;
-	GLuint	vertex_buffer_object;
-	GLuint	element_buffer_object;
-
-	glGenVertexArrays(1, &vertex_array_object);
-	glGenBuffers(1, &vertex_buffer_object);
-	glGenBuffers(1, &element_buffer_object);
-
-	glBindVertexArray(vertex_array_object);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element_buffer_object);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
-	glEnableVertexAttribArray(0);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	rage->init_gl_objects(vertices, indices);
 
 	rage->camera->SetPosition(glm::vec3(0.0, 0.0, -3.0));
 	while (!glfwWindowShouldClose(rage->window->glfw_window))
@@ -78,12 +59,13 @@ int main(void)
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glUseProgram(rage->shader->hProgram);
-		glBindVertexArray(vertex_array_object);
+		rage->vertex_array_object->bind();
 		set_shader_variable_values(rage);
 		glDrawElements(GL_TRIANGLES, 9, GL_UNSIGNED_INT, 0);
-		glfwPollEvents();
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
+
+		glfwPollEvents();
 
 		clock_t endFrame = clock();
 

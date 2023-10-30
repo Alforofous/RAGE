@@ -18,6 +18,9 @@ set(
 	RAGE_transform.cpp
 	RAGE_gui.cpp
 	RAGE_scene_view.cpp
+	vertex_array.cpp
+	vertex_array_buffer.cpp
+	element_array_buffer.cpp
 )
 
 set(
@@ -30,6 +33,9 @@ set(
 	RAGE_transform.hpp
 	RAGE_gui.hpp
 	RAGE_scene_view.hpp
+	vertex_array.hpp
+	vertex_array_buffer.hpp
+	element_array_buffer.hpp
 )
 
 set(
