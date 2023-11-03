@@ -45,9 +45,10 @@ int main(void)
 
 	rage->shader->InitVariableLocations();
 
-	rage->init_gl_objects(vertices, indices);
+	rage->init_gl_objects(vertices, indices, sizeof(vertices), sizeof(indices));
 
-	rage->camera->SetPosition(glm::vec3(0.0, 0.0, -3.0));
+	glm::vec3 position(0.0, 0.0, -3.0);
+	rage->camera->SetPosition(position);
 	while (!glfwWindowShouldClose(rage->window->glfw_window))
 	{
 		clock_t beginFrame = clock();

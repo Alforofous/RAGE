@@ -126,15 +126,15 @@ inline void RAGE_shader::CreateShader(const std::string& vertexShader, const std
 //Initializes all the variables that shader uses and maps them into map<string, int>
 inline void RAGE_shader::InitVariableLocations()
 {
-	char	*variable_names[] =
+	const char	*variable_names[] =
 	{
 		"u_resolution",
 		"u_camera_position",
 		"u_camera_direction"
 	};
-	for each (char * variable_name in variable_names)
+	for (int i = 0; i < 3; i++)
 	{
-		variable_location[variable_name] = glGetUniformLocation(hProgram, variable_name);
+		variable_location[variable_names[i]] = glGetUniformLocation(hProgram, variable_names[i]);
 	}
 }
 #endif

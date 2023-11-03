@@ -1,10 +1,13 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.7)
 set (CMAKE_CXX_STANDARD 11)
 project(RAGE CXX)
+
+message("CMAKE ${PROJECT_SOURCE_DIR}")
 
 set(SOURCES_DIRECTORY "./sources/")
 set(INCLUDES_DIRECTORY "./includes/")
 set(SHADERS_DIRECTORY "./shaders/")
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(
 	SOURCES

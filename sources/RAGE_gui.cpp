@@ -39,8 +39,8 @@ void RAGE_gui::draw(RAGE *rage)
 	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground);
 	ImGui::SetWindowPos(ImVec2(0, 0));
 	ImGui::SetWindowSize(ImVec2(0, 0));
-	ImGui::Text(&deltaTimeString[0]);
-	ImGui::Text(&fpsString[0]);
+	ImGui::Text("%s", deltaTimeString.c_str());
+	ImGui::Text("%s", fpsString.c_str());
 	ImGui::Checkbox("Draw Triangle", &drawTriangle);
 	ImGui::SliderFloat("Size", &size, 0.5f, 2.0f);
 	ImGui::ColorEdit4("Color", color);

@@ -31,7 +31,7 @@ public:
 	RAGE();
 	~RAGE();
 
-	void	init_gl_objects(GLfloat *vertices, GLuint *indices);
+	void	init_gl_objects(GLfloat *vertices, GLuint *indices, GLsizeiptr vertice_size, GLsizeiptr indices_size);
 private:
 };
 

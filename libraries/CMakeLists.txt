@@ -1,14 +1,13 @@
+cmake_minimum_required(VERSION 3.7)
+set (CMAKE_CXX_STANDARD 11)
+project(RAGE CXX)
+
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-# for glfw - has cmake buildchain
 add_subdirectory(glfw)
-
-# for glad - has cmake buildchain
 add_subdirectory(glad)
-
-# for glm - has cmake buildchain
 add_subdirectory(glm)
 
 set(GLM_DIRECTORY glm)
@@ -30,15 +29,12 @@ list(APPEND LIBRARY_SOURCES
 	${IMGUI_DIRECTORY}/imgui_demo.cpp
 	${IMGUI_DIRECTORY}/imgui_impl_glfw.h
 	${IMGUI_DIRECTORY}/imgui_impl_glfw.cpp
-	${GLAD_DIRECTORY}/glad.c
-	${GLAD_DIRECTORY}/glad/glad.h
-	${GLAD_DIRECTORY}/glad/khrplatform.h
 )
 
 set(NAME project_libraries)
 add_library(${NAME} ${LIBRARY_SOURCES})
 target_include_directories(${NAME} PUBLIC ${LIBRARY_INCLUDE_DIRECTORIES})
-target_link_libraries(${NAME} imgui glfw glm)
+target_link_libraries(${NAME} imgui glfw glm glad)
 
 
 list(APPEND IMGUI_PUBLIC_HEADERS
