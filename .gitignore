@@ -4,4 +4,6 @@ libraries/glfw
 libraries/glm
 libraries/imgui
 libraries/glad
+
+.DS_Store
 desktop.ini
