@@ -1,4 +1,5 @@
 @echo off
+
 if "%1%" == "clean" (
 	echo Cleaning builds
 	rmdir /s /q "build" && echo removed build
@@ -9,7 +10,6 @@ if "%1%" == "clean" (
 ) else if "%1%" == "test" (
 	echo Testing
 ) else (
-
 	REM Unpack and CMake glfw
 	echo Unpacking glfw...
 	tar -xf ./libraries/compressed/glfw.zip -C ./libraries/
