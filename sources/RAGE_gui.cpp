@@ -22,9 +22,10 @@ RAGE_gui::~RAGE_gui()
 	ImGui::DestroyContext();
 }
 
-void draw_fps_graph(int fps)
+std::vector<float> frames;
+
+static void draw_fps_graph(int fps)
 {
-	std::vector<float> frames;
 	if (frames.size() > 100)
 	{
 		for (size_t i = 1; i < frames.size(); i++)
@@ -37,10 +38,6 @@ void draw_fps_graph(int fps)
 	}
 	
 	ImGui::Begin("FPS Graph");
-	
-	char text[20];
-	ImGui::Text(text);
-
 	ImGui::PlotHistogram("Framerate", &frames[0], frames.size(), 0, NULL, 0.0f, 1000.0f, ImVec2(300, 100));
 	ImGui::End();
 }
