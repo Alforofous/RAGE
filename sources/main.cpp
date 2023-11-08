@@ -8,6 +8,8 @@ int main(void)
 	if (glfwInit() == GLFW_FALSE)
 		return (1);
 
+	std::filesystem::path executable_path = getExecutableDir();
+	rage->executable_path = executable_path.string();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -39,13 +41,12 @@ int main(void)
 		};
 
 	set_callbacks(rage);
-	rage->gui = new RAGE_gui(rage->window->glfw_window);
+	rage->gui = new RAGE_gui(rage);
+
+	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
+								   rage->executable_path + "/shaders/fragment_test.glsl");
 
 	/*Set GLSL variable locations*/
-	std::filesystem::path executable_path = getExecutableDir();
-	rage->shader = new RAGE_shader(executable_path.string() + "/shaders/vertex_test.glsl",
-								   executable_path.string() + "/shaders/fragment_test.glsl");
-
 	rage->shader->InitVariableLocations();
 
 	rage->init_gl_objects(vertices, indices, sizeof(vertices), sizeof(indices));

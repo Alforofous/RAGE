@@ -30,6 +30,7 @@ public:
 	vertex_array_buffer		*vertex_array_buffer_object;
 	element_array_buffer	*element_array_buffer_object;
 	double					delta_time;
+	std::string				executable_path;
 
 	RAGE();
 	~RAGE();

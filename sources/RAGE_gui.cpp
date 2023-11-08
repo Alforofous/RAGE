@@ -1,17 +1,30 @@
 #include "RAGE.hpp"
-#include"imgui.h"
-#include"imgui_impl_glfw.h"
-#include"imgui_impl_opengl3.h"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 
-RAGE_gui::RAGE_gui(GLFWwindow *glfw_window)
+RAGE_gui::RAGE_gui(RAGE *rage)
 {
 	scene_view = new RAGE_scene_view();
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO &io = ImGui::GetIO(); (void)io;
+
+	std::string font_path = rage->executable_path + "/assets/fonts/Roboto/Roboto-Bold.ttf";
+	std::ifstream font_file(font_path.c_str());
+	if (!font_file.good())
+	{
+		std::cout << "Failed to load font file: " << font_path << std::endl;
+	}
+	else
+	{
+		font_file.close();
+		ImFont *font = io.Fonts->AddFontFromFileTTF(font_path.c_str(), 16.0f);
+	}
+
 	io.IniFilename = NULL;
 	ImGui::StyleColorsDark();
-	ImGui_ImplGlfw_InitForOpenGL(glfw_window, true);
+	ImGui_ImplGlfw_InitForOpenGL(rage->window->glfw_window, true);
 	ImGui_ImplOpenGL3_Init("#version 330");
 }
 
@@ -52,6 +65,7 @@ static void draw_fps_graph(RAGE *rage)
 
 #include <sstream>
 #include <iomanip>
+#include "RAGE_gui.hpp"
 
 void RAGE_gui::draw(RAGE *rage)
 {

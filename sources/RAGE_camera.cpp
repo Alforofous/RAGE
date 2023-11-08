@@ -9,11 +9,6 @@ RAGE_camera::RAGE_camera()
 	m_up = glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
-void RAGE_camera::move_localy(glm::vec3 move)
-{
-	m_position += move;
-}
-
 void RAGE_camera::update_view()
 {
 	m_view = glm::lookAt(m_position, m_position + m_forward, m_up);
