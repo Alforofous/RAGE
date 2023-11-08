@@ -21,23 +21,21 @@ int main(void)
 	glfwMakeContextCurrent(rage->window->glfw_window);
 	gladLoadGL();
 
-	// Vertices coordinates
 	GLfloat vertices[] =
 		{
-			-0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,	// Lower left corner
-			0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,		// Lower right corner
-			0.0f, 0.5f * float(sqrt(3)) * 2 / 3, 0.0f,	// Upper corner
-			-0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f, // Inner left
-			0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f,	// Inner right
-			0.0f, -0.5f * float(sqrt(3)) / 3, 0.0f		// Inner down
+			-0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,	0.8f, 0.3f, 0.2f,
+			0.0f, 0.5f * float(sqrt(3)) * 2 / 3, 0.0f,	0.8f, 0.1f, 0.1f,
+			-0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f,	1.0f, 0.6f, 0.3f,
+			0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f,	0.2f, 0.8f, 0.3f,
+			0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,		0.2f, 0.3f, 0.4f,
+			0.0f, -0.5f * float(sqrt(3)) / 3, 0.0f,		0.2f, 0.2f, 0.5f
 		};
 
-	// Indices for vertices order
 	GLuint indices[] =
 		{
-			0, 3, 5, // Lower left triangle
-			3, 2, 4, // Upper triangle
-			5, 4, 1	 // Lower right triangle
+			0, 2, 5,
+			2, 1, 3,
+			4, 3, 5
 		};
 
 	set_callbacks(rage);
@@ -46,7 +44,6 @@ int main(void)
 	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
 								   rage->executable_path + "/shaders/fragment_test.glsl");
 
-	/*Set GLSL variable locations*/
 	rage->shader->InitVariableLocations();
 
 	rage->init_gl_objects(vertices, indices, sizeof(vertices), sizeof(indices));

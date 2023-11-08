@@ -5,10 +5,10 @@ vertex_array::vertex_array()
 	glGenVertexArrays(1, &id);
 }
 
-void vertex_array::link_to_vertex_array_buffer(vertex_array_buffer &vertex_array_buffer, GLuint layout)
+void vertex_array::link_attributes(vertex_array_buffer &vertex_array_buffer, GLuint layout, GLuint num_components, GLenum type, GLsizeiptr stride, void *offset)
 {
 	vertex_array_buffer.bind();
-	glVertexAttribPointer(layout, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+	glVertexAttribPointer(layout, num_components, type, GL_FALSE, stride, offset);
 	glEnableVertexAttribArray(layout);
 	vertex_array_buffer.unbind();
 }

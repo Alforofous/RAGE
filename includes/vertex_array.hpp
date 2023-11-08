@@ -8,7 +8,7 @@ public:
 	GLuint	id;
 	vertex_array();
 
-	void	link_to_vertex_array_buffer(vertex_array_buffer &vertex_array_buffer, GLuint layout);
+	void	link_attributes(vertex_array_buffer &vertex_array_buffer, GLuint layout, GLuint num_components, GLenum type, GLsizeiptr stride, void *offset);
 	void	bind();
 	void	unbind();
 	void	delete_object();
