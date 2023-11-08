@@ -103,18 +103,20 @@ inline void RAGE_shader::CreateShader(const std::string& vertexShader, const std
 
 	glLinkProgram(hProgram);
 
-	GLint result;
-	glGetShaderiv(hProgram, GL_COMPILE_STATUS, &result);
-	if (result == GL_FALSE)
+	GLint isLinked = 0;
+	glGetProgramiv(hProgram, GL_LINK_STATUS, &isLinked);
+	if (isLinked == GL_FALSE)
 	{
-		int length;
-		glGetShaderiv(hProgram, GL_INFO_LOG_LENGTH, &length);
-		char* infoLog = (char*)malloc(length * sizeof(char));
-		glGetShaderInfoLog(hProgram, length, &length, infoLog);
-		std::cout << "Failed to link vertex and fragment shader!"
-			<< std::endl;
-		std::cout << infoLog << std::endl;
+		GLint maxLength = 0;
+		glGetProgramiv(hProgram, GL_INFO_LOG_LENGTH, &maxLength);
+		std::vector<GLchar> infoLog(maxLength);
+		glGetProgramInfoLog(hProgram, maxLength, &maxLength, &infoLog[0]);
 		glDeleteProgram(hProgram);
+		glDeleteShader(vs);
+		glDeleteShader(fs);
+
+		std::cout << "Failed to link vertex and fragment shader!" << std::endl;
+		std::cout << &infoLog[0] << std::endl;
 		return;
 	}
 	glValidateProgram(hProgram);
