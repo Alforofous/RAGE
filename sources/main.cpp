@@ -1,4 +1,41 @@
 #include "RAGE.hpp"
+#include <filesystem>
+
+#ifdef _WIN32
+#include <windows.h>
+#elif __APPLE__
+#include <mach-o/dyld.h>
+#elif __linux__
+#include <unistd.h>
+#endif
+
+std::string getExecutablePath()
+{
+	char buffer[1024];
+#ifdef _WIN32
+	GetModuleFileName(NULL, buffer, sizeof(buffer));
+#elif __APPLE__
+	uint32_t size = sizeof(buffer);
+	if (_NSGetExecutablePath(buffer, &size) == 0)
+	{
+		char real_path[PATH_MAX];
+		if (realpath(buffer, real_path) != NULL)
+		{
+			return std::string(real_path);
+		}
+	}
+#elif __linux__
+	readlink("/proc/self/exe", buffer, sizeof(buffer));
+#endif
+	return std::string(buffer);
+}
+
+std::string getExecutableDir()
+{
+	std::string path = getExecutablePath();
+	std::filesystem::path dirPath(path);
+	return dirPath.parent_path();
+}
 
 int main(void)
 {
@@ -42,7 +79,9 @@ int main(void)
 	rage->gui = new RAGE_gui(rage->window->glfw_window);
 
 	/*Set GLSL variable locations*/
-	rage->shader = new RAGE_shader("../shaders/vertex_test.glsl", "../shaders/fragment_test.glsl");
+	std::filesystem::path executable_path = getExecutableDir();
+	rage->shader = new RAGE_shader(executable_path.string() + "/shaders/vertex_test.glsl",
+								   executable_path.string() + "/shaders/fragment_test.glsl");
 
 	rage->shader->InitVariableLocations();
 
