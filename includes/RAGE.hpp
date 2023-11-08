@@ -14,7 +14,10 @@
 #include "vertex_array.hpp"
 #include "vertex_array_buffer.hpp"
 #include "element_array_buffer.hpp"
+
 #include <iostream>
+#include <filesystem>
+#include <chrono>
 
 class RAGE
 {
@@ -35,6 +38,6 @@ public:
 private:
 };
 
-void	set_callbacks(RAGE *rage);
-void	set_shader_variable_values(void *content);
-double	clockToMilliseconds(clock_t ticks);
+void		set_callbacks(RAGE *rage);
+void		set_shader_variable_values(void *content);
+std::string	getExecutableDir();

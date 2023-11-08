@@ -1,45 +1,8 @@
 #include "RAGE.hpp"
-#include <filesystem>
-
-#ifdef _WIN32
-#include <windows.h>
-#elif __APPLE__
-#include <mach-o/dyld.h>
-#elif __linux__
-#include <unistd.h>
-#endif
-
-std::string getExecutablePath()
-{
-	char buffer[1024];
-#ifdef _WIN32
-	GetModuleFileName(NULL, buffer, sizeof(buffer));
-#elif __APPLE__
-	uint32_t size = sizeof(buffer);
-	if (_NSGetExecutablePath(buffer, &size) == 0)
-	{
-		char real_path[PATH_MAX];
-		if (realpath(buffer, real_path) != NULL)
-		{
-			return std::string(real_path);
-		}
-	}
-#elif __linux__
-	readlink("/proc/self/exe", buffer, sizeof(buffer));
-#endif
-	return std::string(buffer);
-}
-
-std::string getExecutableDir()
-{
-	std::string path = getExecutablePath();
-	std::filesystem::path dirPath(path);
-	return dirPath.parent_path();
-}
 
 int main(void)
 {
-	RAGE	*rage;
+	RAGE *rage;
 
 	rage = new RAGE();
 	if (glfwInit() == GLFW_FALSE)
@@ -58,22 +21,22 @@ int main(void)
 
 	// Vertices coordinates
 	GLfloat vertices[] =
-	{
-		-0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f, // Lower left corner
-		0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f, // Lower right corner
-		0.0f, 0.5f * float(sqrt(3)) * 2 / 3, 0.0f, // Upper corner
-		-0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f, // Inner left
-		0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f, // Inner right
-		0.0f, -0.5f * float(sqrt(3)) / 3, 0.0f // Inner down
-	};
+		{
+			-0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,	// Lower left corner
+			0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,		// Lower right corner
+			0.0f, 0.5f * float(sqrt(3)) * 2 / 3, 0.0f,	// Upper corner
+			-0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f, // Inner left
+			0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f,	// Inner right
+			0.0f, -0.5f * float(sqrt(3)) / 3, 0.0f		// Inner down
+		};
 
 	// Indices for vertices order
 	GLuint indices[] =
-	{
-		0, 3, 5, // Lower left triangle
-		3, 2, 4, // Upper triangle
-		5, 4, 1 // Lower right triangle
-	};
+		{
+			0, 3, 5, // Lower left triangle
+			3, 2, 4, // Upper triangle
+			5, 4, 1	 // Lower right triangle
+		};
 
 	set_callbacks(rage);
 	rage->gui = new RAGE_gui(rage->window->glfw_window);
@@ -91,7 +54,7 @@ int main(void)
 	rage->camera->SetPosition(position);
 	while (!glfwWindowShouldClose(rage->window->glfw_window))
 	{
-		clock_t beginFrame = clock();
+		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
 		int width;
 		int height;
@@ -107,10 +70,11 @@ int main(void)
 		glfwSwapBuffers(rage->window->glfw_window);
 
 		glfwPollEvents();
+		glfwSwapInterval(1);
 
-		clock_t endFrame = clock();
-
-		rage->delta_time = clockToMilliseconds(endFrame - beginFrame);
+		std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double, std::milli> elapsed = end - start;
+		rage->delta_time = elapsed.count();
 	}
 	return (0);
 }
