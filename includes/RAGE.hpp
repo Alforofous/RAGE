@@ -12,8 +12,8 @@
 #include "RAGE_scene_view.hpp"
 
 #include "vertex_array.hpp"
-#include "vertex_array_buffer.hpp"
-#include "element_array_buffer.hpp"
+#include "vertex_buffer.hpp"
+#include "element_buffer.hpp"
 
 #include <iostream>
 #include <filesystem>
@@ -27,8 +27,8 @@ public:
 	RAGE_shader				*shader;
 	RAGE_gui				*gui;
 	vertex_array			*vertex_array_object;
-	vertex_array_buffer		*vertex_array_buffer_object;
-	element_array_buffer	*element_array_buffer_object;
+	vertex_buffer		*vertex_buffer_object;
+	element_buffer	*element_buffer_object;
 	double					delta_time;
 	std::string				executable_path;
 

@@ -24,8 +24,8 @@ set(
 	RAGE_scene_view.cpp
 	RAGE_scene.cpp
 	vertex_array.cpp
-	vertex_array_buffer.cpp
-	element_array_buffer.cpp
+	vertex_buffer.cpp
+	element_buffer.cpp
 )
 
 set(
@@ -40,8 +40,8 @@ set(
 	RAGE_scene_view.hpp
 	RAGE_scene.hpp
 	vertex_array.hpp
-	vertex_array_buffer.hpp
-	element_array_buffer.hpp
+	vertex_buffer.hpp
+	element_buffer.hpp
 )
 
 set(

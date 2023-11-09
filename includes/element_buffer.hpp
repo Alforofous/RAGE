@@ -1,10 +1,10 @@
 #include<glad/glad.h>
 
-class element_array_buffer
+class element_buffer
 {
 public:
 	GLuint	id;
-	element_array_buffer(GLuint *indices, GLsizeiptr size);
+	element_buffer(GLuint *indices, GLsizeiptr size);
 
 	void	bind();
 	void	unbind();
