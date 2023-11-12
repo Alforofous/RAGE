@@ -8,6 +8,7 @@
 #include <string>
 #include <sstream>
 #include <map>
+#include <vector>
 
 class RAGE_shader
 {

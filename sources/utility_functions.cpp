@@ -1,5 +1,3 @@
-#include "RAGE.hpp"
-
 #ifdef _WIN32
 #include <windows.h>
 #elif __APPLE__
@@ -7,6 +5,8 @@
 #elif __linux__
 #include <unistd.h>
 #endif
+
+#include "RAGE.hpp"
 
 static std::string getExecutablePath()
 {
@@ -33,5 +33,5 @@ std::string getExecutableDir()
 {
 	std::string path = getExecutablePath();
 	std::filesystem::path dirPath(path);
-	return dirPath.parent_path();
+	return dirPath.parent_path().string();
 }

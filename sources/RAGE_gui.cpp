@@ -45,11 +45,11 @@ static void draw_fps_graph(RAGE *rage)
 	{
 		for (size_t i = 1; i < frames.size(); i++)
 			frames[i - 1] = frames[i];
-		frames[frames.size() - 1] = fps;
+		frames[frames.size() - 1] = (float)fps;
 	}
 	else
 	{
-		frames.push_back(fps);
+		frames.push_back((float)fps);
 	}
 
 	std::stringstream stream;
@@ -60,7 +60,7 @@ static void draw_fps_graph(RAGE *rage)
 
 	std::string	fps_string = "FPS: " + std::to_string((int)fps);
 	ImGui::Text("%s", fps_string.c_str());
-	ImGui::PlotHistogram("", &frames[0], frames.size(), 0, NULL, 0.0f, 360.0f, ImVec2(200, 40));
+	ImGui::PlotHistogram("", &frames[0], (int)frames.size(), 0, NULL, 0.0f, 360.0f, ImVec2(200, 40));
 }
 
 #include <sstream>
