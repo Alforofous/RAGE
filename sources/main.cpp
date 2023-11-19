@@ -9,7 +9,7 @@ int main(void)
 		return (1);
 
 	std::filesystem::path executable_path = getExecutableDir();
-	rage->executable_path = executable_path.string();
+	rage->executable_path = executable_path.generic_string();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
