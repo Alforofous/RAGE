@@ -18,6 +18,5 @@ else
 	tar -xf ./libraries/compressed/imgui.zip -C ./libraries/
 
 	# CMake RAGE
-	cmake -B ./build -S ./
-	cmake --build ./build
+	./compileRAGE
 fi
