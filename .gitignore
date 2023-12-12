@@ -6,6 +6,8 @@ libraries/imgui
 libraries/glad
 
 RAGE
+RAGE.exe
+RAGE.pdb
 
 .DS_Store
 desktop.ini

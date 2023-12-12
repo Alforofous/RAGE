@@ -7,6 +7,7 @@ if "%1%" == "clean" (
 	rmdir /s /q "libraries/glad/" && echo removed glad
 	rmdir /s /q "libraries/glm/" && echo removed glm
 	rmdir /s /q "libraries/imgui/" && echo removed imgui
+	del /Q /F "RAGE.exe" && del /Q /F "RAGE.pdb" && echo removed RAGE
 ) else if "%1%" == "test" (
 	echo Testing
 ) else (
