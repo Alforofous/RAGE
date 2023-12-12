@@ -40,12 +40,9 @@ int main(void)
 
 	set_callbacks(rage);
 	rage->gui = new RAGE_gui(rage);
-
 	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
 								   rage->executable_path + "/shaders/fragment_test.glsl");
-
 	rage->shader->InitVariableLocations();
-
 	rage->init_gl_objects(vertices, indices, sizeof(vertices), sizeof(indices));
 
 	glm::vec3 position(0.0, 0.0, -3.0);
