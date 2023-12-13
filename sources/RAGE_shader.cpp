@@ -1,4 +1,5 @@
 #include "RAGE.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
 RAGE_shader::RAGE_shader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader)
 {
@@ -105,9 +106,11 @@ void RAGE_shader::InitVariableLocations()
 	{
 		"u_resolution",
 		"u_camera_position",
-		"u_camera_direction"
+		"u_camera_direction",
+		"u_perspective_matrix",
 	};
-	for (int i = 0; i < 3; i++)
+	int variable_count = sizeof(variable_names) / sizeof(variable_names[0]);
+	for (int i = 0; i < variable_count; i++)
 	{
 		variable_location[variable_names[i]] = glGetUniformLocation(hProgram, variable_names[i]);
 	}
@@ -139,4 +142,6 @@ void set_shader_variable_values(void *content)
 	camera_direction = glm::vec3(0.0f, 0.0f, -1.0f);
 	glUniform3f(rage->shader->variable_location["u_camera_direction"],
 				camera_direction.x, camera_direction.y, camera_direction.z);
+	glUniformMatrix4fv(rage->shader->variable_location["u_perspective_matrix"], 1,
+					   GL_FALSE, glm::value_ptr(rage->camera->get_perspective_matrix()));
 }

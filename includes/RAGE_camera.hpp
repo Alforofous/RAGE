@@ -9,13 +9,13 @@ public:
 	glm::mat4 m_view;
 	void move_localy(glm::vec3 move);
 	void update_view();
-	bool rotating_mode;
+	glm::mat4 get_perspective_matrix();
 
 private:
+	glm::mat4 m_perspective_matrix;
 	glm::vec3 m_forward;
 	glm::vec3 m_up;
 	glm::vec3 m_right;
 	float m_aspect_ratio;
 	float m_fov;
-	glm::mat4 m_projection_matrix;
 };
