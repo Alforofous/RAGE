@@ -20,9 +20,17 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 {
 	RAGE	*rage = (RAGE *)glfwGetWindowUserPointer(window);
 	if (key == GLFW_KEY_W && action == GLFW_PRESS)
-		rage->camera->translate(glm::vec3(0.0f, 0.0f, -0.1f));
+		rage->camera->translate(rage->camera->get_forward());
 	if (key == GLFW_KEY_S && action == GLFW_PRESS)
-		rage->camera->translate(glm::vec3(0.0f, 0.0f, 0.1f));
+		rage->camera->translate(rage->camera->get_forward() * -1.0f);
+	if (key == GLFW_KEY_A && action == GLFW_PRESS)
+		rage->camera->translate(rage->camera->get_right() * -1.0f);
+	if (key == GLFW_KEY_D && action == GLFW_PRESS)
+		rage->camera->translate(rage->camera->get_right());
+	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
+		rage->camera->translate(rage->camera->get_up() * -1.0f);
+	if (key == GLFW_KEY_E && action == GLFW_PRESS)
+		rage->camera->translate(rage->camera->get_up());
 }
 
 void set_callbacks(RAGE *rage)

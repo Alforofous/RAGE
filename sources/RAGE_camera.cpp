@@ -25,3 +25,7 @@ glm::mat4 RAGE_camera::get_view_matrix(bool update)
 		m_view_matrix = glm::lookAt(m_position, m_position + m_forward, m_up);
 	return (m_view_matrix);
 }
+
+glm::vec3 RAGE_camera::get_forward() { return (m_forward); }
+glm::vec3 RAGE_camera::get_up() { return (m_up); }
+glm::vec3 RAGE_camera::get_right() { return (m_right); }
