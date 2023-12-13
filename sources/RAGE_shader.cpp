@@ -144,4 +144,5 @@ void set_shader_variable_values(void *content)
 				camera_direction.x, camera_direction.y, camera_direction.z);
 	glUniformMatrix4fv(rage->shader->variable_location["u_perspective_matrix"], 1,
 					   GL_FALSE, glm::value_ptr(rage->camera->get_perspective_matrix()));
+	glm::mat4 view_matrix = rage->camera->get_view_matrix();
 }

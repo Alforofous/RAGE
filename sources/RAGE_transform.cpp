@@ -20,7 +20,7 @@ glm::mat4 RAGE_transform::GetModelMatrix() const
 	return posMatrix * rotMatrix * scaleMatrix;
 }
 
-void RAGE_transform::translate(glm::vec3 &move) { m_position += move; }
+void RAGE_transform::translate(const glm::vec3 &move) { m_position += move; }
 
 glm::vec3 &RAGE_transform::GetPosition() { return m_position; }
 glm::vec3 &RAGE_transform::GetRotation() { return m_rotation; }

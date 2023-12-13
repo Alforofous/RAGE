@@ -9,7 +9,7 @@ public:
 	RAGE_transform(const glm::vec3 &position = glm::vec3(), const glm::vec3 &rotation = glm::vec3(), const glm::vec3 &scale = glm::vec3(1.0f, 1.0f, 1.0f));
 
 	glm::mat4 GetModelMatrix() const;
-	void translate(glm::vec3 &move);
+	void translate(const glm::vec3 &move);
 	
 	glm::vec3 &GetPosition();
 	glm::vec3 &GetRotation();
