@@ -44,8 +44,6 @@ int main(void)
 	rage->shader->InitVariableLocations();
 	rage->init_gl_objects(vertices, indices, sizeof(vertices), sizeof(indices));
 
-	glm::vec3 position(0.0, 0.0, -3.0);
-	rage->camera->SetPosition(position);
 	while (!glfwWindowShouldClose(rage->window->glfw_window))
 	{
 		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();

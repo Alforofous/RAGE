@@ -11,9 +11,11 @@ public:
 private:
 	glm::mat4 m_perspective_matrix;
 	glm::mat4 m_view_matrix;
+
 	glm::vec3 m_forward;
 	glm::vec3 m_up;
 	glm::vec3 m_right;
+
 	float m_aspect_ratio;
 	float m_fov;
 };

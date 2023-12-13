@@ -10,7 +10,7 @@ RAGE_camera::RAGE_camera(float fov, glm::vec2 window_size, glm::vec3 position, g
 	m_fov = fov;
 	m_aspect_ratio = window_size.x / window_size.y;
 	m_rotation = rotation;
-	m_view_matrix = glm::lookAt(m_position, m_position + m_forward, m_up);
+	m_view_matrix = RAGE_camera::get_view_matrix();
 	m_perspective_matrix = glm::perspective(m_fov, m_aspect_ratio, z_plane.x, z_plane.y);
 }
 
