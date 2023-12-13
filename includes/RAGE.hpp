@@ -10,6 +10,7 @@
 #include "RAGE_shader.hpp"
 #include "RAGE_gui.hpp"
 #include "RAGE_scene_view.hpp"
+#include "RAGE_user_input.hpp"
 
 #include "vertex_array.hpp"
 #include "vertex_buffer.hpp"
@@ -26,6 +27,7 @@ public:
 	RAGE_camera				*camera;
 	RAGE_shader				*shader;
 	RAGE_gui				*gui;
+	RAGE_user_input			*user_input;
 	vertex_array			*vertex_array_object;
 	vertex_buffer		*vertex_buffer_object;
 	element_buffer	*element_buffer_object;
