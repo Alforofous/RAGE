@@ -14,9 +14,9 @@ set(
 	main.cpp
 	utility_functions.cpp
 	set_callbacks.cpp
-	set_shader_variable_values.cpp
 	RAGE.cpp
 	RAGE_window.cpp
+	RAGE_shader.cpp
 	RAGE_camera.cpp
 	RAGE_object.cpp
 	RAGE_transform.cpp
