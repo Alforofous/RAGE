@@ -2,7 +2,7 @@
 
 #include "RAGE_transform.hpp"
 
-class RAGE_object : public Transform
+class RAGE_object : public RAGE_transform
 {
 public:
 	
