@@ -31,3 +31,5 @@ private:
 	float m_aspect_ratio;
 	float m_fov;
 };
+
+glm::vec3 direction_to_euler(glm::vec3 direction);
