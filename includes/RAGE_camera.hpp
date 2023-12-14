@@ -17,7 +17,7 @@ private:
 	void handle_movement(RAGE_user_input *user_input, float movement_speed);
 	void handle_rotation(RAGE_user_input *user_input, float rotation_speed);
 
-	void rotate_on_sperical_coordinates(glm::vec2 delta_movement);
+	void rotate_on_spherical_coordinates(glm::vec2 delta_movement);
 
 	glm::mat4 m_perspective_matrix;
 	glm::mat4 m_view_matrix;
