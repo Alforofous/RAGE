@@ -1,10 +1,11 @@
 #pragma once
 
 #include "RAGE.hpp"
+#include <unordered_map>
 
 class RAGE_keyboard_input
 {
 public:
-	static std::unordered_map<int, bool> pressed_keys;
+	std::unordered_map<int, bool> pressed_keys;
 private:
 };

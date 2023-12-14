@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RAGE_object.hpp"
+#include "RAGE_user_input.hpp"
 
 class RAGE_camera : public RAGE_object
 {
@@ -11,6 +12,7 @@ public:
 	glm::vec3 get_forward();
 	glm::vec3 get_up();
 	glm::vec3 get_right();
+	void handle_input(RAGE_user_input *user_input, float delta_time);
 private:
 	glm::mat4 m_perspective_matrix;
 	glm::mat4 m_view_matrix;
@@ -19,6 +21,7 @@ private:
 	glm::vec3 m_up;
 	glm::vec3 m_right;
 
+	float m_movement_speed;
 	float m_aspect_ratio;
 	float m_fov;
 };

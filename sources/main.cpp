@@ -60,9 +60,10 @@ int main(void)
 		glDrawElements(GL_TRIANGLES, 9, GL_UNSIGNED_INT, 0);
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
+		rage->camera->handle_input(rage->user_input, (float)rage->delta_time);
 
 		glfwPollEvents();
-		glfwSwapInterval(1);
+		glfwSwapInterval(0);
 
 		std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double, std::milli> elapsed = end - start;

@@ -29,8 +29,8 @@ public:
 	RAGE_gui				*gui;
 	RAGE_user_input			*user_input;
 	vertex_array			*vertex_array_object;
-	vertex_buffer		*vertex_buffer_object;
-	element_buffer	*element_buffer_object;
+	vertex_buffer			*vertex_buffer_object;
+	element_buffer			*element_buffer_object;
 	double					delta_time;
 	std::string				executable_path;
 
