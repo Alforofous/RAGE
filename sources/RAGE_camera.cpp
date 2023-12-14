@@ -34,6 +34,15 @@ glm::vec3 direction_to_euler(glm::vec3 direction)
 	return glm::vec3(pitch, yaw, 0.0f);
 }
 
+glm::vec3 euler_to_direction(glm::vec3 euler)
+{
+	glm::vec3 direction;
+	direction.x = cos(euler.y) * cos(euler.x);
+	direction.y = sin(euler.x);
+	direction.z = sin(euler.y) * cos(euler.x);
+	return glm::normalize(direction);
+}
+
 void RAGE_camera::handle_movement(RAGE_user_input *user_input, float movement_speed)
 {
 	glm::vec3 new_up = glm::cross(this->get_right(), this->get_forward());
@@ -71,9 +80,7 @@ void RAGE_camera::rotate_on_spherical_coordinates(glm::vec2 delta_movement)
 	m_rotation.y += delta_movement.x;
 	m_rotation.x = glm::clamp(m_rotation.x, -glm::half_pi<float>() + 0.001f, glm::half_pi<float>() - 0.001f);
 
-	m_forward.x = cos(m_rotation.y) * cos(m_rotation.x);
-	m_forward.y = sin(m_rotation.x);
-	m_forward.z = sin(m_rotation.y) * cos(m_rotation.x);
+	m_forward = euler_to_direction(m_rotation);
 
 	m_forward = glm::normalize(m_forward);
 	m_right = glm::normalize(glm::cross(m_forward, this->get_up()));
