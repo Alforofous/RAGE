@@ -21,6 +21,8 @@ glm::mat4 RAGE_transform::GetModelMatrix() const
 }
 
 void RAGE_transform::translate(const glm::vec3 &move) { m_position += move; }
+void RAGE_transform::rotate(const glm::vec3 &rotate) { m_rotation += rotate; }
+void RAGE_transform::scale(const glm::vec3 &scale) { m_scale += scale; }
 
 glm::vec3 &RAGE_transform::GetPosition() { return m_position; }
 glm::vec3 &RAGE_transform::GetRotation() { return m_rotation; }

@@ -14,6 +14,11 @@ public:
 	glm::vec3 get_right();
 	void handle_input(RAGE_user_input *user_input, float delta_time);
 private:
+	void handle_movement(RAGE_user_input *user_input, float movement_speed);
+	void handle_rotation(RAGE_user_input *user_input, float rotation_speed);
+
+	void rotate_on_sperical_coordinates(glm::vec2 delta_movement);
+
 	glm::mat4 m_perspective_matrix;
 	glm::mat4 m_view_matrix;
 
@@ -22,6 +27,7 @@ private:
 	glm::vec3 m_right;
 
 	float m_movement_speed;
+	float m_rotation_speed;
 	float m_aspect_ratio;
 	float m_fov;
 };

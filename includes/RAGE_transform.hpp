@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 class RAGE_transform
 {
@@ -10,6 +11,8 @@ public:
 
 	glm::mat4 GetModelMatrix() const;
 	void translate(const glm::vec3 &move);
+	void rotate(const glm::vec3 &rotate);
+	void scale(const glm::vec3 &scale);
 	
 	glm::vec3 &GetPosition();
 	glm::vec3 &GetRotation();
@@ -20,7 +23,8 @@ public:
 	void SetScale(glm::vec3 &scale);
 
 protected:
-	glm::vec3	m_position;
-	glm::vec3	m_rotation;
-	glm::vec3	m_scale;
+	glm::vec3 m_position;
+	glm::vec3 m_rotation;
+	glm::vec3 m_scale;
+	glm::quat quaternion;
 };
