@@ -23,6 +23,7 @@ set(
 	RAGE_gui.cpp
 	RAGE_scene_view.cpp
 	RAGE_scene.cpp
+	RAGE_mesh.cpp
 	vertex_array.cpp
 	vertex_buffer.cpp
 	element_buffer.cpp
@@ -39,6 +40,7 @@ set(
 	RAGE_gui.hpp
 	RAGE_scene_view.hpp
 	RAGE_scene.hpp
+	RAGE_mesh.hpp
 	vertex_array.hpp
 	vertex_buffer.hpp
 	element_buffer.hpp
@@ -66,6 +68,7 @@ add_subdirectory(libraries/)
 list(APPEND PROJECT_INCLUDES
 	${INCLUDES_DIRECTORY}
 	${LIBRARY_INCLUDE_DIRECTORIES}
+	libraries/
 )
 
 add_executable(RAGE ${SOURCES} ${INCLUDES} ${SHADERS})
