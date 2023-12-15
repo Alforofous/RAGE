@@ -18,7 +18,7 @@ int main(void)
 	if (rage->window->Init() == -1)
 		return (1);
 	glm::ivec2 window_pixel_size = rage->window->get_window_pixel_size();
-	if (rage->camera->Init(45.0f, window_pixel_size, glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f), glm::vec2(0.1f, 1000.0f)) == -1)
+	if (rage->camera->Init(rage->window) == -1)
 		return (1);
 
 	glfwMakeContextCurrent(rage->window->glfw_window);

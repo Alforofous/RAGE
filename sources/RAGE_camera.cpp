@@ -1,17 +1,17 @@
 #include "RAGE.hpp"
 #include "RAGE_camera.hpp"
 
-int RAGE_camera::Init(float fov, glm::vec2 window_size, glm::vec3 position, glm::vec3 rotation, glm::vec2 z_plane)
+int RAGE_camera::Init(RAGE_window *window)
 {
-	m_position = position;
+	m_position = glm::vec3(0.0f, 0.0f, 3.0f);
 	m_forward = glm::vec3(0.0f, 0.0f, -1.0f);
 	m_up = glm::vec3(0.0f, 1.0f, 0.0f);
 	m_right = glm::vec3(1.0f, 0.0f, 0.0f);
-	m_fov = fov;
-	m_aspect_ratio = window_size.x / window_size.y;
+	m_fov = 45.0f;
+	m_aspect_ratio = window->get_window_pixel_width() / window->get_window_pixel_height();
 	m_rotation = direction_to_euler(m_forward);
 	m_view_matrix = RAGE_camera::get_view_matrix();
-	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, z_plane.x, z_plane.y);
+	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 100.0f);
 	return (1);
 }
 
