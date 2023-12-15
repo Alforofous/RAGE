@@ -11,6 +11,7 @@
 #include "RAGE_gui.hpp"
 #include "RAGE_scene_view.hpp"
 #include "RAGE_user_input.hpp"
+#include "RAGE_mesh.hpp"
 
 #include "vertex_array.hpp"
 #include "vertex_buffer.hpp"
@@ -37,7 +38,7 @@ public:
 	RAGE();
 	~RAGE();
 
-	void	init_gl_objects(GLfloat *vertices, GLuint *indices, GLsizeiptr vertice_size, GLsizeiptr indices_size);
+	void	init_gl_objects(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size);
 private:
 };
 

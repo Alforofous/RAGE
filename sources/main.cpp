@@ -24,6 +24,7 @@ int main(void)
 	glfwMakeContextCurrent(rage->window->glfw_window);
 	gladLoadGL();
 
+	/*
 	GLfloat vertices[] = {
 		0.0f, 5.0f, 0.0f, 1.0f, 0.0f, 0.0f,   // Peak
 		-0.5f, 0.0f, -0.5f, 0.0f, 1.0f, 0.0f, // Base corner 1
@@ -40,13 +41,21 @@ int main(void)
 		1, 2, 3, // Base triangle 1
 		1, 3, 4	 // Base triangle 2
 	};
+	*/
+
+	RAGE_mesh mesh;
+	mesh.LoadGLB((rage->executable_path + "/assets/models/MonkeyHead.glb").c_str());
+	GLfloat *vertices = mesh.vertices;
+	GLuint *indices = mesh.indices;
+	GLsizeiptr vertices_size = mesh.vertices_size;
+	GLsizeiptr indices_size = mesh.indices_size;
 
 	set_callbacks(rage);
 	rage->gui = new RAGE_gui(rage);
 	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
 								   rage->executable_path + "/shaders/fragment_test.glsl");
 	rage->shader->InitVariableLocations();
-	rage->init_gl_objects(vertices, indices, sizeof(vertices), sizeof(indices));
+	rage->init_gl_objects(vertices, indices, vertices_size, indices_size);
 	glEnable(GL_DEPTH_TEST);
 
 	while (!glfwWindowShouldClose(rage->window->glfw_window))
@@ -62,8 +71,8 @@ int main(void)
 		glUseProgram(rage->shader->hProgram);
 		rage->vertex_array_object->bind();
 		set_shader_variable_values(rage);
-		int numIndices = sizeof(indices) / sizeof(indices[0]);
-		glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
+		int indices_count = indices_size / sizeof(indices[0]);
+		glDrawElements(GL_TRIANGLES, indices_count, GL_UNSIGNED_INT, 0);
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
 		rage->camera->handle_input(rage->user_input, (float)rage->delta_time);

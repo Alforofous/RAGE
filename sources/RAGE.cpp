@@ -16,12 +16,12 @@ RAGE::~RAGE()
 	element_buffer_object->delete_object();
 }
 
-void RAGE::init_gl_objects(GLfloat *vertices, GLuint *indices, GLsizeiptr vertice_size, GLsizeiptr indices_size)
+void RAGE::init_gl_objects(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size)
 {
 	vertex_array_object = new vertex_array();
 	vertex_array_object->bind();
 
-	vertex_buffer_object = new vertex_buffer(vertices, vertice_size);
+	vertex_buffer_object = new vertex_buffer(vertices, vertices_size);
 	element_buffer_object = new element_buffer(indices, indices_size);
 	
 	vertex_array_object->link_attributes(*vertex_buffer_object, 0, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void *)0);
