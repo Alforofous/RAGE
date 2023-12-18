@@ -14,15 +14,19 @@ struct GLBChunkHeader
 	uint32_t type;
 };
 
-int RAGE_mesh::LoadGLB(const char *path)
+static int read_file(const char *path, std::ifstream &file)
 {
-	std::ifstream file(path, std::ios::binary);
+	file.open(path, std::ios::binary);
 	if (!file)
 	{
 		std::cerr << "Failed to open file: " << path << std::endl;
 		return (-1);
 	}
+	return (1);
+}
 
+static int check_glb_header(const char *path, std::ifstream &file)
+{
 	GLBHeader header;
 	file.read(reinterpret_cast<char *>(&header), sizeof(header));
 	if (header.magic != 0x46546C67)
@@ -31,6 +35,11 @@ int RAGE_mesh::LoadGLB(const char *path)
 		return (-1);
 	}
 
+	return (1);
+}
+
+static int check_glb_chunk_header(const char *path, std::ifstream &file, std::vector<char> &file_buffer, std::vector<char> &binary_file_buffer)
+{
 	GLBChunkHeader chunkHeader;
 	file.read(reinterpret_cast<char *>(&chunkHeader), sizeof(chunkHeader));
 	if (chunkHeader.type != 0x4E4F534A)
@@ -38,54 +47,135 @@ int RAGE_mesh::LoadGLB(const char *path)
 		std::cerr << "Invalid GLB chunk type: " << chunkHeader.type << std::endl;
 		return (-1);
 	}
+	file_buffer.resize(chunkHeader.length);
+	file.read(file_buffer.data(), file_buffer.size());
 
-	std::vector<char> json(chunkHeader.length);
-	file.read(json.data(), json.size());
+	GLBChunkHeader binaryChunkHeader;
+	file.read(reinterpret_cast<char *>(&binaryChunkHeader), sizeof(binaryChunkHeader));
+	if (binaryChunkHeader.type != 0x004E4942)
+	{
+		std::cerr << "Invalid GLB binary chunk type: " << binaryChunkHeader.type << std::endl;
+		return (-1);
+	}
+	binary_file_buffer.resize(binaryChunkHeader.length);
+	file.read(binary_file_buffer.data(), binary_file_buffer.size());
+	return (1);
+}
 
-	nlohmann::json scene = nlohmann::json::parse(json.begin(), json.end());
+int RAGE_mesh::LoadGLB(const char *path)
+{
+	std::ifstream		file;
+	std::vector<char>	json_file_buffer;
+	std::vector<char>	binary_file_buffer;
 
-	std::vector<char> buffer(chunkHeader.length);
-	file.read(buffer.data(), buffer.size());
+	if (read_file(path, file) == -1)
+		return (-1);
+	if (check_glb_header(path, file) == -1)
+		return (-1);
+	if (check_glb_chunk_header(path, file, json_file_buffer, binary_file_buffer) == -1)
+		return (-1);
+
+	nlohmann::json json_scene = nlohmann::json::parse(json_file_buffer.begin(), json_file_buffer.end());
 
 	GLuint vertices_count;
-	if (scene["buffers"][0].is_null() || scene["buffers"][0]["byteLength"].is_null())
+	if (json_scene["meshes"].is_null() || json_scene["meshes"][0]["primitives"].is_null() || json_scene["meshes"][0]["primitives"][0]["attributes"].is_null() || json_scene["meshes"][0]["primitives"][0]["attributes"]["POSITION"].is_null())
 	{
-		std::cerr << "Invalid or missing byteLength in the first buffer" << std::endl;
+		std::cerr << "Invalid or missing POSITION attribute in the first primitive of the first mesh" << std::endl;
 		return -1;
 	}
 	else
 	{
-		this->vertices_size = scene["buffers"][0]["byteLength"];
-		int accessorIndex = scene["meshes"][0]["primitives"][0]["attributes"]["POSITION"];
+		int positionAccessorIndex = json_scene["meshes"][0]["primitives"][0]["attributes"]["POSITION"];
+		if (json_scene["accessors"].is_null() || json_scene["accessors"][positionAccessorIndex].is_null())
+		{
+			std::cerr << "Invalid or missing accessor for POSITION attribute" << std::endl;
+			return -1;
+		}
+		else
+		{
+			int bufferViewIndex = json_scene["accessors"][positionAccessorIndex]["bufferView"];
+			if (json_scene["bufferViews"].is_null() || json_scene["bufferViews"][bufferViewIndex].is_null())
+			{
+				std::cerr << "Invalid or missing buffer view for POSITION attribute" << std::endl;
+				return -1;
+			}
+			else
+			{
+				int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
+				int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
+				this->vertices_size = byteLength;
 
-		int bufferViewIndex = scene["accessors"][accessorIndex]["bufferView"];
+				printf("byteOffset: %d byteLength: %d\n", byteOffset, byteLength);
 
-		int byteOffset = scene["bufferViews"][bufferViewIndex]["byteOffset"];
-		int byteLength = scene["bufferViews"][bufferViewIndex]["byteLength"];
+				std::vector<GLfloat> vertices(byteLength / sizeof(GLfloat));
+				std::memcpy(vertices.data(), binary_file_buffer.data() + byteOffset, byteLength);
 
-		vertices_count = byteLength / sizeof(GLfloat);
-		std::vector<GLfloat> vertices(byteLength / sizeof(GLfloat));
-		std::memcpy(vertices.data(), buffer.data() + byteOffset, byteLength);
-		this->vertices = vertices.data();
+				std::vector<GLfloat> colors(byteLength / sizeof(GLfloat));
+				std::fill(colors.begin(), colors.end(), 0.4f);
+				vertices_count = byteLength / (3 * sizeof(GLfloat));
+
+				printf("vertices_count: %d\n", vertices_count);
+				printf("vertices_countf: %f\n", (float)byteLength / (3.0f * sizeof(GLfloat)));
+
+				this->vertices = vertices.data();
+				this->vertices = new GLfloat[vertices_count * 6];
+				for (int i = 0; i < vertices_count; i += 6)
+				{
+					this->vertices[i + 0] = vertices[i + 0];
+					this->vertices[i + 1] = vertices[i + 1];
+					this->vertices[i + 2] = vertices[i + 2];
+					this->vertices[i + 3] = colors[i + 0];
+					this->vertices[i + 4] = colors[i + 1];
+					this->vertices[i + 5] = colors[i + 2];
+				}
+
+				std::vector<GLfloat> unique_vertices;
+				for (int i = 0; i < vertices.size(); i += 3)
+				{
+					GLfloat x = vertices[i];
+					GLfloat y = vertices[i + 1];
+					GLfloat z = vertices[i + 2];
+
+					bool is_unique = true;
+					for (int j = 0; j < unique_vertices.size(); j += 3)
+					{
+						if (unique_vertices[j] == x && unique_vertices[j + 1] == y && unique_vertices[j + 2] == z)
+						{
+							is_unique = false;
+							break;
+						}
+					}
+					if (is_unique)
+					{
+						unique_vertices.push_back(x);
+						unique_vertices.push_back(y);
+						unique_vertices.push_back(z);
+					}
+				}
+				printf("unique_vertices.size(): %zu\n", unique_vertices.size());
+
+			}
+		}
 	}
 
-	if (scene["buffers"][1].is_null() || scene["buffers"][1]["byteLength"].is_null())
+	if (json_scene["buffers"][1].is_null() || json_scene["buffers"][1]["byteLength"].is_null())
 	{
+		std::cerr << "Invalid or missing byteLength in the second buffer" << std::endl;
 		std::vector<GLuint> indices;
 		for (GLuint i = 0; i < vertices_count; i++)
 		{
 			indices.push_back(i);
-		}; 
-		std::cerr << "Invalid or missing byteLength in the second buffer" << std::endl;
-		this->indices = std::move(indices.data());
-		this->indices_size = indices.size();
+		};
+		this->indices = new GLuint[vertices_count];
+		std::copy(indices.begin(), indices.end(), this->indices);
+		this->indices_size = vertices_count * sizeof(GLuint);
 	}
 	else
 	{
-
-
 	}
-	printf("vertices_size: %ld\n", this->vertices_size);
-	printf("indices_size: %ld\n", this->indices_size);
+	for (int i = 0; i < vertices_count; i += 1)
+	{
+		printf("vertices[%d]: %f %f %f %f %f %f\n", i, this->vertices[i * 6 + 0], this->vertices[i * 6 + 1], this->vertices[i * 6 + 2], this->vertices[i * 6 + 3], this->vertices[i * 6 + 4], this->vertices[i * 6 + 5]);
+	}
 	return (1);
 }
