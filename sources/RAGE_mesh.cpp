@@ -103,7 +103,6 @@ int RAGE_mesh::LoadGLB(const char *path)
 			{
 				int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
 				int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
-				this->vertices_size = byteLength;
 
 				printf("byteOffset: %d byteLength: %d\n", byteOffset, byteLength);
 
@@ -111,22 +110,22 @@ int RAGE_mesh::LoadGLB(const char *path)
 				std::memcpy(vertices.data(), binary_file_buffer.data() + byteOffset, byteLength);
 
 				std::vector<GLfloat> colors(byteLength / sizeof(GLfloat));
-				std::fill(colors.begin(), colors.end(), 0.4f);
+				std::fill(colors.begin(), colors.end(), 0.8f);
 				vertices_count = byteLength / (3 * sizeof(GLfloat));
+				this->vertices_size = vertices_count * 6 * sizeof(GLfloat);
 
 				printf("vertices_count: %d\n", vertices_count);
 				printf("vertices_countf: %f\n", (float)byteLength / (3.0f * sizeof(GLfloat)));
 
-				this->vertices = vertices.data();
 				this->vertices = new GLfloat[vertices_count * 6];
-				for (int i = 0; i < vertices_count; i += 6)
+				for (int i = 0; i < vertices_count; i++)
 				{
-					this->vertices[i + 0] = vertices[i + 0];
-					this->vertices[i + 1] = vertices[i + 1];
-					this->vertices[i + 2] = vertices[i + 2];
-					this->vertices[i + 3] = colors[i + 0];
-					this->vertices[i + 4] = colors[i + 1];
-					this->vertices[i + 5] = colors[i + 2];
+					this->vertices[i * 6 + 0] = vertices[i * 3 + 0];
+					this->vertices[i * 6 + 1] = vertices[i * 3 + 1];
+					this->vertices[i * 6 + 2] = vertices[i * 3 + 2];
+					this->vertices[i * 6 + 3] = colors[i * 3 + 0];
+					this->vertices[i * 6 + 4] = colors[i * 3 + 1];
+					this->vertices[i * 6 + 5] = colors[i * 3 + 2];
 				}
 
 				std::vector<GLfloat> unique_vertices;
@@ -158,24 +157,65 @@ int RAGE_mesh::LoadGLB(const char *path)
 		}
 	}
 
-	if (json_scene["buffers"][1].is_null() || json_scene["buffers"][1]["byteLength"].is_null())
+	if (json_scene["meshes"][0]["primitives"][0].contains("indices"))
 	{
-		std::cerr << "Invalid or missing byteLength in the second buffer" << std::endl;
-		std::vector<GLuint> indices;
-		for (GLuint i = 0; i < vertices_count; i++)
+		int indicesAccessorIndex = json_scene["meshes"][0]["primitives"][0]["indices"];
+		if (json_scene["accessors"].is_null() || json_scene["accessors"][indicesAccessorIndex].is_null())
 		{
-			indices.push_back(i);
-		};
-		this->indices = new GLuint[vertices_count];
-		std::copy(indices.begin(), indices.end(), this->indices);
-		this->indices_size = vertices_count * sizeof(GLuint);
+			std::cerr << "Invalid or missing accessor for INDICES attribute" << std::endl;
+			return -1;
+		}
+		else
+		{
+			int bufferViewIndex = json_scene["accessors"][indicesAccessorIndex]["bufferView"];
+			if (json_scene["bufferViews"].is_null() || json_scene["bufferViews"][bufferViewIndex].is_null())
+			{
+				std::cerr << "Invalid or missing buffer view for INDICES attribute" << std::endl;
+				return -1;
+			}
+			else
+			{
+				int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
+				int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
+				int componentType = json_scene["accessors"][indicesAccessorIndex]["componentType"];
+
+				GLuint indices_count;
+				if (componentType == 5123)
+				{
+					printf("GLushort\n");
+					GLushort *tempIndices = new GLushort[byteLength / sizeof(GLushort)];
+					std::memcpy(tempIndices, binary_file_buffer.data() + byteOffset, byteLength);
+					this->indices = new GLuint[byteLength / sizeof(GLushort)];
+					for (int i = 0; i < byteLength / sizeof(GLushort); i++)
+						this->indices[i] = static_cast<GLuint>(tempIndices[i]);
+					delete[] tempIndices;
+					indices_count = byteLength / sizeof(GLushort);
+				}
+				else if (componentType == 5125)
+				{
+					printf("GLuint\n");
+					this->indices = new GLuint[byteLength / sizeof(GLuint)];
+					std::memcpy(this->indices, binary_file_buffer.data() + byteOffset, byteLength);
+					indices_count = byteLength / sizeof(GLuint);
+				}
+				else
+				{
+					std::cerr << "Unsupported componentType for INDICES attribute" << std::endl;
+					return -1;
+				}
+				this->indices_size = indices_count * sizeof(GLuint);
+			}
+		}
 	}
 	else
 	{
+		std::cerr << "No INDICES attribute found" << std::endl;
+		return -1;
 	}
+
 	for (int i = 0; i < vertices_count; i += 1)
 	{
-		printf("vertices[%d]: %f %f %f %f %f %f\n", i, this->vertices[i * 6 + 0], this->vertices[i * 6 + 1], this->vertices[i * 6 + 2], this->vertices[i * 6 + 3], this->vertices[i * 6 + 4], this->vertices[i * 6 + 5]);
+		printf("v[%d]: %.2f %.2f %.2f %.2f %.2f %.2f index: %u\n", i, this->vertices[i * 6 + 0], this->vertices[i * 6 + 1], this->vertices[i * 6 + 2], this->vertices[i * 6 + 3], this->vertices[i * 6 + 4], this->vertices[i * 6 + 5], this->indices[i]);
 	}
 	return (1);
 }
