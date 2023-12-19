@@ -3,6 +3,8 @@
 #include "RAGE.hpp"
 #include "nlohmann/json.hpp"
 
+#define VERTEX_ARRAY_ELEMENT_COUNT 7
+
 class RAGE_mesh
 {
 public:

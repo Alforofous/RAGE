@@ -26,6 +26,7 @@ int main(void)
 
 	RAGE_mesh mesh;
 	mesh.LoadGLB((rage->executable_path + "/assets/models/SimpleCone.glb").c_str());
+	mesh.LoadGLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/MonkeyHead.glb").c_str());
 	GLfloat *vertices = mesh.vertices;
 	GLuint *indices = mesh.indices;
@@ -39,6 +40,8 @@ int main(void)
 	rage->shader->InitVariableLocations();
 	rage->init_gl_objects(vertices, indices, vertices_size, indices_size);
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	while (!glfwWindowShouldClose(rage->window->glfw_window))
 	{
 		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();

@@ -1,12 +1,12 @@
 #version 330 core
 
 layout (location = 0) in vec3 position_attr;
-layout (location = 1) in vec3 color_attr;
+layout (location = 1) in vec4 color_attr;
 
 uniform mat4 u_perspective_matrix;
 uniform mat4 u_view_matrix;
 
-out vec3 color;
+out vec4 color;
 
 void main()
 {

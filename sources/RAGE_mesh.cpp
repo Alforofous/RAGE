@@ -48,14 +48,36 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 
 	int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
 	int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
+	int componentType = json_scene["accessors"][colorAccessorIndex]["componentType"];
 
-	this->vertex_colors = new GLfloat[byteLength / sizeof(GLfloat)];
-	std::memcpy(this->vertex_colors, binary_buffer.data() + byteOffset, byteLength);
+	this->vertex_colors = new GLfloat[this->vertices_count * 4];
+	if (componentType == 5126) // FLOAT
+		std::memcpy(this->vertex_colors, binary_buffer.data() + byteOffset, byteLength);
+	else if (componentType == 5123) // UNSIGNED_SHORT
+	{
+		unsigned short *tempColors = new unsigned short[byteLength / sizeof(unsigned short)];
+		std::memcpy(tempColors, binary_buffer.data() + byteOffset, byteLength);
+		this->vertex_colors = new GLfloat[this->vertices_count * 4];
+		for (int i = 0; i < this->vertices_count; i++)
+		{
+			this->vertex_colors[i * 4 + 0] = tempColors[i * 4 + 0] / 65535.0f;
+			this->vertex_colors[i * 4 + 1] = tempColors[i * 4 + 1] / 65535.0f;
+			this->vertex_colors[i * 4 + 2] = tempColors[i * 4 + 2] / 65535.0f;
+			this->vertex_colors[i * 4 + 3] = tempColors[i * 4 + 3] / 65535.0f;
+		}
+		delete[] tempColors;
+	}
+	else
+	{
+		throw std::runtime_error("Unsupported componentType for COLOR_0 attribute");
+	}
+
 	for (int i = 0; i < this->vertices_count; i++)
 	{
-		this->vertices[i * 6 + 3] = this->vertex_colors[i * 3 + 0];
-		this->vertices[i * 6 + 4] = this->vertex_colors[i * 3 + 1];
-		this->vertices[i * 6 + 5] = this->vertex_colors[i * 3 + 2];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = this->vertex_colors[i * 4 + 0];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = this->vertex_colors[i * 4 + 1];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = this->vertex_colors[i * 4 + 2];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = this->vertex_colors[i * 4 + 3];
 	}
 }
 
@@ -83,19 +105,30 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 	std::memcpy(vertices.data(), binary_buffer.data() + byteOffset, byteLength);
 
 	std::vector<GLfloat> colors(byteLength / sizeof(GLfloat));
-	std::fill(colors.begin(), colors.end(), 1.0f);
+	std::fill(colors.begin(), colors.end(), 0.5f);
 	this->vertices_count = byteLength / (3 * sizeof(GLfloat));
-	this->vertices_size = this->vertices_count * 6 * sizeof(GLfloat);
+	this->vertices_size = this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT * sizeof(GLfloat);
 
-	this->vertices = new GLfloat[this->vertices_count * 6];
+	this->vertices = new GLfloat[this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT];
 	for (int i = 0; i < this->vertices_count; i++)
 	{
-		this->vertices[i * 6 + 0] = vertices[i * 3 + 0];
-		this->vertices[i * 6 + 1] = vertices[i * 3 + 1];
-		this->vertices[i * 6 + 2] = vertices[i * 3 + 2];
-		this->vertices[i * 6 + 3] = colors[i * 3 + 0];
-		this->vertices[i * 6 + 4] = colors[i * 3 + 1];
-		this->vertices[i * 6 + 5] = colors[i * 3 + 2];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 0] = vertices[i * 3 + 0];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 1] = vertices[i * 3 + 1];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 2] = vertices[i * 3 + 2];
+
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = colors[i * 3 + 0];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = colors[i * 3 + 1];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = colors[i * 3 + 2];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = 1.0f;
+
+		float random_color[3];
+		random_color[0] = (float)rand() / RAND_MAX;
+		random_color[1] = (float)rand() / RAND_MAX;
+		random_color[2] = (float)rand() / RAND_MAX;
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = random_color[0];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = random_color[1];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = random_color[2];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = 0.3f;
 	}
 }
 
@@ -164,7 +197,7 @@ int RAGE_mesh::LoadGLB(const char *path)
 		load_model_indices(json_scene, binary_buffer);
 
 		for (int i = 0; i < this->vertices_count; i += 1)
-			printf("v[%d]: %.2f %.2f %.2f %.2f %.2f %.2f\n", i, this->vertices[i * 6 + 0], this->vertices[i * 6 + 1], this->vertices[i * 6 + 2], this->vertices[i * 6 + 3], this->vertices[i * 6 + 4], this->vertices[i * 6 + 5]);
+			printf("v[%d]: %.2f %.2f %.2f %.2f %.2f %.2f\n", i, this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 0], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 1], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 2], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5]);
 		for (int i = 0; i < this->indices_count; i += 1)
 			printf("i[%d]: %u\n", i, this->indices[i]);
 		printf("vertices_count: %u\n", this->vertices_count);

@@ -25,10 +25,9 @@ void RAGE::init_gl_objects(GLfloat *vertices, GLuint *indices, GLsizeiptr vertic
 	element_buffer_object = new element_buffer(indices, indices_size);
 	
 	//position
-	vertex_array_object->link_attributes(*vertex_buffer_object, 0, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void *)0);
+	vertex_array_object->link_attributes(*vertex_buffer_object, 0, 3, GL_FLOAT, 7 * sizeof(GLfloat), (void *)0);
 	//color
-	vertex_array_object->link_attributes(*vertex_buffer_object, 1, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void *)(3 * sizeof(GLfloat)));
-	vertex_array_object->unbind();
+	vertex_array_object->link_attributes(*vertex_buffer_object, 1, 4, GL_FLOAT, 7 * sizeof(GLfloat), (void *)(3 * sizeof(GLfloat)));vertex_array_object->unbind();
 	vertex_buffer_object->unbind();
 	element_buffer_object->unbind();
 }
