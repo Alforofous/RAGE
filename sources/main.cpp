@@ -27,7 +27,10 @@ int main(void)
 	RAGE_mesh mesh;
 	mesh.LoadGLB((rage->executable_path + "/assets/models/SimpleCone.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/MonkeyHead.glb").c_str());
+	mesh.LoadGLB((rage->executable_path + "/assets/models/Duck.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
+	mesh.LoadGLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
+	mesh.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
 	GLfloat *vertices = mesh.vertices;
 	GLuint *indices = mesh.indices;
 	GLsizeiptr vertices_size = mesh.vertices_size;
