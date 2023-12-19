@@ -6,7 +6,7 @@
 class RAGE_camera : public RAGE_object
 {
 public:
-	int Init(RAGE_window *window);
+	bool init(RAGE_window *window);
 	glm::mat4 get_perspective_matrix();
 	glm::mat4 get_view_matrix(bool update = true);
 	glm::vec3 get_forward();

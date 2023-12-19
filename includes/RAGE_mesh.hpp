@@ -1,14 +1,15 @@
 #pragma once
 
-#include "RAGE.hpp"
 #include "nlohmann/json.hpp"
+#include "glad/glad.h"
+#include <vector>
 
 #define VERTEX_ARRAY_ELEMENT_COUNT 7
 
 class RAGE_mesh
 {
 public:
-	int LoadGLB(const char *path);
+	bool LoadGLB(const char *path);
 	GLfloat *vertices;
 	GLuint *indices;
 	GLsizeiptr vertices_size;

@@ -16,10 +16,10 @@ int main(void)
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	if (rage->window->Init() == -1)
+	if (rage->window->init() == false)
 		return (1);
 	glm::ivec2 window_pixel_size = rage->window->get_window_pixel_size();
-	if (rage->camera->Init(rage->window) == -1)
+	if (rage->camera.init(rage->window) == false)
 		return (1);
 
 	glfwMakeContextCurrent(rage->window->glfw_window);
@@ -33,7 +33,8 @@ int main(void)
 	mesh.LoadGLB((rage->executable_path + "/assets/models/Duck.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
-	gl_object_test.init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size);
+	if (gl_object_test.init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size) == false)
+		return (1);
 	mesh.LoadGLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
 
 	set_callbacks(rage);
@@ -41,7 +42,8 @@ int main(void)
 	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
 								   rage->executable_path + "/shaders/fragment_test.glsl");
 	rage->shader->InitVariableLocations();
-	gl_object.init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size);
+	if (gl_object.init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size) == false)
+		return (1);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -63,7 +65,7 @@ int main(void)
 
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
-		rage->camera->handle_input(rage->user_input, (float)rage->delta_time);
+		rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
 
 		glfwPollEvents();
 		glfwSwapInterval(0);

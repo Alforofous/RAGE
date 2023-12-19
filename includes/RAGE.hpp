@@ -21,7 +21,7 @@ class RAGE
 {
 public:
 	RAGE_window				*window;
-	RAGE_camera				*camera;
+	RAGE_camera				camera;
 	RAGE_shader				*shader;
 	RAGE_gui				*gui;
 	RAGE_user_input			*user_input;

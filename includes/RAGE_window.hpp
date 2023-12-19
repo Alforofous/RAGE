@@ -6,7 +6,7 @@ class RAGE_window
 public:
 	GLFWwindow *glfw_window;
 	~RAGE_window();
-	int Init();
+	bool init();
 	glm::ivec2 get_window_pixel_size() const;
 	int get_window_pixel_width() const;
 	int get_window_pixel_height() const;

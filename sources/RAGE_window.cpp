@@ -1,28 +1,30 @@
 #include "RAGE.hpp"
 #include "RAGE_window.hpp"
 
-int RAGE_window::Init()
+bool RAGE_window::init()
 {
-	primary_monitor = glfwGetPrimaryMonitor();
-	if (primary_monitor == NULL)
+	try
 	{
-		std::cerr << "Failed to get primary monitor" << std::endl;
-		return (-1);
+		primary_monitor = glfwGetPrimaryMonitor();
+		if (primary_monitor == NULL)
+			throw std::runtime_error("Failed to get primary monitor");
+
+		mode = glfwGetVideoMode(primary_monitor);
+		if (mode == NULL)
+			throw std::runtime_error("Failed to get video mode");
+		
+		this->window_pixel_size = glm::ivec2(mode->width / 2, mode->height / 2);
+		glfw_window = glfwCreateWindow(this->window_pixel_size.x, this->window_pixel_size.y, "RAGE", NULL, NULL);
+		if (glfw_window == NULL)
+			throw std::runtime_error("Failed to create window");
+		
+		return true;
 	}
-	mode = glfwGetVideoMode(primary_monitor);
-	if (mode == NULL)
+	catch (const std::exception& e)
 	{
-		std::cerr << "Failed to get video mode" << std::endl;
-		return (-1);
+		std::cerr << "RAGE_window error: " << e.what() << std::endl;
+		return false;
 	}
-	this->window_pixel_size = glm::ivec2(mode->width / 2, mode->height / 2);
-	glfw_window = glfwCreateWindow(this->window_pixel_size.x, this->window_pixel_size.y, "RAGE", NULL, NULL);
-	if (glfw_window == NULL)
-	{
-		std::cerr << "Failed to create window" << std::endl;
-		return (-1);
-	}
-	return (1);
 }
 
 glm::ivec2 RAGE_window::get_window_pixel_size() const

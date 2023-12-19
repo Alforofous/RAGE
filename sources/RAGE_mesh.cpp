@@ -1,4 +1,6 @@
 #include "RAGE_mesh.hpp"
+#include <fstream>
+#include <iostream>
 
 static void check_glb_header(const char *path, std::ifstream &file)
 {
@@ -172,7 +174,7 @@ void RAGE_mesh::load_model_indices(nlohmann::json &json_scene, std::vector<char>
 	this->indices_size = this->indices_count * sizeof(GLuint);
 }
 
-int RAGE_mesh::LoadGLB(const char *path)
+bool RAGE_mesh::LoadGLB(const char *path)
 {
 	std::ifstream file;
 	std::vector<char> json_header_buffer;
@@ -199,11 +201,11 @@ int RAGE_mesh::LoadGLB(const char *path)
 			printf("i[%d]: %u\n", i, this->indices[i]);
 		printf("vertices_count: %u\n", this->vertices_count);
 		printf("indices_count: %u\n", this->indices_count);
-		return 1;
+		return (true);
 	}
 	catch (const std::exception &e)
 	{
 		std::cerr << "RAGE_mesh error: " << e.what() << std::endl;
-		return -1;
+		return (false);
 	}
 }
