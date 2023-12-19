@@ -24,25 +24,6 @@ int main(void)
 	glfwMakeContextCurrent(rage->window->glfw_window);
 	gladLoadGL();
 
-	/*
-	GLfloat vertices[] = {
-		0.0f, 5.0f, 0.0f, 1.0f, 0.0f, 0.0f,   // Peak
-		-0.5f, 0.0f, -0.5f, 0.0f, 1.0f, 0.0f, // Base corner 1
-		0.5f, 0.0f, -0.5f, 0.0f, 0.0f, 1.0f,  // Base corner 2
-		0.5f, 0.0f, 0.5f, 1.0f, 1.0f, 0.0f,   // Base corner 3
-		-0.5f, 0.0f, 0.5f, 0.0f, 1.0f, 1.0f   // Base corner 4
-	};
-
-	GLuint indices[] = {
-		0, 1, 2, // Triangle 1
-		0, 2, 3, // Triangle 2
-		0, 3, 4, // Triangle 3
-		0, 4, 1, // Triangle 4
-		1, 2, 3, // Base triangle 1
-		1, 3, 4	 // Base triangle 2
-	};
-	*/
-
 	RAGE_mesh mesh;
 	mesh.LoadGLB((rage->executable_path + "/assets/models/SimpleCone.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/MonkeyHead.glb").c_str());
