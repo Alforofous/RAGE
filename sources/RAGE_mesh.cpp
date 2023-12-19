@@ -49,21 +49,26 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 	int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
 	int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
 	int componentType = json_scene["accessors"][colorAccessorIndex]["componentType"];
+	std::string type = json_scene["accessors"][colorAccessorIndex]["type"];
+	int color_channel_count = 4;
+	if (type == "VEC3")
+		color_channel_count = 3;
 
-	this->vertex_colors = new GLfloat[this->vertices_count * 4];
+	this->vertex_colors = new GLfloat[this->vertices_count * color_channel_count];
 	if (componentType == 5126) // FLOAT
 		std::memcpy(this->vertex_colors, binary_buffer.data() + byteOffset, byteLength);
 	else if (componentType == 5123) // UNSIGNED_SHORT
 	{
 		unsigned short *tempColors = new unsigned short[byteLength / sizeof(unsigned short)];
 		std::memcpy(tempColors, binary_buffer.data() + byteOffset, byteLength);
-		this->vertex_colors = new GLfloat[this->vertices_count * 4];
+		this->vertex_colors = new GLfloat[this->vertices_count * color_channel_count];
 		for (int i = 0; i < this->vertices_count; i++)
 		{
-			this->vertex_colors[i * 4 + 0] = tempColors[i * 4 + 0] / 65535.0f;
-			this->vertex_colors[i * 4 + 1] = tempColors[i * 4 + 1] / 65535.0f;
-			this->vertex_colors[i * 4 + 2] = tempColors[i * 4 + 2] / 65535.0f;
-			this->vertex_colors[i * 4 + 3] = tempColors[i * 4 + 3] / 65535.0f;
+			this->vertex_colors[i * color_channel_count + 0] = tempColors[i * color_channel_count + 0] / 65535.0f;
+			this->vertex_colors[i * color_channel_count + 1] = tempColors[i * color_channel_count + 1] / 65535.0f;
+			this->vertex_colors[i * color_channel_count + 2] = tempColors[i * color_channel_count + 2] / 65535.0f;
+			if (color_channel_count == 4)
+				this->vertex_colors[i * color_channel_count + 3] = tempColors[i * color_channel_count + 3] / 65535.0f;
 		}
 		delete[] tempColors;
 	}
@@ -74,10 +79,11 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 
 	for (int i = 0; i < this->vertices_count; i++)
 	{
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = this->vertex_colors[i * 4 + 0];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = this->vertex_colors[i * 4 + 1];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = this->vertex_colors[i * 4 + 2];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = this->vertex_colors[i * 4 + 3];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = this->vertex_colors[i * color_channel_count + 0];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = this->vertex_colors[i * color_channel_count + 1];
+		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = this->vertex_colors[i * color_channel_count + 2];
+		if (color_channel_count == 4)
+			this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = this->vertex_colors[i * color_channel_count + 3];
 	}
 }
 
@@ -120,15 +126,6 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = colors[i * 3 + 1];
 		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = colors[i * 3 + 2];
 		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = 1.0f;
-
-		float random_color[3];
-		random_color[0] = (float)rand() / RAND_MAX;
-		random_color[1] = (float)rand() / RAND_MAX;
-		random_color[2] = (float)rand() / RAND_MAX;
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = random_color[0];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = random_color[1];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = random_color[2];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = 0.3f;
 	}
 }
 
