@@ -27,6 +27,7 @@ set(
 	vertex_array.cpp
 	vertex_buffer.cpp
 	element_buffer.cpp
+	GLobject.cpp
 )
 
 set(
@@ -44,6 +45,7 @@ set(
 	vertex_array.hpp
 	vertex_buffer.hpp
 	element_buffer.hpp
+	GLobject.hpp
 )
 
 set(

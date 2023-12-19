@@ -13,10 +13,6 @@
 #include "RAGE_user_input.hpp"
 #include "RAGE_mesh.hpp"
 
-#include "vertex_array.hpp"
-#include "vertex_buffer.hpp"
-#include "element_buffer.hpp"
-
 #include <iostream>
 #include <filesystem>
 #include <chrono>
@@ -29,16 +25,11 @@ public:
 	RAGE_shader				*shader;
 	RAGE_gui				*gui;
 	RAGE_user_input			*user_input;
-	vertex_array			*vertex_array_object;
-	vertex_buffer			*vertex_buffer_object;
-	element_buffer			*element_buffer_object;
 	double					delta_time;
 	std::string				executable_path;
 
 	RAGE();
 	~RAGE();
-
-	void	init_gl_objects(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size);
 private:
 };
 
