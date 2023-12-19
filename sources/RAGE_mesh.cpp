@@ -31,12 +31,36 @@ static void check_glb_chunk_header(const char *path, std::ifstream &file, std::v
 	file.read(binary_file_buffer.data(), binary_file_buffer.size());
 }
 
+void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector<char> &binary_buffer)
+{
+	if (!json_scene["meshes"][0]["primitives"][0]["attributes"].contains("COLOR_0"))
+		return;
+	int colorAccessorIndex = json_scene["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"];
+	if (json_scene["accessors"].is_null() || json_scene["accessors"][colorAccessorIndex].is_null())
+	{
+		throw std::runtime_error("Invalid or missing accessor for COLOR_0 attribute");
+	}
+	int bufferViewIndex = json_scene["accessors"][colorAccessorIndex]["bufferView"];
+	if (json_scene["bufferViews"].is_null() || json_scene["bufferViews"][bufferViewIndex].is_null())
+	{
+		throw std::runtime_error("Invalid or missing buffer view for COLOR_0 attribute");
+	}
+
+	int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
+	int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
+
+	this->vertex_colors = new GLfloat[byteLength / sizeof(GLfloat)];
+	std::memcpy(this->vertex_colors, binary_buffer.data() + byteOffset, byteLength);
+	for (int i = 0; i < this->vertices_count; i++)
+	{
+		this->vertices[i * 6 + 3] = this->vertex_colors[i * 3 + 0];
+		this->vertices[i * 6 + 4] = this->vertex_colors[i * 3 + 1];
+		this->vertices[i * 6 + 5] = this->vertex_colors[i * 3 + 2];
+	}
+}
+
 void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vector<char> &binary_buffer)
 {
-	if (json_scene["meshes"].is_null() || json_scene["meshes"][0]["primitives"].is_null() || json_scene["meshes"][0]["primitives"][0]["attributes"].is_null())
-	{
-		throw std::runtime_error("Invalid or missing attributes in the first primitive of the first mesh");
-	}
 	if (!json_scene["meshes"][0]["primitives"][0]["attributes"].contains("POSITION"))
 	{
 		throw std::runtime_error("No POSITION attribute found");
@@ -59,7 +83,7 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 	std::memcpy(vertices.data(), binary_buffer.data() + byteOffset, byteLength);
 
 	std::vector<GLfloat> colors(byteLength / sizeof(GLfloat));
-	std::fill(colors.begin(), colors.end(), 0.8f);
+	std::fill(colors.begin(), colors.end(), 1.0f);
 	this->vertices_count = byteLength / (3 * sizeof(GLfloat));
 	this->vertices_size = this->vertices_count * 6 * sizeof(GLfloat);
 
@@ -133,7 +157,10 @@ int RAGE_mesh::LoadGLB(const char *path)
 		check_glb_chunk_header(path, file, json_header_buffer, binary_buffer);
 
 		nlohmann::json json_scene = nlohmann::json::parse(json_header_buffer.begin(), json_header_buffer.end());
+		if (json_scene["meshes"].is_null() || json_scene["meshes"][0]["primitives"].is_null() || json_scene["meshes"][0]["primitives"][0]["attributes"].is_null())
+			throw std::runtime_error("Invalid or missing attributes in the first primitive of the first mesh");
 		load_model_vertex_positions(json_scene, binary_buffer);
+		load_model_vertex_colors(json_scene, binary_buffer);
 		load_model_indices(json_scene, binary_buffer);
 
 		for (int i = 0; i < this->vertices_count; i += 1)
