@@ -5,6 +5,7 @@ layout (location = 1) in vec4 color_attr;
 
 uniform mat4 u_perspective_matrix;
 uniform mat4 u_view_matrix;
+uniform mat4 u_model_matrix;
 
 out vec4 color;
 
@@ -12,5 +13,5 @@ void main()
 {
 	color = color_attr;
 	vec4 position = vec4(position_attr.x, position_attr.y, position_attr.z, 1.0);
-	gl_Position = u_perspective_matrix * u_view_matrix * position;
+	gl_Position = u_perspective_matrix * u_view_matrix * u_model_matrix * position;
 }

@@ -62,7 +62,7 @@ int main(void)
 		glUseProgram(rage->shader->hProgram);
 		set_shader_variable_values(rage);
 
-		rage->scene.draw();
+		rage->scene.draw(rage);
 
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);

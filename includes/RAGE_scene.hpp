@@ -3,12 +3,14 @@
 #include "RAGE_object.hpp"
 #include <vector>
 
+class RAGE;
+
 class RAGE_scene
 {
 public:
 	RAGE_scene(const char *name = "New Scene");
 
-	void draw();
+	void draw(RAGE *rage);
 	bool add_object(RAGE_object *object);
 	void print_objects();
 private:

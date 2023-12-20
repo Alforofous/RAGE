@@ -1,5 +1,4 @@
 #include "RAGE.hpp"
-#include "glm/gtc/type_ptr.hpp"
 
 RAGE_shader::RAGE_shader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader)
 {
@@ -106,7 +105,8 @@ void RAGE_shader::InitVariableLocations()
 	{
 		"u_resolution",
 		"u_perspective_matrix",
-		"u_view_matrix"
+		"u_view_matrix",
+		"u_model_matrix",
 	};
 	int variable_count = sizeof(variable_names) / sizeof(variable_names[0]);
 	for (int i = 0; i < variable_count; i++)
