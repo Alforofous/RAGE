@@ -6,12 +6,12 @@
 class RAGE_scene
 {
 public:
-	RAGE_scene();
-	~RAGE_scene();
+	RAGE_scene(const char *name = "New Scene");
 
-	void loadScene(const char *sceneName);
-	void renderScene();
-	void updateScene(float deltaTime);
+	void draw();
+	bool add_object(RAGE_object *object);
+	void print_objects();
 private:
-	std::vector<RAGE_object> objects;
+	std::string name;
+	std::vector<RAGE_object *> objects;
 };

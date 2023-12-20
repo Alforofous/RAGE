@@ -25,16 +25,14 @@ int main(void)
 	glfwMakeContextCurrent(rage->window->glfw_window);
 	gladLoadGL();
 
-	GLobject gl_object;
-	GLobject gl_object_test;
 	RAGE_mesh mesh;
+	RAGE_mesh mesh2;
 	mesh.LoadGLB((rage->executable_path + "/assets/models/SimpleCone.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/MonkeyHead.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/Duck.glb").c_str());
 	mesh.LoadGLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
-	mesh.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
-	if (gl_object_test.init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size) == false)
-		return (1);
+	mesh2.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
+	rage->scene.add_object(new RAGE_object(&mesh2, "BoxVertexColors"));
 	mesh.LoadGLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
 
 	set_callbacks(rage);
@@ -42,8 +40,8 @@ int main(void)
 	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
 								   rage->executable_path + "/shaders/fragment_test.glsl");
 	rage->shader->InitVariableLocations();
-	if (gl_object.init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size) == false)
-		return (1);
+	rage->scene.add_object(new RAGE_object(&mesh, "WideMonkeyHeadVertexColored"));
+	rage->scene.print_objects();
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -60,8 +58,7 @@ int main(void)
 		glUseProgram(rage->shader->hProgram);
 		set_shader_variable_values(rage);
 
-		gl_object.draw();
-		gl_object_test.draw();
+		rage->scene.draw();
 
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);

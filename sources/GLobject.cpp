@@ -2,11 +2,9 @@
 #include "RAGE_mesh.hpp"
 #include <iostream>
 
-GLobject::~GLobject()
+GLobject::GLobject()
 {
-	this->vertex_array_object->delete_object();
-	this->vertex_buffer_object->delete_object();
-	this->element_buffer_object->delete_object();
+	this->initialized = false;
 }
 
 bool GLobject::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size)
@@ -28,6 +26,7 @@ bool GLobject::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size
 		this->element_buffer_object->unbind();
 
 		this->indices_count = indices_size / sizeof(GLuint);
+		this->initialized = true;
 		return (true);
 	}
 	catch (const std::exception &e)
@@ -39,9 +38,8 @@ bool GLobject::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size
 
 bool GLobject::init(RAGE_mesh &mesh)
 {
-	if (this->init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size) == false)
-		return (false);
-	return (true);
+	bool gl_object_initialized = this->init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size);
+	return (gl_object_initialized);
 }
 
 void GLobject::draw()
@@ -51,4 +49,17 @@ void GLobject::draw()
 	glDrawElements(GL_TRIANGLES, this->indices_count, GL_UNSIGNED_INT, 0);
 	this->element_buffer_object->unbind();
 	this->vertex_array_object->unbind();
+}
+
+bool GLobject::is_initialized()
+{
+	return (this->initialized);
+}
+
+GLobject::~GLobject()
+{
+	this->vertex_array_object->delete_object();
+	this->vertex_buffer_object->delete_object();
+	this->element_buffer_object->delete_object();
+	this->initialized = false;
 }

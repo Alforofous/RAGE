@@ -10,6 +10,7 @@
 #include "RAGE_shader.hpp"
 #include "RAGE_gui.hpp"
 #include "RAGE_scene_view.hpp"
+#include "RAGE_scene.hpp"
 #include "RAGE_user_input.hpp"
 #include "RAGE_mesh.hpp"
 
@@ -20,19 +21,21 @@
 class RAGE
 {
 public:
-	RAGE_window				*window;
-	RAGE_camera				camera;
-	RAGE_shader				*shader;
-	RAGE_gui				*gui;
-	RAGE_user_input			*user_input;
-	double					delta_time;
-	std::string				executable_path;
+	RAGE_window *window;
+	RAGE_camera camera;
+	RAGE_shader *shader;
+	RAGE_gui *gui;
+	RAGE_user_input *user_input;
+	RAGE_scene scene;
+	double delta_time;
+	std::string executable_path;
 
 	RAGE();
 	~RAGE();
+
 private:
 };
 
-void		set_callbacks(RAGE *rage);
-void		set_shader_variable_values(void *content);
-std::string	getExecutableDir();
+void set_callbacks(RAGE *rage);
+void set_shader_variable_values(void *content);
+std::string getExecutableDir();
