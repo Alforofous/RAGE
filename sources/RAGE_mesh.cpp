@@ -56,21 +56,21 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 	if (type == "VEC3")
 		this->vertex_color_channel_count = 3;
 
-	this->vertex_colors = new GLfloat[this->vertices_count * this->vertex_color_channel_count];
+	this->vertex_colors.clear();
 	if (componentType == 5126) // FLOAT
-		std::memcpy(this->vertex_colors, binary_buffer.data() + byteOffset, byteLength);
+		std::memcpy(this->vertex_colors.data(), binary_buffer.data() + byteOffset, byteLength);
 	else if (componentType == 5123) // UNSIGNED_SHORT
 	{
 		unsigned short *tempColors = new unsigned short[byteLength / sizeof(unsigned short)];
 		std::memcpy(tempColors, binary_buffer.data() + byteOffset, byteLength);
-		this->vertex_colors = new GLfloat[this->vertices_count * this->vertex_color_channel_count];
 		for (int i = 0; i < this->vertices_count; i++)
 		{
-			this->vertex_colors[i * this->vertex_color_channel_count + 0] = tempColors[i * this->vertex_color_channel_count + 0] / 65535.0f;
-			this->vertex_colors[i * this->vertex_color_channel_count + 1] = tempColors[i * this->vertex_color_channel_count + 1] / 65535.0f;
-			this->vertex_colors[i * this->vertex_color_channel_count + 2] = tempColors[i * this->vertex_color_channel_count + 2] / 65535.0f;
+			int vertex_color_index = i * this->vertex_color_channel_count;
+			this->vertex_colors.push_back(tempColors[vertex_color_index + 0] / 65535.0f);
+			this->vertex_colors.push_back(tempColors[vertex_color_index + 1] / 65535.0f);
+			this->vertex_colors.push_back(tempColors[vertex_color_index + 2] / 65535.0f);
 			if (this->vertex_color_channel_count == 4)
-				this->vertex_colors[i * this->vertex_color_channel_count + 3] = tempColors[i * this->vertex_color_channel_count + 3] / 65535.0f;
+				this->vertex_colors.push_back(tempColors[vertex_color_index + 3] / 65535.0f);
 		}
 		delete[] tempColors;
 	}
@@ -108,20 +108,22 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 	this->vertices_count = byteLength / (3 * sizeof(GLfloat));
 	this->vertices_size = this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT * sizeof(GLfloat);
 
-	this->vertex_positions = new GLfloat[this->vertices_count * 3];
+	this->vertex_positions.clear();
 	for (int i = 0; i < this->vertices_count; i++)
 	{
-		this->vertex_positions[i * 3 + 0] = vertices[i * 3 + 0];
-		this->vertex_positions[i * 3 + 1] = vertices[i * 3 + 1];
-		this->vertex_positions[i * 3 + 2] = vertices[i * 3 + 2];
+		int vertex_position_index = i * VERTEX_POSITION_ELEMENT_COUNT;
+		this->vertex_positions.push_back(vertices[vertex_position_index + 0]);
+		this->vertex_positions.push_back(vertices[vertex_position_index + 1]);
+		this->vertex_positions.push_back(vertices[vertex_position_index + 2]);
 	}
 	this->vertex_color_channel_count = 3;
-	this->vertex_colors = new GLfloat[this->vertices_count * 3];
+	this->vertex_colors.clear();
 	for (int i = 0; i < this->vertices_count; i++)
 	{
-		this->vertex_colors[i * 3 + 0] = colors[i * 3 + 0];
-		this->vertex_colors[i * 3 + 1] = colors[i * 3 + 1];
-		this->vertex_colors[i * 3 + 2] = colors[i * 3 + 2];
+		int vertex_color_index = i * this->vertex_color_channel_count;
+		this->vertex_colors.push_back(colors[vertex_color_index + 0]);
+		this->vertex_colors.push_back(colors[vertex_color_index + 1]);
+		this->vertex_colors.push_back(colors[vertex_color_index + 2]);
 	}
 }
 
@@ -214,8 +216,10 @@ bool RAGE_mesh::LoadGLB(const char *path)
 
 		for (int i = 0; i < this->vertices_count; i += 1)
 			printf("v[%d]: %.2f %.2f %.2f %.2f %.2f %.2f\n", i, this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 0], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 1], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 2], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5]);
+		/*
 		for (int i = 0; i < this->indices_count; i += 1)
 			printf("i[%d]: %u\n", i, this->indices[i]);
+		*/
 		printf("vertices_count: %u\n", this->vertices_count);
 		printf("indices_count: %u\n", this->indices_count);
 		return (true);
