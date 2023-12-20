@@ -10,6 +10,8 @@ RAGE_scene::RAGE_scene(const char *name)
 void RAGE_scene::draw(RAGE *rage)
 {
 	for (int i = 0; i < this->objects.size(); i++)
+		this->objects[i]->update_model_matrix();
+	for (int i = 0; i < this->objects.size(); i++)
 	{
 		if (this->objects[i]->has_mesh() == true)
 		{
@@ -20,7 +22,7 @@ void RAGE_scene::draw(RAGE *rage)
 				gl_object->init(*rage_object->get_mesh());
 
 			glUniformMatrix4fv(rage->shader->variable_location["u_model_matrix"], 1,
-							   GL_FALSE, glm::value_ptr(rage_object->get_model_matrix(true)));
+							   GL_FALSE, glm::value_ptr(rage_object->get_model_matrix()));
 			(rage_object->get_gl_object())->draw();
 		}
 	}
