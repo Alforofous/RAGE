@@ -4,7 +4,9 @@
 #include "glad/glad.h"
 #include <vector>
 
-#define VERTEX_ARRAY_ELEMENT_COUNT 7
+#define VERTEX_POSITION_ELEMENT_COUNT 3
+#define VERTEX_COLOR_ELEMENT_COUNT 4
+#define VERTEX_ARRAY_ELEMENT_COUNT (VERTEX_POSITION_ELEMENT_COUNT + VERTEX_COLOR_ELEMENT_COUNT)
 
 class RAGE_mesh
 {
@@ -14,14 +16,16 @@ public:
 	GLuint *indices;
 	GLsizeiptr vertices_size;
 	GLsizeiptr indices_size;
+	GLuint vertices_count;
+	GLuint indices_count;
 private:
 	void load_model_vertex_positions(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
 	void load_model_vertex_colors(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
 	void load_model_indices(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
+	void combine_vertex_positions_and_colors();
 	GLfloat *vertex_colors;
-	GLuint vertices_count;
-	GLuint vertex_color_count;
-	GLuint indices_count;
+	GLfloat *vertex_positions;
+	int vertex_color_channel_count;
 };
 
 struct GLBHeader

@@ -52,40 +52,31 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 	int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
 	int componentType = json_scene["accessors"][colorAccessorIndex]["componentType"];
 	std::string type = json_scene["accessors"][colorAccessorIndex]["type"];
-	int color_channel_count = 4;
+	this->vertex_color_channel_count = 4;
 	if (type == "VEC3")
-		color_channel_count = 3;
+		this->vertex_color_channel_count = 3;
 
-	this->vertex_colors = new GLfloat[this->vertices_count * color_channel_count];
+	this->vertex_colors = new GLfloat[this->vertices_count * this->vertex_color_channel_count];
 	if (componentType == 5126) // FLOAT
 		std::memcpy(this->vertex_colors, binary_buffer.data() + byteOffset, byteLength);
 	else if (componentType == 5123) // UNSIGNED_SHORT
 	{
 		unsigned short *tempColors = new unsigned short[byteLength / sizeof(unsigned short)];
 		std::memcpy(tempColors, binary_buffer.data() + byteOffset, byteLength);
-		this->vertex_colors = new GLfloat[this->vertices_count * color_channel_count];
+		this->vertex_colors = new GLfloat[this->vertices_count * this->vertex_color_channel_count];
 		for (int i = 0; i < this->vertices_count; i++)
 		{
-			this->vertex_colors[i * color_channel_count + 0] = tempColors[i * color_channel_count + 0] / 65535.0f;
-			this->vertex_colors[i * color_channel_count + 1] = tempColors[i * color_channel_count + 1] / 65535.0f;
-			this->vertex_colors[i * color_channel_count + 2] = tempColors[i * color_channel_count + 2] / 65535.0f;
-			if (color_channel_count == 4)
-				this->vertex_colors[i * color_channel_count + 3] = tempColors[i * color_channel_count + 3] / 65535.0f;
+			this->vertex_colors[i * this->vertex_color_channel_count + 0] = tempColors[i * this->vertex_color_channel_count + 0] / 65535.0f;
+			this->vertex_colors[i * this->vertex_color_channel_count + 1] = tempColors[i * this->vertex_color_channel_count + 1] / 65535.0f;
+			this->vertex_colors[i * this->vertex_color_channel_count + 2] = tempColors[i * this->vertex_color_channel_count + 2] / 65535.0f;
+			if (this->vertex_color_channel_count == 4)
+				this->vertex_colors[i * this->vertex_color_channel_count + 3] = tempColors[i * this->vertex_color_channel_count + 3] / 65535.0f;
 		}
 		delete[] tempColors;
 	}
 	else
 	{
 		throw std::runtime_error("Unsupported componentType for COLOR_0 attribute");
-	}
-
-	for (int i = 0; i < this->vertices_count; i++)
-	{
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = this->vertex_colors[i * color_channel_count + 0];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = this->vertex_colors[i * color_channel_count + 1];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = this->vertex_colors[i * color_channel_count + 2];
-		if (color_channel_count == 4)
-			this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = this->vertex_colors[i * color_channel_count + 3];
 	}
 }
 
@@ -117,17 +108,20 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 	this->vertices_count = byteLength / (3 * sizeof(GLfloat));
 	this->vertices_size = this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT * sizeof(GLfloat);
 
-	this->vertices = new GLfloat[this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT];
+	this->vertex_positions = new GLfloat[this->vertices_count * 3];
 	for (int i = 0; i < this->vertices_count; i++)
 	{
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 0] = vertices[i * 3 + 0];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 1] = vertices[i * 3 + 1];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 2] = vertices[i * 3 + 2];
-
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3] = colors[i * 3 + 0];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4] = colors[i * 3 + 1];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5] = colors[i * 3 + 2];
-		this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 6] = 1.0f;
+		this->vertex_positions[i * 3 + 0] = vertices[i * 3 + 0];
+		this->vertex_positions[i * 3 + 1] = vertices[i * 3 + 1];
+		this->vertex_positions[i * 3 + 2] = vertices[i * 3 + 2];
+	}
+	this->vertex_color_channel_count = 3;
+	this->vertex_colors = new GLfloat[this->vertices_count * 3];
+	for (int i = 0; i < this->vertices_count; i++)
+	{
+		this->vertex_colors[i * 3 + 0] = colors[i * 3 + 0];
+		this->vertex_colors[i * 3 + 1] = colors[i * 3 + 1];
+		this->vertex_colors[i * 3 + 2] = colors[i * 3 + 2];
 	}
 }
 
@@ -174,6 +168,28 @@ void RAGE_mesh::load_model_indices(nlohmann::json &json_scene, std::vector<char>
 	this->indices_size = this->indices_count * sizeof(GLuint);
 }
 
+void RAGE_mesh::combine_vertex_positions_and_colors()
+{
+	this->vertices = new GLfloat[this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT];
+	for (int i = 0; i < this->vertices_count; i++)
+	{
+		int vertex_position_index = i * VERTEX_POSITION_ELEMENT_COUNT;
+		int vertex_color_index = i * this->vertex_color_channel_count;
+		int vertices_index = i * VERTEX_ARRAY_ELEMENT_COUNT;
+		this->vertices[vertices_index + 0] = this->vertex_positions[vertex_position_index + 0];
+		this->vertices[vertices_index + 1] = this->vertex_positions[vertex_position_index + 1];
+		this->vertices[vertices_index + 2] = this->vertex_positions[vertex_position_index + 2];
+
+		this->vertices[vertices_index + 3] = this->vertex_colors[vertex_color_index + 0];
+		this->vertices[vertices_index + 4] = this->vertex_colors[vertex_color_index + 1];
+		this->vertices[vertices_index + 5] = this->vertex_colors[vertex_color_index + 2];
+		if (this->vertex_color_channel_count == 4)
+			this->vertices[vertices_index + 6] = this->vertex_colors[vertex_color_index + 3];
+		else
+			this->vertices[vertices_index + 6] = 1.0f;
+	}
+}
+
 bool RAGE_mesh::LoadGLB(const char *path)
 {
 	std::ifstream file;
@@ -193,6 +209,7 @@ bool RAGE_mesh::LoadGLB(const char *path)
 			throw std::runtime_error("Invalid or missing attributes in the first primitive of the first mesh");
 		load_model_vertex_positions(json_scene, binary_buffer);
 		load_model_vertex_colors(json_scene, binary_buffer);
+		combine_vertex_positions_and_colors();
 		load_model_indices(json_scene, binary_buffer);
 
 		for (int i = 0; i < this->vertices_count; i += 1)
