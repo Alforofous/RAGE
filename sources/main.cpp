@@ -38,7 +38,9 @@ int main(void)
 
 	rage->scene.add_object(new RAGE_object(&mesh2, "BoxVertexColors"));
 	rage->scene.add_object(new RAGE_object(&mesh, "WideMonkeyHeadVertexColored"));
-	rage->scene.add_object(RAGE_primitive_objects::create_cube(20.0f, 20.0f, 0.1f));
+	RAGE_object *cube = RAGE_primitive_objects::create_cube(1000.0f, 0.1f, 1000.0f);
+	cube->translate(glm::vec3(0.0f, -5.0f, 0.0f));
+	rage->scene.add_object(cube);
 
 	set_callbacks(rage);
 	rage->gui = new RAGE_gui(rage);

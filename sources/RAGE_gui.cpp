@@ -2,10 +2,15 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include <sstream>
+#include <iomanip>
+#include "RAGE_gui.hpp"
+
 
 RAGE_gui::RAGE_gui(RAGE *rage)
 {
-	scene_view = new RAGE_scene_view();
+	glGenFramebuffers(1, &framebuffer);
+	glGenTextures(1, &texture);
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO &io = ImGui::GetIO(); (void)io;
@@ -28,16 +33,7 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	ImGui_ImplOpenGL3_Init("#version 330");
 }
 
-RAGE_gui::~RAGE_gui()
-{
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-}
-
-std::vector<float> frames;
-
-static void draw_fps_graph(RAGE *rage)
+void RAGE_gui::draw_fps_graph(RAGE *rage)
 {
 	double fps = 1000 / rage->delta_time;
 	
@@ -63,9 +59,51 @@ static void draw_fps_graph(RAGE *rage)
 	ImGui::PlotHistogram("", &frames[0], (int)frames.size(), 0, NULL, 0.0f, 360.0f, ImVec2(200, 40));
 }
 
-#include <sstream>
-#include <iomanip>
-#include "RAGE_gui.hpp"
+void RAGE_gui::draw_scene_view(RAGE *rage)
+{
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+	int width, height;
+	glfwGetFramebufferSize(rage->window->glfw_window, &width, &height);
+
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthbuffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, depthbuffer);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+
+	// Check the framebuffer status
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		// Handle the error
+		std::cerr << "Framebuffer is not complete!" << std::endl;
+		return;
+	}
+
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	rage->scene.draw(rage);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	ImGui::Begin("OpenGL");
+	ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
+	ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
+	if (canvas_sz.x < 50.0f)
+		canvas_sz.x = 50.0f;
+	if (canvas_sz.y < 50.0f)
+		canvas_sz.y = 50.0f;
+	ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
+
+	ImGui::Image((void *)(intptr_t)texture, canvas_sz, ImVec2(0, 1), ImVec2(1, 0));
+	ImGui::End();
+}
 
 void RAGE_gui::draw(RAGE *rage)
 {
@@ -77,8 +115,7 @@ void RAGE_gui::draw(RAGE *rage)
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-
-	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground);
+	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 	ImGui::SetWindowPos(ImVec2(0, 0));
 	ImGui::SetWindowSize(ImVec2(0, 0));
 	draw_fps_graph(rage);
@@ -87,6 +124,21 @@ void RAGE_gui::draw(RAGE *rage)
 	ImGui::ColorEdit4("Color", color);
 	ImGui::End();
 
+	ImGui::Begin("Scene");
+	ImGui::SetWindowPos(ImVec2(0, 0));
+	ImGui::SetWindowSize(ImVec2(100, 100));
+	ImGui::End();
+
+	draw_scene_view(rage);
+
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+RAGE_gui::~RAGE_gui()
+{
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+	glDeleteRenderbuffers(1, &depthbuffer);
 }
