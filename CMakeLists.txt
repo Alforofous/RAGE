@@ -24,6 +24,7 @@ set(
 	RAGE_scene_view.cpp
 	RAGE_scene.cpp
 	RAGE_mesh.cpp
+	RAGE_primitive_objects.cpp
 	vertex_array.cpp
 	vertex_buffer.cpp
 	element_buffer.cpp
@@ -42,6 +43,7 @@ set(
 	RAGE_scene_view.hpp
 	RAGE_scene.hpp
 	RAGE_mesh.hpp
+	RAGE_primitive_objects.hpp
 	vertex_array.hpp
 	vertex_buffer.hpp
 	element_buffer.hpp
