@@ -32,8 +32,9 @@ public:
 
 	RAGE();
 	~RAGE();
-
+	bool create_template_objects();
 private:
+	std::vector<RAGE_object *> template_objects;
 };
 
 void set_callbacks(RAGE *rage);

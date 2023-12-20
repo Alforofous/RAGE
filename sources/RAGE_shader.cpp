@@ -125,10 +125,8 @@ void set_shader_variable_values(void *content)
 	glfwGetWindowSize(rage->window->glfw_window, &width, &height);
 	glUniform2f(rage->shader->variable_location["u_resolution"], (float)width,
 				(float)height);
-
 	glUniformMatrix4fv(rage->shader->variable_location["u_perspective_matrix"], 1,
 					   GL_FALSE, glm::value_ptr(rage->camera.get_perspective_matrix()));
-	glm::mat4 view_matrix = rage->camera.get_view_matrix();
 	glUniformMatrix4fv(rage->shader->variable_location["u_view_matrix"], 1,
-					   GL_FALSE, glm::value_ptr(view_matrix));
+					   GL_FALSE, glm::value_ptr(rage->camera.get_view_matrix()));
 }

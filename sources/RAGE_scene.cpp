@@ -4,7 +4,6 @@
 RAGE_scene::RAGE_scene(const char *name)
 {
 	this->name = name;
-	this->objects = std::vector<RAGE_object *>();
 }
 
 void RAGE_scene::draw()
