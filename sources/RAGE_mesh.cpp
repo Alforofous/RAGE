@@ -2,6 +2,12 @@
 #include <fstream>
 #include <iostream>
 
+RAGE_mesh::RAGE_mesh()
+{
+	this->vertices = NULL;
+	this->indices = NULL;
+}
+
 static void check_glb_header(const char *path, std::ifstream &file)
 {
 	GLBHeader header;
@@ -58,7 +64,10 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 
 	this->vertex_colors.clear();
 	if (componentType == 5126) // FLOAT
+	{
+		this->vertex_colors.resize(byteLength / sizeof(GLfloat));
 		std::memcpy(this->vertex_colors.data(), binary_buffer.data() + byteOffset, byteLength);
+	}
 	else if (componentType == 5123) // UNSIGNED_SHORT
 	{
 		unsigned short *tempColors = new unsigned short[byteLength / sizeof(unsigned short)];
@@ -147,7 +156,7 @@ void RAGE_mesh::load_model_indices(nlohmann::json &json_scene, std::vector<char>
 	int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
 	int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
 	int componentType = json_scene["accessors"][indicesAccessorIndex]["componentType"];
-	if (componentType == 5123)
+	if (componentType == 5123) // UNSIGNED_SHORT
 	{
 		GLushort *tempIndices = new GLushort[byteLength / sizeof(GLushort)];
 		std::memcpy(tempIndices, binary_buffer.data() + byteOffset, byteLength);
@@ -156,35 +165,79 @@ void RAGE_mesh::load_model_indices(nlohmann::json &json_scene, std::vector<char>
 			this->indices[i] = static_cast<GLuint>(tempIndices[i]);
 		delete[] tempIndices;
 		this->indices_count = byteLength / sizeof(GLushort);
+		this->indices_size = this->indices_count * sizeof(GLuint);
 	}
-	else if (componentType == 5125)
+	else if (componentType == 5125) // UNSIGNED_INT
 	{
 		this->indices = new GLuint[byteLength / sizeof(GLuint)];
 		std::memcpy(this->indices, binary_buffer.data() + byteOffset, byteLength);
 		this->indices_count = byteLength / sizeof(GLuint);
+		this->indices_size = this->indices_count * sizeof(GLuint);
 	}
 	else
 	{
 		throw std::runtime_error("Unsupported componentType for INDICES attribute");
 	}
+}
+
+void RAGE_mesh::set_vertex_positions(GLfloat *vertex_positions, unsigned int count)
+{
+	this->vertex_positions.clear();
+	this->vertex_positions.assign(vertex_positions, vertex_positions + count);
+	this->set_vertex_positions();
+}
+
+void RAGE_mesh::set_vertex_colors(GLfloat *vertex_colors, unsigned int count)
+{
+	this->vertex_colors.clear();
+	this->vertex_colors.assign(vertex_colors, vertex_colors + count);
+	this->set_vertex_colors();
+}
+
+void RAGE_mesh::set_indices(GLuint *indices, unsigned int count)
+{
+	this->indices_count = count;
+	this->indices_size = this->indices_count * sizeof(GLuint);
+	if (this->indices != NULL)
+		delete[] this->indices;
+	this->indices = new GLuint[this->indices_count];
+	std::memcpy(this->indices, indices, this->indices_size);
 	this->indices_size = this->indices_count * sizeof(GLuint);
 }
 
-void RAGE_mesh::combine_vertex_positions_and_colors()
+void RAGE_mesh::set_vertex_positions()
 {
-	this->vertices = new GLfloat[this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT];
-	for (int i = 0; i < this->vertices_count; i++)
+	int vertices_count = this->vertex_positions.size() / VERTEX_POSITION_ELEMENT_COUNT;
+	this->vertices = new GLfloat[vertices_count * VERTEX_ARRAY_ELEMENT_COUNT];
+
+	std::fill_n(this->vertices, vertices_count * VERTEX_ARRAY_ELEMENT_COUNT, 0.75f);
+	for (int i = 0; i < vertices_count; i++)
 	{
 		int vertex_position_index = i * VERTEX_POSITION_ELEMENT_COUNT;
-		int vertex_color_index = i * this->vertex_color_channel_count;
 		int vertices_index = i * VERTEX_ARRAY_ELEMENT_COUNT;
+
 		this->vertices[vertices_index + 0] = this->vertex_positions[vertex_position_index + 0];
 		this->vertices[vertices_index + 1] = this->vertex_positions[vertex_position_index + 1];
 		this->vertices[vertices_index + 2] = this->vertex_positions[vertex_position_index + 2];
 
+			this->vertices[vertices_index + 6] = 1.0f;
+	}
+	this->vertices_size = vertices_count * VERTEX_ARRAY_ELEMENT_COUNT * sizeof(GLfloat);
+}
+
+void RAGE_mesh::set_vertex_colors()
+{
+	int vertices_count = this->vertex_colors.size() / this->vertex_color_channel_count;
+
+	for (int i = 0; i < vertices_count; i++)
+	{
+		int vertex_color_index = i * this->vertex_color_channel_count;
+		int vertices_index = i * VERTEX_ARRAY_ELEMENT_COUNT;
+
 		this->vertices[vertices_index + 3] = this->vertex_colors[vertex_color_index + 0];
 		this->vertices[vertices_index + 4] = this->vertex_colors[vertex_color_index + 1];
 		this->vertices[vertices_index + 5] = this->vertex_colors[vertex_color_index + 2];
+
 		if (this->vertex_color_channel_count == 4)
 			this->vertices[vertices_index + 6] = this->vertex_colors[vertex_color_index + 3];
 		else
@@ -211,7 +264,8 @@ bool RAGE_mesh::LoadGLB(const char *path)
 			throw std::runtime_error("Invalid or missing attributes in the first primitive of the first mesh");
 		load_model_vertex_positions(json_scene, binary_buffer);
 		load_model_vertex_colors(json_scene, binary_buffer);
-		combine_vertex_positions_and_colors();
+		set_vertex_positions();
+		set_vertex_colors();
 		load_model_indices(json_scene, binary_buffer);
 
 		for (int i = 0; i < this->vertices_count; i += 1)

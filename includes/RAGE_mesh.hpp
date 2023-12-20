@@ -11,6 +11,7 @@
 class RAGE_mesh
 {
 public:
+	RAGE_mesh();
 	bool LoadGLB(const char *path);
 	GLfloat *vertices;
 	GLuint *indices;
@@ -18,13 +19,15 @@ public:
 	GLsizeiptr indices_size;
 	GLuint vertices_count;
 	GLuint indices_count;
-	void set_vertex_positions(GLfloat *vertex_positions, int vertex_position_size);
-	void set_vertex_colors(GLfloat *vertex_colors, int vertex_color_size);
-	void combine_vertex_positions_and_colors();
+	void set_vertex_positions(GLfloat *vertex_positions, unsigned int count);
+	void set_vertex_colors(GLfloat *vertex_colors, unsigned int count);
+	void set_indices(GLuint *indices, unsigned int count);
 private:
 	void load_model_vertex_positions(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
 	void load_model_vertex_colors(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
 	void load_model_indices(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
+	void set_vertex_positions();
+	void set_vertex_colors();
 	std::vector<GLfloat> vertex_positions;
 	std::vector<GLfloat> vertex_colors;
 	int vertex_color_channel_count;
