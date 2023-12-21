@@ -12,6 +12,7 @@ public:
 
 	void draw(RAGE *rage);
 	bool add_object(RAGE_object *object);
+	std::vector<RAGE_object *> *get_objects();
 	void print_objects();
 private:
 	std::string name;

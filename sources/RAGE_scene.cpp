@@ -28,6 +28,11 @@ void RAGE_scene::draw(RAGE *rage)
 	}
 }
 
+std::vector<RAGE_object *> *RAGE_scene::get_objects()
+{
+	return &this->objects;
+}
+
 bool RAGE_scene::add_object(RAGE_object *object)
 {
 	this->objects.push_back(object);

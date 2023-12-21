@@ -268,9 +268,9 @@ bool RAGE_mesh::LoadGLB(const char *path)
 		set_vertex_colors();
 		load_model_indices(json_scene, binary_buffer);
 
+		/*
 		for (GLuint i = 0; i < this->vertices_count; i += 1)
 			printf("v[%d]: %.2f %.2f %.2f %.2f %.2f %.2f\n", i, this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 0], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 1], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 2], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5]);
-		/*
 		for (int i = 0; i < this->indices_count; i += 1)
 			printf("i[%d]: %u\n", i, this->indices[i]);
 		*/

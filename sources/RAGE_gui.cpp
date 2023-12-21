@@ -5,11 +5,12 @@
 #include <sstream>
 #include <iomanip>
 #include "RAGE_gui.hpp"
-
+#include "RAGE_primitive_objects.hpp"
 
 RAGE_gui::RAGE_gui(RAGE *rage)
 {
 	this->scene_view_size = ImVec2((float)rage->window->get_pixel_size().x, (float)rage->window->get_pixel_size().y);
+	this->show_performance_window = false;
 	glGenFramebuffers(1, &framebuffer);
 	glGenRenderbuffers(1, &depthbuffer);
 	glGenTextures(1, &texture);
@@ -115,6 +116,23 @@ void RAGE_gui::draw_scene_view(RAGE *rage)
 	ImGui::End();
 }
 
+void RAGE_gui::draw_inspector(RAGE *rage)
+{
+	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+	ImGui::SetWindowPos(ImVec2(0, 0));
+	ImGui::SetWindowSize(ImVec2(0, 0));
+	ImGui::Text("Scene object count: %d", rage->scene.get_objects()->size());
+	//Add a button to add a new object to the scene
+	if (ImGui::Button("Add cube") == true)
+	{
+		rage->scene.add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f));
+	}
+	if (ImGui::Button("Add monkey head") == true)
+	{
+	}
+	ImGui::End();
+}
+
 void RAGE_gui::draw(RAGE *rage)
 {
 	bool drawTriangle = true;
@@ -126,15 +144,9 @@ void RAGE_gui::draw(RAGE *rage)
 	ImGui::NewFrame();
 
 	draw_scene_view(rage);
-	draw_performance_window(rage);
-
-	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus);
-	ImGui::SetWindowPos(ImVec2(0, 0));
-	ImGui::SetWindowSize(ImVec2(0, 0));
-	ImGui::Checkbox("Draw Triangle", &drawTriangle);
-	ImGui::SliderFloat("Size", &size, 0.5f, 2.0f);
-	ImGui::ColorEdit4("Color", color);
-	ImGui::End();
+	if (show_performance_window == true)
+		draw_performance_window(rage);
+	draw_inspector(rage);
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
