@@ -19,6 +19,6 @@ public:
 	void draw();
 	bool is_initialized();
 private:
-	int indices_count;
+	GLuint indices_count;
 	bool initialized;
 };

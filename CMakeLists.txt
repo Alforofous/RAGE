@@ -25,6 +25,7 @@ set(
 	RAGE_scene.cpp
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
+	RAGE_keyboard_input.cpp
 	vertex_array.cpp
 	vertex_buffer.cpp
 	element_buffer.cpp
@@ -44,6 +45,8 @@ set(
 	RAGE_scene.hpp
 	RAGE_mesh.hpp
 	RAGE_primitive_objects.hpp
+	RAGE_keyboard_input.hpp
+	RAGE_user_input.hpp
 	vertex_array.hpp
 	vertex_buffer.hpp
 	element_buffer.hpp

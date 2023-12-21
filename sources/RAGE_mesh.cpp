@@ -72,7 +72,7 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 	{
 		unsigned short *tempColors = new unsigned short[byteLength / sizeof(unsigned short)];
 		std::memcpy(tempColors, binary_buffer.data() + byteOffset, byteLength);
-		for (int i = 0; i < this->vertices_count; i++)
+		for (GLuint i = 0; i < this->vertices_count; i++)
 		{
 			int vertex_color_index = i * this->vertex_color_channel_count;
 			this->vertex_colors.push_back(tempColors[vertex_color_index + 0] / 65535.0f);
@@ -118,7 +118,7 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 	this->vertices_size = this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT * sizeof(GLfloat);
 
 	this->vertex_positions.clear();
-	for (int i = 0; i < this->vertices_count; i++)
+	for (GLuint i = 0; i < this->vertices_count; i++)
 	{
 		int vertex_position_index = i * VERTEX_POSITION_ELEMENT_COUNT;
 		this->vertex_positions.push_back(vertices[vertex_position_index + 0]);
@@ -127,7 +127,7 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 	}
 	this->vertex_color_channel_count = 3;
 	this->vertex_colors.clear();
-	for (int i = 0; i < this->vertices_count; i++)
+	for (GLuint i = 0; i < this->vertices_count; i++)
 	{
 		int vertex_color_index = i * this->vertex_color_channel_count;
 		this->vertex_colors.push_back(colors[vertex_color_index + 0]);
@@ -207,11 +207,11 @@ void RAGE_mesh::set_indices(GLuint *indices, unsigned int count)
 
 void RAGE_mesh::set_vertex_positions()
 {
-	int vertices_count = this->vertex_positions.size() / VERTEX_POSITION_ELEMENT_COUNT;
+	GLuint vertices_count = (GLuint)(this->vertex_positions.size() / VERTEX_POSITION_ELEMENT_COUNT);
 	this->vertices = new GLfloat[vertices_count * VERTEX_ARRAY_ELEMENT_COUNT];
 
 	std::fill_n(this->vertices, vertices_count * VERTEX_ARRAY_ELEMENT_COUNT, 0.75f);
-	for (int i = 0; i < vertices_count; i++)
+	for (GLuint i = 0; i < vertices_count; i++)
 	{
 		int vertex_position_index = i * VERTEX_POSITION_ELEMENT_COUNT;
 		int vertices_index = i * VERTEX_ARRAY_ELEMENT_COUNT;
@@ -227,9 +227,9 @@ void RAGE_mesh::set_vertex_positions()
 
 void RAGE_mesh::set_vertex_colors()
 {
-	int vertices_count = this->vertex_colors.size() / this->vertex_color_channel_count;
+	GLuint vertices_count = (GLuint)(this->vertex_colors.size() / this->vertex_color_channel_count);
 
-	for (int i = 0; i < vertices_count; i++)
+	for (GLuint i = 0; i < vertices_count; i++)
 	{
 		int vertex_color_index = i * this->vertex_color_channel_count;
 		int vertices_index = i * VERTEX_ARRAY_ELEMENT_COUNT;
@@ -268,7 +268,7 @@ bool RAGE_mesh::LoadGLB(const char *path)
 		set_vertex_colors();
 		load_model_indices(json_scene, binary_buffer);
 
-		for (int i = 0; i < this->vertices_count; i += 1)
+		for (GLuint i = 0; i < this->vertices_count; i += 1)
 			printf("v[%d]: %.2f %.2f %.2f %.2f %.2f %.2f\n", i, this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 0], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 1], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 2], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 3], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 4], this->vertices[i * VERTEX_ARRAY_ELEMENT_COUNT + 5]);
 		/*
 		for (int i = 0; i < this->indices_count; i += 1)

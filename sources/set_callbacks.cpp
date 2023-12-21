@@ -22,6 +22,7 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 
 	if (action == GLFW_PRESS)
 	{
+		rage->user_input->keyboard.signal((void *)rage, key);
 		rage->user_input->keyboard.pressed_keys[key] = true;
 	}
 	else if (action == GLFW_RELEASE)

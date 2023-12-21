@@ -9,7 +9,9 @@
 
 RAGE_gui::RAGE_gui(RAGE *rage)
 {
+	this->scene_view_size = ImVec2((float)rage->window->get_pixel_size().x, (float)rage->window->get_pixel_size().y);
 	glGenFramebuffers(1, &framebuffer);
+	glGenRenderbuffers(1, &depthbuffer);
 	glGenTextures(1, &texture);
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -33,8 +35,11 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	ImGui_ImplOpenGL3_Init("#version 330");
 }
 
-void RAGE_gui::draw_fps_graph(RAGE *rage)
+void RAGE_gui::draw_performance_window(RAGE *rage)
 {
+	ImGui::Begin("Performance window", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+	ImGui::SetWindowPos(ImVec2(0, 0));
+	ImGui::SetWindowSize(ImVec2(0, 0));
 	double fps = 1000 / rage->delta_time;
 	
 	if (frames.size() > 100)
@@ -57,6 +62,7 @@ void RAGE_gui::draw_fps_graph(RAGE *rage)
 	std::string	fps_string = "FPS: " + std::to_string((int)fps);
 	ImGui::Text("%s", fps_string.c_str());
 	ImGui::PlotHistogram("", &frames[0], (int)frames.size(), 0, NULL, 0.0f, 360.0f, ImVec2(200, 40));
+	ImGui::End();
 }
 
 void RAGE_gui::draw_scene_view(RAGE *rage)
@@ -66,41 +72,45 @@ void RAGE_gui::draw_scene_view(RAGE *rage)
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
 	int width, height;
+	width = (int)this->scene_view_size.x;
+	height = (int)this->scene_view_size.y;
 	glfwGetFramebufferSize(rage->window->glfw_window, &width, &height);
 
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthbuffer);
 	glBindRenderbuffer(GL_RENDERBUFFER, depthbuffer);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthbuffer);
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
 
-	// Check the framebuffer status
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 	{
-		// Handle the error
 		std::cerr << "Framebuffer is not complete!" << std::endl;
 		return;
 	}
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	rage->scene.draw(rage);
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	ImGui::Begin("OpenGL");
-	ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
-	ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
-	if (canvas_sz.x < 50.0f)
-		canvas_sz.x = 50.0f;
-	if (canvas_sz.y < 50.0f)
-		canvas_sz.y = 50.0f;
-	ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
+	ImGui::Begin("Scene", NULL, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+	static bool first_time_open = true;
+	if (first_time_open == true)
+	{
+		ImGui::SetWindowSize(ImVec2((float)rage->window->get_pixel_size().x, (float)rage->window->get_pixel_size().y));
+		first_time_open = false;
+	}
+	ImGui::SetWindowPos(ImVec2(0, 0));
+	static ImVec2 widget_size = ImGui::GetWindowSize();
 
+	ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
 	ImGui::Image((void *)(intptr_t)texture, canvas_sz, ImVec2(0, 1), ImVec2(1, 0));
 	ImGui::End();
 }
@@ -115,21 +125,16 @@ void RAGE_gui::draw(RAGE *rage)
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+	draw_scene_view(rage);
+	draw_performance_window(rage);
+
+	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	ImGui::SetWindowPos(ImVec2(0, 0));
 	ImGui::SetWindowSize(ImVec2(0, 0));
-	draw_fps_graph(rage);
 	ImGui::Checkbox("Draw Triangle", &drawTriangle);
 	ImGui::SliderFloat("Size", &size, 0.5f, 2.0f);
 	ImGui::ColorEdit4("Color", color);
 	ImGui::End();
-
-	ImGui::Begin("Scene");
-	ImGui::SetWindowPos(ImVec2(0, 0));
-	ImGui::SetWindowSize(ImVec2(100, 100));
-	ImGui::End();
-
-	draw_scene_view(rage);
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

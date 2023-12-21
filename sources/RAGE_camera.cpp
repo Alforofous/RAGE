@@ -8,7 +8,7 @@ bool RAGE_camera::init(RAGE_window *window)
 	m_up = glm::vec3(0.0f, 1.0f, 0.0f);
 	m_right = glm::vec3(1.0f, 0.0f, 0.0f);
 	m_fov = 45.0f;
-	m_aspect_ratio = static_cast<float>(window->get_window_pixel_width()) / window->get_window_pixel_height();
+	m_aspect_ratio = static_cast<float>(window->get_pixel_size().x) / window->get_pixel_size().y;
 	m_rotation = direction_to_euler(m_forward);
 	m_view_matrix = RAGE_camera::get_view_matrix();
 	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 100.0f);

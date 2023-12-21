@@ -25,7 +25,7 @@ bool GLobject::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size
 		this->vertex_buffer_object->unbind();
 		this->element_buffer_object->unbind();
 
-		this->indices_count = indices_size / sizeof(GLuint);
+		this->indices_count = (GLuint)(indices_size / sizeof(GLuint));
 		this->initialized = true;
 		return (true);
 	}

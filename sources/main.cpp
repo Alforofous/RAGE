@@ -19,7 +19,7 @@ int main(void)
 
 	if (rage->window->init() == false)
 		return (1);
-	glm::ivec2 window_pixel_size = rage->window->get_window_pixel_size();
+	glm::ivec2 pixel_size = rage->window->get_pixel_size();
 	if (rage->camera.init(rage->window) == false)
 		return (1);
 
@@ -53,18 +53,16 @@ int main(void)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{
+		for (auto &key : rage->user_input->keyboard.pressed_keys_signal)
+		{
+			key.second = false;
+		}
 		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
-		int width;
-		int height;
-		glfwGetFramebufferSize(rage->window->glfw_window, &width, &height);
-		glViewport(0, 0, width, height);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glUseProgram(rage->shader->hProgram);
 		set_shader_variable_values(rage);
-
-		rage->scene.draw(rage);
 
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
