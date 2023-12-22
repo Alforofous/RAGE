@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "imgui_internal.h"
 #include <vector>
 #include "glad/glad.h"
 #include "RAGE_menu_bar.hpp"
@@ -24,6 +25,7 @@ private:
 	void draw_performance_window(RAGE *rage);
 	void draw_inspector(RAGE *rage);
 	void draw_dockspace(RAGE *rage);
+	void reset_dockings();
 	std::vector<float> frames;
 	RAGE_menu_bar menu_bar;
 	RAGE_scene_view scene_view;

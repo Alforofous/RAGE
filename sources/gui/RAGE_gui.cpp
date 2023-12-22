@@ -83,11 +83,58 @@ void RAGE_gui::draw_dockspace(RAGE *rage)
 	this->dockspace_size = glm::vec2(viewport->WorkSize.x, viewport->WorkSize.y);
 }
 
+void RAGE_gui::reset_dockings()
+{
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+	ImGuiID dockspace_id = ImGui::GetID("DockSpace");
+
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
+	ImGui::DockBuilderRemoveNode(dockspace_id);
+	ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
+	ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+
+	ImGuiID dock_id_top = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Up, 0.2f, nullptr, &dockspace_id);
+	ImGuiID dock_id_down = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.25f, nullptr, &dockspace_id);
+	ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, nullptr, &dockspace_id);
+	ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.15f, nullptr, &dockspace_id);
+
+	ImGui::DockBuilderDockWindow("Scene", dockspace_id);
+
+	ImGui::DockBuilderFinish(dockspace_id);
+}
+
+void CN3UIDebug::RenderDockSpace() {
+    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+    ImGui::Begin(IMGUI_WND_ID_DASHBOARD);
+    ImGuiID dsId = ImGui::GetID("DashboardDS");
+    if (!ImGui::DockBuilderGetNode(dsId)) {
+        ImGui::SetWindowSize(ImVec2(370.0f, 680.0f));
+        ImGui::SetWindowPos(ImVec2(640.0f, 55.0f));
+
+        ImGui::DockBuilderRemoveNode(dsId);
+        ImGui::DockBuilderAddNode(dsId);
+
+        ImGuiID dsIdCopy = dsId;
+        ImGuiID dsIdUp = ImGui::DockBuilderSplitNode(dsIdCopy, ImGuiDir_Up, 0.34f, NULL, &dsIdCopy);
+        ImGuiID dsIdDown = ImGui::DockBuilderSplitNode(dsIdCopy, ImGuiDir_Down, 0.0f, NULL, &dsIdCopy);
+        ImGui::DockBuilderDockWindow(IMGUI_WND_ID_FPS, dsIdUp);
+        ImGui::DockBuilderDockWindow(IMGUI_WND_ID_METRICS, dsIdDown);
+        ImGui::DockBuilderDockWindow(IMGUI_WND_ID_DEMO, dsIdDown);
+
+        ImGui::DockBuilderFinish(dsId);
+    }
+    ImGui::DockSpace(dsId);
+    ImGui::End();
+}
+
 void RAGE_gui::draw(RAGE *rage)
 {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
+
 
 	draw_dockspace(rage);
 	if (show_performance_window == true)
@@ -95,6 +142,12 @@ void RAGE_gui::draw(RAGE *rage)
 	scene_view.draw(rage);
 	menu_bar.draw(rage);
 	draw_inspector(rage);
+	static bool first_time = true;
+	if (first_time == true)
+	{
+		reset_dockings();
+		first_time = false;
+	}
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
