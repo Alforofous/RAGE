@@ -143,7 +143,7 @@ void RAGE_gui::draw(RAGE *rage)
 	if (show_performance_window == true)
 		draw_performance_window(rage);
 	draw_inspector(rage);
-	menu_bar.draw();
+	menu_bar.draw(rage);
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
