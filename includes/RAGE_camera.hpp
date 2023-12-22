@@ -13,6 +13,7 @@ public:
 	glm::vec3 get_up();
 	glm::vec3 get_right();
 	void handle_input(RAGE_user_input *user_input, float delta_time);
+	void set_aspect_ratio(glm::ivec2 window_size);
 private:
 	void handle_movement(RAGE_user_input *user_input, float movement_speed);
 	void handle_rotation(RAGE_user_input *user_input, float rotation_speed);

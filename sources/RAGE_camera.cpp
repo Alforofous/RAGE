@@ -25,6 +25,12 @@ void RAGE_camera::handle_input(RAGE_user_input *user_input, float delta_time)
 	handle_rotation(user_input, m_rotation_speed);
 }
 
+void RAGE_camera::set_aspect_ratio(glm::ivec2 window_size)
+{
+	this->m_aspect_ratio = static_cast<float>(window_size.x) / window_size.y;
+	this->m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 100.0f);
+}
+
 glm::vec3 direction_to_euler(glm::vec3 direction)
 {
 	direction = glm::normalize(direction);
