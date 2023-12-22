@@ -17,7 +17,7 @@ bool RAGE_window::init()
 		glfw_window = glfwCreateWindow(this->pixel_size.x, this->pixel_size.y, "RAGE", NULL, NULL);
 		if (glfw_window == NULL)
 			throw std::runtime_error("Failed to create window");
-		
+		glfwGetWindowPos(glfw_window, &this->pixel_position.x, &this->pixel_position.y);
 		return true;
 	}
 	catch (const std::exception& e)
@@ -25,11 +25,6 @@ bool RAGE_window::init()
 		std::cerr << "RAGE_window error: " << e.what() << std::endl;
 		return false;
 	}
-}
-
-glm::ivec2 RAGE_window::get_pixel_size() const
-{
-	return (this->pixel_size);
 }
 
 RAGE_window::~RAGE_window()

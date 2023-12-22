@@ -19,7 +19,7 @@ int main(void)
 
 	if (rage->window->init() == false)
 		return (1);
-	glm::ivec2 pixel_size = rage->window->get_pixel_size();
+	glm::ivec2 pixel_size = rage->window->pixel_size;
 	if (rage->camera.init(rage->window) == false)
 		return (1);
 

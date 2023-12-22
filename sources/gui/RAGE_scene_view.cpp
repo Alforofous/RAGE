@@ -19,11 +19,12 @@ void RAGE_scene_view::draw(RAGE *rage)
 
 	glm::ivec2 framebuffer_size;
 	glfwGetFramebufferSize(rage->window->glfw_window, &framebuffer_size.x, &framebuffer_size.y);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, framebuffer_size.x, framebuffer_size.y);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, this->window_size.x, this->window_size.y);
+	glViewport(0, 0, this->window_size.x, this->window_size.y);
 
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthbuffer);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, framebuffer_size.x, framebuffer_size.y, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, this->window_size.x, this->window_size.y, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -40,16 +41,12 @@ void RAGE_scene_view::draw(RAGE *rage)
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	ImGui::Begin("Scene", NULL, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
-	static bool first_time_open = true;
-	if (first_time_open == true)
-	{
-		ImGui::SetWindowPos(ImVec2(0, 0));
-		ImGui::SetWindowSize(ImVec2(this->window_size.x, this->window_size.y));
-		first_time_open = false;
-	}
+	ImGui::Begin("Scene", NULL, ImGuiWindowFlags_NoCollapse);
+	ImGui::SetWindowPos(ImVec2(rage->window->pixel_position.x, rage->window->pixel_position.y), ImGuiCond_FirstUseEver);
+	ImGui::SetWindowSize(ImVec2(this->window_size.x, this->window_size.y), ImGuiCond_FirstUseEver);
 	rage->camera.set_aspect_ratio(this->window_size);
 	this->window_size = glm::ivec2(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+	ImGui::Text("Window size: %d, %d", this->window_size.x, this->window_size.y);
 	ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
 	ImGui::Image((void *)(intptr_t)texture, canvas_sz, ImVec2(0, 1), ImVec2(1, 0));
 	ImGui::End();

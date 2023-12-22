@@ -19,11 +19,13 @@ public:
 	~RAGE_gui();
 	void draw(RAGE *rage);
 	bool show_performance_window;
+	glm::ivec2 dockspace_size;
 private:
 	void draw_performance_window(RAGE *rage);
 	void draw_inspector(RAGE *rage);
+	void draw_dockspace(RAGE *rage);
 	std::vector<float> frames;
 	RAGE_menu_bar menu_bar;
 	RAGE_scene_view scene_view;
-	std::vector<glm::ivec2> get_window_avaliable_positions(RAGE *rage);
+	ImGuiIO *io;
 };

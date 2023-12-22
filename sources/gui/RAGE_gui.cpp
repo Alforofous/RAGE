@@ -7,8 +7,9 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	this->show_performance_window = false;
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO &io = ImGui::GetIO();
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	this->io = &ImGui::GetIO();
+	io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
 	std::string font_path = rage->executable_path + "/assets/fonts/Roboto/Roboto-Bold.ttf";
 	std::ifstream font_file(font_path.c_str());
@@ -19,10 +20,10 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	else
 	{
 		font_file.close();
-		ImFont *font = io.Fonts->AddFontFromFileTTF(font_path.c_str(), 16.0f);
+		ImFont *font = io->Fonts->AddFontFromFileTTF(font_path.c_str(), 16.0f);
 	}
 
-	io.IniFilename = NULL;
+	io->IniFilename = NULL;
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(rage->window->glfw_window, true);
 	ImGui_ImplOpenGL3_Init("#version 330");
@@ -60,44 +61,51 @@ void RAGE_gui::draw_performance_window(RAGE *rage)
 	std::string fps_string = "FPS: " + std::to_string((int)fps);
 	ImGui::Text("%s", fps_string.c_str());
 	ImGui::PlotHistogram("", &frames[0], (int)frames.size(), 0, NULL, 0.0f, 360.0f, ImVec2(200, 40));
+	ImGui::Text("Window position: %d, %d", rage->window->pixel_position.x, rage->window->pixel_position.y);
+	ImGui::Text("Window size: %d, %d", rage->window->pixel_size.x, rage->window->pixel_size.y);
 	ImGui::End();
 }
 
 void RAGE_gui::draw_inspector(RAGE *rage)
 {
-	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoCollapse);
 	ImGui::SetWindowPos(ImVec2(0, 200));
 	ImGui::SetWindowSize(ImVec2(0, 0));
 	ImGui::Text("Scene object count: %zu", rage->scene.get_objects()->size());
+	ImGui::Text("Dockspace size: %d, %d", this->dockspace_size.x, this->dockspace_size.y);
 	ImGui::End();
 }
 
-std::vector<glm::ivec2> RAGE_gui::get_window_avaliable_positions(RAGE *rage)
+void RAGE_gui::draw_dockspace(RAGE *rage)
 {
-	std::vector<glm::ivec2> positions;
-	glm::ivec2 window_size = rage->window->get_pixel_size();
-
-	return (positions);
+	ImGuiViewport *viewport = ImGui::GetMainViewport();
+	ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_None);
+	this->dockspace_size = glm::vec2(viewport->WorkSize.x, viewport->WorkSize.y);
 }
 
 void RAGE_gui::draw(RAGE *rage)
 {
-	bool drawTriangle = true;
-	float size = 1.0f;
-	float color[4] = {0.8f, 0.3f, 0.02f, 1.0f};
-
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	scene_view.draw(rage);
+	draw_dockspace(rage);
 	if (show_performance_window == true)
 		draw_performance_window(rage);
-	draw_inspector(rage);
+	scene_view.draw(rage);
 	menu_bar.draw(rage);
+	draw_inspector(rage);
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	ImGui::EndFrame();
+	if (this->io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		GLFWwindow *backup_current_context = glfwGetCurrentContext();
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+		glfwMakeContextCurrent(backup_current_context);
+	}
 }
 
 RAGE_gui::~RAGE_gui()
