@@ -1,6 +1,6 @@
 #include "RAGE_menu_bar.hpp"
-#include <iostream>
-#include <GLFW/glfw3.h>
+#include "RAGE_primitive_objects.hpp"
+#include "RAGE.hpp"
 
 RAGE_menu_bar::RAGE_menu_bar()
 {
@@ -10,10 +10,25 @@ RAGE_menu_bar::RAGE_menu_bar()
 
 	menu_bar_item exit;
 	exit.name = "Exit";
-	exit.callback = []() { glfwSetWindowShouldClose(glfwGetCurrentContext(), GLFW_TRUE); };
+	exit.callback = [](RAGE *rage) { glfwSetWindowShouldClose(glfwGetCurrentContext(), GLFW_TRUE); };
+
+	menu_bar_item object;
+	object.name = "Object";
+
+	menu_bar_item add_object;
+	add_object.name = "Add object";
+
+	std::vector<menu_bar_item> object_children;
+	object_children.push_back({ "Add cube", [](RAGE *rage) { rage->scene.add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f)); } });
+
+	add_object.children = object_children;
+
+	object.children.push_back(add_object);
 
 	file.children.push_back(exit);
+	
 	items.push_back(file);
+	items.push_back(object);
 }
 
 void RAGE_menu_bar::draw_menu_item(const menu_bar_item& item)
@@ -24,7 +39,7 @@ void RAGE_menu_bar::draw_menu_item(const menu_bar_item& item)
 		{
 			std::cout << "Menu item clicked: " << item.name << std::endl;
 			if (item.callback)
-				item.callback();
+				item.callback(this->rage);
 		}
 	}
 	else

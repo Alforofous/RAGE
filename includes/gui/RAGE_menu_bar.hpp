@@ -9,7 +9,7 @@ class RAGE;
 struct menu_bar_item
 {
 	std::string name;
-	std::function<void()> callback;
+	std::function<void(RAGE *rage)> callback;
 	std::vector<menu_bar_item> children;
 };
 
