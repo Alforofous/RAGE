@@ -4,6 +4,7 @@ class RAGE;
 
 #include <string>
 #include <vector>
+#include <functional>
 #include "imgui.h"
 
 struct menu_bar_item

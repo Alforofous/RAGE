@@ -104,6 +104,7 @@ void RAGE_gui::reset_dockings()
 	ImGui::DockBuilderFinish(dockspace_id);
 }
 
+/*
 void CN3UIDebug::RenderDockSpace() {
     ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
@@ -128,6 +129,7 @@ void CN3UIDebug::RenderDockSpace() {
     ImGui::DockSpace(dsId);
     ImGui::End();
 }
+*/
 
 void RAGE_gui::draw(RAGE *rage)
 {
