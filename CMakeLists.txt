@@ -20,7 +20,8 @@ set(
 	RAGE_camera.cpp
 	RAGE_object.cpp
 	RAGE_transform.cpp
-	RAGE_gui.cpp
+	gui/RAGE_gui.cpp
+	gui/RAGE_menu_bar.cpp
 	RAGE_scene_view.cpp
 	RAGE_scene.cpp
 	RAGE_mesh.cpp
@@ -40,7 +41,8 @@ set(
 	RAGE_camera.hpp
 	RAGE_object.hpp
 	RAGE_transform.hpp
-	RAGE_gui.hpp
+	gui/RAGE_gui.hpp
+	gui/RAGE_menu_bar.hpp
 	RAGE_scene_view.hpp
 	RAGE_scene.hpp
 	RAGE_mesh.hpp
@@ -74,6 +76,7 @@ add_subdirectory(libraries/)
 
 list(APPEND PROJECT_INCLUDES
 	${INCLUDES_DIRECTORY}
+	${INCLUDES_DIRECTORY}/gui/
 	${LIBRARY_INCLUDE_DIRECTORIES}
 	libraries/
 )
