@@ -7,20 +7,19 @@ RAGE_scene_view::RAGE_scene_view()
 	glGenRenderbuffers(1, &depthbuffer);
 	glGenTextures(1, &texture);
 	glfwGetWindowSize(glfwGetCurrentContext(), &window_size.x, &window_size.y);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 }
 
 void RAGE_scene_view::draw(RAGE *rage)
 {
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
 	glBindRenderbuffer(GL_RENDERBUFFER, depthbuffer);
+	glBindTexture(GL_TEXTURE_2D, texture);
+
 	glm::ivec2 framebuffer_size;
 	glfwGetFramebufferSize(rage->window->glfw_window, &framebuffer_size.x, &framebuffer_size.y);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, framebuffer_size.x, framebuffer_size.y);
-
-	glBindTexture(GL_TEXTURE_2D, texture);
 
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthbuffer);
 
@@ -32,7 +31,6 @@ void RAGE_scene_view::draw(RAGE *rage)
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 	{
 		std::cerr << "Framebuffer is not complete!" << std::endl;
-		this->window_size = rage->window->get_pixel_size();
 		return;
 	}
 
@@ -50,6 +48,7 @@ void RAGE_scene_view::draw(RAGE *rage)
 		ImGui::SetWindowSize(ImVec2(this->window_size.x, this->window_size.y));
 		first_time_open = false;
 	}
+	rage->camera.set_aspect_ratio(this->window_size);
 	this->window_size = glm::ivec2(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
 	ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
 	ImGui::Image((void *)(intptr_t)texture, canvas_sz, ImVec2(0, 1), ImVec2(1, 0));
