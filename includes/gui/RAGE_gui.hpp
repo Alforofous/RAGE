@@ -6,6 +6,7 @@
 #include <vector>
 #include "glad/glad.h"
 #include "RAGE_menu_bar.hpp"
+#include "RAGE_scene_view.hpp"
 
 class RAGE_scene_view;
 class RAGE;
@@ -19,12 +20,8 @@ public:
 	bool show_performance_window;
 private:
 	void draw_performance_window(RAGE *rage);
-	void draw_scene_view(RAGE *rage);
 	void draw_inspector(RAGE *rage);
 	std::vector<float> frames;
-	GLuint framebuffer;
-	GLuint depthbuffer;
-	GLuint texture;
-	ImVec2 scene_view_size;
 	RAGE_menu_bar menu_bar;
+	RAGE_scene_view scene_view;
 };

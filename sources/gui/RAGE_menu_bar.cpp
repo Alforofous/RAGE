@@ -27,8 +27,8 @@ RAGE_menu_bar::RAGE_menu_bar()
 
 	file.children.push_back(exit);
 	
-	items.push_back(file);
-	items.push_back(object);
+	this->items.push_back(file);
+	this->items.push_back(object);
 }
 
 void RAGE_menu_bar::draw_menu_item(const menu_bar_item& item)
@@ -60,10 +60,13 @@ void RAGE_menu_bar::draw(RAGE *rage)
 	this->rage = rage;
 	if (ImGui::BeginMainMenuBar())
 	{
-		for (const auto& item : items)
+		for (const auto& item : this->items)
 		{
 			draw_menu_item(item);
 		}
+		this->window_size = ImGui::GetWindowSize();
 		ImGui::EndMainMenuBar();
 	}
 }
+
+ImVec2 RAGE_menu_bar::get_window_size() { return (this->window_size); }

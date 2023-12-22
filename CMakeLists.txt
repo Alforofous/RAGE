@@ -22,7 +22,7 @@ set(
 	RAGE_transform.cpp
 	gui/RAGE_gui.cpp
 	gui/RAGE_menu_bar.cpp
-	RAGE_scene_view.cpp
+	gui/RAGE_scene_view.cpp
 	RAGE_scene.cpp
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
@@ -43,7 +43,7 @@ set(
 	RAGE_transform.hpp
 	gui/RAGE_gui.hpp
 	gui/RAGE_menu_bar.hpp
-	RAGE_scene_view.hpp
+	gui/RAGE_scene_view.hpp
 	RAGE_scene.hpp
 	RAGE_mesh.hpp
 	RAGE_primitive_objects.hpp
