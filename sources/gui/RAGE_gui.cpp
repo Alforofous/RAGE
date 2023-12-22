@@ -29,9 +29,14 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 
 void RAGE_gui::draw_performance_window(RAGE *rage)
 {
-	ImGui::Begin("Performance window", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-	ImGui::SetWindowPos(ImVec2(0, 0));
-	ImGui::SetWindowSize(ImVec2(0, 0));
+	ImGui::Begin("Performance window", NULL, ImGuiWindowFlags_NoResize);
+	static bool first_time_open = true;
+	if (first_time_open == true)
+	{
+		ImGui::SetWindowPos(ImVec2(0, 0));
+		ImGui::SetWindowSize(ImVec2(0, 0));
+		first_time_open = false;
+	}
 	double fps = 1000 / rage->delta_time;
 
 	if (frames.size() > 100)
