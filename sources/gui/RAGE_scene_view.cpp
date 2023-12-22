@@ -6,6 +6,7 @@ RAGE_scene_view::RAGE_scene_view()
 	glGenFramebuffers(1, &framebuffer);
 	glGenRenderbuffers(1, &depthbuffer);
 	glGenTextures(1, &texture);
+	glfwGetWindowSize(glfwGetCurrentContext(), &window_size.x, &window_size.y);
 }
 
 void RAGE_scene_view::draw(RAGE *rage)
@@ -45,10 +46,10 @@ void RAGE_scene_view::draw(RAGE *rage)
 	static bool first_time_open = true;
 	if (first_time_open == true)
 	{
-		ImGui::SetWindowSize(ImVec2((float)rage->window->get_pixel_size().x, (float)rage->window->get_pixel_size().y));
+		ImGui::SetWindowPos(ImVec2(0, 0));
+		ImGui::SetWindowSize(ImVec2(this->window_size.x, this->window_size.y));
 		first_time_open = false;
 	}
-	ImGui::SetWindowPos(ImVec2(0, 0));
 	this->window_size = glm::ivec2(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
 	ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
 	ImGui::Image((void *)(intptr_t)texture, canvas_sz, ImVec2(0, 1), ImVec2(1, 0));
