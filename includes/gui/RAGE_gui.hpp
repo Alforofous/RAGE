@@ -1,5 +1,7 @@
 #pragma once
 
+#define IMGUI_HAS_DOCK
+#define IMGUI_IMPL_OPENGL_LOADER_GLAD
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -8,7 +10,6 @@
 #include "RAGE_menu_bar.hpp"
 #include "RAGE_scene_view.hpp"
 
-class RAGE_scene_view;
 class RAGE;
 
 class RAGE_gui
@@ -24,4 +25,5 @@ private:
 	std::vector<float> frames;
 	RAGE_menu_bar menu_bar;
 	RAGE_scene_view scene_view;
+	std::vector<glm::ivec2> get_window_avaliable_positions(RAGE *rage);
 };

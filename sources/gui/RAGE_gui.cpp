@@ -1,4 +1,5 @@
 #include "RAGE.hpp"
+#include "RAGE_gui.hpp"
 #include "RAGE_primitive_objects.hpp"
 
 RAGE_gui::RAGE_gui(RAGE *rage)
@@ -7,7 +8,7 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO &io = ImGui::GetIO();
-	(void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 	std::string font_path = rage->executable_path + "/assets/fonts/Roboto/Roboto-Bold.ttf";
 	std::ifstream font_file(font_path.c_str());
@@ -69,6 +70,14 @@ void RAGE_gui::draw_inspector(RAGE *rage)
 	ImGui::SetWindowSize(ImVec2(0, 0));
 	ImGui::Text("Scene object count: %zu", rage->scene.get_objects()->size());
 	ImGui::End();
+}
+
+std::vector<glm::ivec2> RAGE_gui::get_window_avaliable_positions(RAGE *rage)
+{
+	std::vector<glm::ivec2> positions;
+	glm::ivec2 window_size = rage->window->get_pixel_size();
+
+	return (positions);
 }
 
 void RAGE_gui::draw(RAGE *rage)
