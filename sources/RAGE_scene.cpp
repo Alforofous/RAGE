@@ -33,6 +33,11 @@ std::vector<RAGE_object *> *RAGE_scene::get_objects()
 	return &this->objects;
 }
 
+std::vector<RAGE_object *> *RAGE_scene::get_selected_objects()
+{
+	return &this->selected_objects;
+}
+
 bool RAGE_scene::add_object(RAGE_object *object)
 {
 	this->objects.push_back(object);

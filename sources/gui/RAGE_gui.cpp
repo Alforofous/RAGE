@@ -63,14 +63,6 @@ void RAGE_gui::draw_performance_window(RAGE *rage)
 	ImGui::End();
 }
 
-void RAGE_gui::draw_inspector(RAGE *rage)
-{
-	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoCollapse);
-	ImGui::Text("Scene object count: %zu", rage->scene.get_objects()->size());
-	ImGui::Text("Dockspace size: %d, %d", this->dockspace_size.x, this->dockspace_size.y);
-	ImGui::End();
-}
-
 void RAGE_gui::draw_dockspace(RAGE *rage)
 {
 	this->viewport = ImGui::GetMainViewport();
@@ -106,7 +98,7 @@ void RAGE_gui::draw(RAGE *rage)
 		draw_performance_window(rage);
 	scene_view.draw(rage);
 	menu_bar.draw(rage);
-	draw_inspector(rage);
+	inspector.draw(rage);
 
 	static bool first_time = true;
 	if (first_time == true)

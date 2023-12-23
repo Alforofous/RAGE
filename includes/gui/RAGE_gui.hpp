@@ -10,6 +10,7 @@
 #include "glad/glad.h"
 #include "RAGE_menu_bar.hpp"
 #include "RAGE_scene_view.hpp"
+#include "RAGE_inspector.hpp"
 
 class RAGE;
 
@@ -23,12 +24,12 @@ public:
 	glm::ivec2 dockspace_size;
 private:
 	void draw_performance_window(RAGE *rage);
-	void draw_inspector(RAGE *rage);
 	void draw_dockspace(RAGE *rage);
 	void reset_dockings();
 	std::vector<float> frames;
 	RAGE_menu_bar menu_bar;
 	RAGE_scene_view scene_view;
+	RAGE_inspector inspector;
 	ImGuiIO *io;
 	ImGuiID dockspace_id;
 	ImGuiViewport *viewport;
