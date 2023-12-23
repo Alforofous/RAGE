@@ -18,9 +18,9 @@ static bool load_imgui_font(RAGE *rage, ImGuiIO *io)
 
 RAGE_gui::RAGE_gui(RAGE *rage)
 {
-	this->show_performance_window = false;
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	this->show_performance_window = false;
 	this->io = &ImGui::GetIO();
 	io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
@@ -88,7 +88,7 @@ void RAGE_gui::reset_dockings()
 	ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.20f, NULL, &dock_main_id);
 	ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.20f, NULL, &dock_main_id);
 
-	ImGui::DockBuilderDockWindow("Scene", dock_main_id);
+	ImGui::DockBuilderDockWindow("Scene View", dock_main_id);
 	ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
 	ImGui::DockBuilderDockWindow("Performance", dock_id_left);
 

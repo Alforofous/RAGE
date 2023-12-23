@@ -46,3 +46,8 @@ void RAGE_scene::print_objects()
 		std::cout << this->objects[i]->get_name() << std::endl;
 	}
 }
+
+void RAGE_scene::select_all_objects()
+{
+	this->selected_objects = this->objects;
+}

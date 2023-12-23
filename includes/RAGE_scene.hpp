@@ -14,7 +14,10 @@ public:
 	bool add_object(RAGE_object *object);
 	std::vector<RAGE_object *> *get_objects();
 	void print_objects();
+	void select_all_objects();
+
 private:
 	std::string name;
 	std::vector<RAGE_object *> objects;
+	std::vector<RAGE_object *> selected_objects;
 };
