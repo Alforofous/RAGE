@@ -2,6 +2,20 @@
 #include "RAGE_gui.hpp"
 #include "RAGE_primitive_objects.hpp"
 
+static bool load_imgui_font(RAGE *rage, ImGuiIO *io)
+{
+	std::string font_path = rage->executable_path + "/assets/fonts/Roboto/Roboto-Bold.ttf";
+	std::ifstream font_file(font_path.c_str());
+	if (!font_file.good())
+	{
+		std::cout << "Failed to load font file: " << font_path << std::endl;
+		return (false);
+	}
+	font_file.close();
+	ImFont *font = io->Fonts->AddFontFromFileTTF(font_path.c_str(), 16.0f);
+	return (true);
+}
+
 RAGE_gui::RAGE_gui(RAGE *rage)
 {
 	this->show_performance_window = false;
@@ -11,17 +25,7 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-	std::string font_path = rage->executable_path + "/assets/fonts/Roboto/Roboto-Bold.ttf";
-	std::ifstream font_file(font_path.c_str());
-	if (!font_file.good())
-	{
-		std::cout << "Failed to load font file: " << font_path << std::endl;
-	}
-	else
-	{
-		font_file.close();
-		ImFont *font = io->Fonts->AddFontFromFileTTF(font_path.c_str(), 16.0f);
-	}
+	load_imgui_font(rage, this->io);
 
 	io->IniFilename = NULL;
 	ImGui::StyleColorsDark();
