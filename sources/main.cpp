@@ -53,10 +53,6 @@ int main(void)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{
-		for (auto &key : rage->user_input->keyboard.pressed_keys_signal)
-		{
-			key.second = false;
-		}
 		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -66,7 +62,16 @@ int main(void)
 
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
-		rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
+		if (ImGui::GetCurrentContext()->NavWindow != NULL)
+		{
+			const char *focused_window_name = ImGui::GetCurrentContext()->NavWindow->Name;
+			if (strcmp(focused_window_name, "Scene View") == 0)
+				rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
+		}
+		else
+		{
+			printf("No window is currently focused.\n");
+		}
 
 		glfwPollEvents();
 		glfwSwapInterval(0);

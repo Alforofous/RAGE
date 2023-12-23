@@ -41,7 +41,7 @@ void RAGE_scene_view::draw(RAGE *rage)
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	ImGui::Begin("Scene", NULL, ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Scene View", NULL, ImGuiWindowFlags_NoCollapse);
 	ImGui::SetWindowPos(ImVec2((float)rage->window->pixel_position.x, (float)rage->window->pixel_position.y), ImGuiCond_FirstUseEver);
 	ImGui::SetWindowSize(ImVec2((float)this->window_size.x, (float)this->window_size.y), ImGuiCond_FirstUseEver);
 	rage->camera.set_aspect_ratio(this->window_size);
