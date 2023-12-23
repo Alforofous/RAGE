@@ -2,25 +2,41 @@
 #include "RAGE_primitive_objects.hpp"
 #include "RAGE.hpp"
 
+static void exit_callback(RAGE *rage)
+{
+	glfwSetWindowShouldClose(rage->window->glfw_window, GLFW_TRUE);
+}
+
+static void add_cube_callback(RAGE *rage)
+{
+	rage->scene.add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f));
+}
+
 RAGE_menu_bar::RAGE_menu_bar()
 {
 	this->items = {
 		menu_bar_item{
 			"File",
-			[](RAGE *rage) { glfwSetWindowShouldClose(glfwGetCurrentContext(), GLFW_TRUE); },
-			{}
+			NULL,
+			{
+				menu_bar_item{
+					"Exit",
+					exit_callback,
+					{}
+				}
+			}
 		},
 		menu_bar_item{
 			"Object",
-			nullptr,
+			NULL,
 			{
 				menu_bar_item{
 					"Add object",
-					nullptr,
+					NULL,
 					{
 						menu_bar_item{
 							"Add cube",
-							[](RAGE *rage) { rage->scene.add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f)); },
+							add_cube_callback,
 							{}
 						}
 					}
