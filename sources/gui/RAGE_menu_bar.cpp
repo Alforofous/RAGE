@@ -4,31 +4,30 @@
 
 RAGE_menu_bar::RAGE_menu_bar()
 {
-	menu_bar_item file;
-
-	file.name = "File";
-
-	menu_bar_item exit;
-	exit.name = "Exit";
-	exit.callback = [](RAGE *rage) { glfwSetWindowShouldClose(glfwGetCurrentContext(), GLFW_TRUE); };
-
-	menu_bar_item object;
-	object.name = "Object";
-
-	menu_bar_item add_object;
-	add_object.name = "Add object";
-
-	std::vector<menu_bar_item> object_children;
-	object_children.push_back({ "Add cube", [](RAGE *rage) { rage->scene.add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f)); } });
-
-	add_object.children = object_children;
-
-	object.children.push_back(add_object);
-
-	file.children.push_back(exit);
-	
-	this->items.push_back(file);
-	this->items.push_back(object);
+	this->items = {
+		menu_bar_item{
+			"File",
+			[](RAGE *rage) { glfwSetWindowShouldClose(glfwGetCurrentContext(), GLFW_TRUE); },
+			{}
+		},
+		menu_bar_item{
+			"Object",
+			nullptr,
+			{
+				menu_bar_item{
+					"Add object",
+					nullptr,
+					{
+						menu_bar_item{
+							"Add cube",
+							[](RAGE *rage) { rage->scene.add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f)); },
+							{}
+						}
+					}
+				}
+			}
+		}
+	};
 }
 
 void RAGE_menu_bar::draw_menu_item(const menu_bar_item& item)
