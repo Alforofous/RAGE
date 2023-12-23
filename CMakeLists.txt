@@ -23,6 +23,7 @@ set(
 	gui/RAGE_gui.cpp
 	gui/RAGE_menu_bar.cpp
 	gui/RAGE_scene_view.cpp
+	gui/RAGE_inspector.cpp
 	RAGE_scene.cpp
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
@@ -44,6 +45,7 @@ set(
 	gui/RAGE_gui.hpp
 	gui/RAGE_menu_bar.hpp
 	gui/RAGE_scene_view.hpp
+	gui/RAGE_inspector.hpp
 	RAGE_scene.hpp
 	RAGE_mesh.hpp
 	RAGE_primitive_objects.hpp
