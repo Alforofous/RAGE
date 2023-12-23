@@ -13,7 +13,7 @@ bool RAGE_window::init()
 		if (mode == NULL)
 			throw std::runtime_error("Failed to get video mode");
 		
-		this->pixel_size = glm::ivec2(mode->width / 2, mode->height / 2);
+		this->pixel_size = glm::ivec2(mode->width, mode->height);
 		glfw_window = glfwCreateWindow(this->pixel_size.x, this->pixel_size.y, "RAGE", NULL, NULL);
 		if (glfw_window == NULL)
 			throw std::runtime_error("Failed to create window");
