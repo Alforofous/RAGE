@@ -30,4 +30,6 @@ private:
 	RAGE_menu_bar menu_bar;
 	RAGE_scene_view scene_view;
 	ImGuiIO *io;
+	ImGuiID dockspace_id;
+	ImGuiViewport *viewport;
 };
