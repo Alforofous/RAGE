@@ -65,7 +65,7 @@ int main(void)
 		if (ImGui::GetCurrentContext()->NavWindow != NULL)
 		{
 			const char *focused_window_name = ImGui::GetCurrentContext()->NavWindow->Name;
-			if (strcmp(focused_window_name, "Scene View") == 0)
+			if (strcmp(focused_window_name, "Scene View") == 0 && rage->user_input->keyboard.pressed_keys[GLFW_KEY_LEFT_CONTROL] == false)
 				rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
 		}
 		else
