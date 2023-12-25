@@ -9,17 +9,15 @@ void RAGE_inspector::draw(RAGE *rage)
 	ImGui::Text("Selected object count: %zu", selected_objects->size());
 	for (int i = 0; i < selected_objects->size(); i++)
 	{
-		ImGui::Text("Selected object name: %s", selected_objects->at(i)->get_name().c_str());
+		RAGE_object *selected_object = selected_objects->at(i);
+		ImGui::Text("Selected object name: %s", selected_object->get_name().c_str());
+		ImGui::Text("UUID: %llu", (unsigned long long)selected_object);
 
-		glm::vec3 position = selected_objects->at(i)->get_position();
-		if (ImGui::InputFloat3("Position Input", glm::value_ptr(position)))
-		{
-			selected_objects->at(i)->set_position(position);
-		}
-		if (ImGui::SliderFloat3("Position Slider", glm::value_ptr(position), -100.0f, 100.0f))
-		{
-			selected_objects->at(i)->set_position(position);
-		}
+		glm::vec3 position = selected_object->get_position();
+		std::string label = "Position" + std::to_string(i);
+		float drag_speed = 0.1f;
+		if (ImGui::DragFloat3(label.c_str(), &position.x, drag_speed) == true)
+			selected_object->set_position(position);
 	}
 	ImGui::End();
 }
