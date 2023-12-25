@@ -1,7 +1,7 @@
 #include "RAGE.hpp"
 #include "RAGE_inspector.hpp"
 
-static void draw_drag_float3(std::string label, glm::vec3 &vector, float drag_speed, glm::vec3 *min = NULL, glm::vec3 *max = NULL, bool overflow = false)
+static void draw_drag_float3(RAGE *rage, std::string label, glm::vec3 &vector, float drag_speed, glm::vec3 *min = NULL, glm::vec3 *max = NULL, bool overflow = false)
 {
 	if (ImGui::DragFloat3(label.c_str(), &vector.x, drag_speed) == true)
 	{
@@ -26,13 +26,10 @@ static void draw_drag_float3(std::string label, glm::vec3 &vector, float drag_sp
 			}
 		}
 	}
-	GLFWwindow *window = glfwGetCurrentContext();
-	if (window == NULL)
-		return ;
 	if (ImGui::IsItemActivated())
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		glfwSetInputMode(rage->window->glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	if (ImGui::IsItemDeactivated())
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		glfwSetInputMode(rage->window->glfw_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
 void RAGE_inspector::draw(RAGE *rage)
@@ -48,11 +45,11 @@ void RAGE_inspector::draw(RAGE *rage)
 		ImGui::Text("Selected object name: %s", selected_object->get_name().c_str());
 		ImGui::Text("UUID: %llu", (unsigned long long)selected_object);
 
-		draw_drag_float3("Position" + std::to_string(i), selected_object->get_position(), 0.1f);
+		draw_drag_float3(rage, "Position" + std::to_string(i), selected_object->get_position(), 0.1f);
 		glm::vec3 min_rotation = glm::vec3(glm::radians(-180.0f));
 		glm::vec3 max_rotation = glm::vec3(glm::radians(180.0f));
-		draw_drag_float3("Rotation" + std::to_string(i), selected_object->get_rotation(), 0.1f, &min_rotation, &max_rotation, true);
-		draw_drag_float3("Scale" + std::to_string(i), selected_object->get_scale(), 0.1f);
+		draw_drag_float3(rage, "Rotation" + std::to_string(i), selected_object->get_rotation(), 0.1f, &min_rotation, &max_rotation, true);
+		draw_drag_float3(rage, "Scale" + std::to_string(i), selected_object->get_scale(), 0.1f);
 		ImGui::Separator();
 	}
 	ImGui::End();
