@@ -44,14 +44,6 @@ bool RAGE_scene::add_object(RAGE_object *object)
 	return true;
 }
 
-void RAGE_scene::print_objects()
-{
-	for (int i = 0; i < this->objects.size(); i++)
-	{
-		std::cout << this->objects[i]->get_name() << std::endl;
-	}
-}
-
 void RAGE_scene::select_all_objects()
 {
 	this->selected_objects = this->objects;

@@ -47,7 +47,6 @@ int main(void)
 	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
 								   rage->executable_path + "/shaders/fragment_test.glsl");
 	rage->shader->InitVariableLocations();
-	rage->scene.print_objects();
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
