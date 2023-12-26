@@ -42,7 +42,7 @@ int main(void)
 	cube->translate(glm::vec3(0.0f, -5.0f, 0.0f));
 	rage->scene.add_object(cube);
 
-	set_callbacks(rage);
+	set_callbacks(rage->window->glfw_window, rage);
 	rage->gui = new RAGE_gui(rage);
 	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
 								   rage->executable_path + "/shaders/fragment_test.glsl");
@@ -61,16 +61,9 @@ int main(void)
 
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
-		if (ImGui::GetCurrentContext()->NavWindow != NULL)
-		{
-			const char *focused_window_name = ImGui::GetCurrentContext()->NavWindow->Name;
-			if (strcmp(focused_window_name, "Scene View") == 0 && rage->user_input->keyboard.pressed_keys[GLFW_KEY_LEFT_CONTROL] == false)
-				rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
-		}
-		else
-		{
-			printf("No window is currently focused.\n");
-		}
+
+		if (rage->gui->scene_view.is_focused())
+			rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
 
 		glfwPollEvents();
 		glfwSwapInterval(0);

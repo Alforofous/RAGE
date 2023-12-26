@@ -38,6 +38,6 @@ private:
 	std::vector<RAGE_object *> template_objects;
 };
 
-void set_callbacks(RAGE *rage);
+void set_callbacks(GLFWwindow *window, RAGE *rage);
 void set_shader_variable_values(void *content);
 std::string getExecutableDir();

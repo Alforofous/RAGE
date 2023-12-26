@@ -21,15 +21,16 @@ public:
 	~RAGE_gui();
 	void draw(RAGE *rage);
 	bool show_performance_window;
+	RAGE_menu_bar menu_bar;
+	RAGE_scene_view scene_view;
+	RAGE_inspector inspector;
 	glm::ivec2 dockspace_size;
+	ImGuiIO *get_imgui_io();
 private:
 	void draw_performance_window(RAGE *rage);
 	void draw_dockspace(RAGE *rage);
 	void reset_dockings();
 	std::vector<float> frames;
-	RAGE_menu_bar menu_bar;
-	RAGE_scene_view scene_view;
-	RAGE_inspector inspector;
 	ImGuiIO *io;
 	ImGuiID dockspace_id;
 	ImGuiViewport *viewport;

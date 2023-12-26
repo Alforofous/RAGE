@@ -26,11 +26,18 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
 	load_imgui_font(rage, this->io);
-
 	io->IniFilename = NULL;
+
+	io->UserData = (void *)rage;
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(rage->window->glfw_window, true);
+	ImGui_ImplGlfw_SetCallbacksChainForAllWindows(true);
 	ImGui_ImplOpenGL3_Init("#version 330");
+}
+
+ImGuiIO *RAGE_gui::get_imgui_io()
+{
+	return (this->io);
 }
 
 void RAGE_gui::draw_performance_window(RAGE *rage)

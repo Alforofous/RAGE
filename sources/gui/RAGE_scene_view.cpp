@@ -42,6 +42,7 @@ void RAGE_scene_view::draw(RAGE *rage)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	ImGui::Begin("Scene View", NULL, ImGuiWindowFlags_NoCollapse);
+	this->focused = ImGui::IsWindowFocused();
 	ImGui::SetWindowPos(ImVec2((float)rage->window->pixel_position.x, (float)rage->window->pixel_position.y), ImGuiCond_FirstUseEver);
 	ImGui::SetWindowSize(ImVec2((float)this->window_size.x, (float)this->window_size.y), ImGuiCond_FirstUseEver);
 	rage->camera.set_aspect_ratio(this->window_size);
@@ -50,6 +51,11 @@ void RAGE_scene_view::draw(RAGE *rage)
 	ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
 	ImGui::Image((void *)(intptr_t)texture, canvas_sz, ImVec2(0, 1), ImVec2(1, 0));
 	ImGui::End();
+}
+
+bool RAGE_scene_view::is_focused()
+{
+	return (this->focused);
 }
 
 RAGE_scene_view::~RAGE_scene_view()
