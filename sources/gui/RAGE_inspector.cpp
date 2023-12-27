@@ -1,5 +1,5 @@
 #include "RAGE.hpp"
-#include "RAGE_inspector.hpp"
+#include "gui/RAGE_inspector.hpp"
 
 static void draw_drag_float3(RAGE *rage, std::string label, glm::vec3 &vector, float drag_speed, glm::vec3 *min = NULL, glm::vec3 *max = NULL, bool overflow = false)
 {

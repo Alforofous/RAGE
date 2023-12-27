@@ -1,5 +1,5 @@
 #include "RAGE.hpp"
-#include "RAGE_gui.hpp"
+#include "gui/RAGE_gui.hpp"
 #include "RAGE_primitive_objects.hpp"
 
 static bool load_imgui_font(RAGE *rage, ImGuiIO *io)

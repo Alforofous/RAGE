@@ -1,4 +1,4 @@
-#include "RAGE_menu_bar.hpp"
+#include "gui/RAGE_menu_bar.hpp"
 #include "RAGE_primitive_objects.hpp"
 #include "RAGE.hpp"
 

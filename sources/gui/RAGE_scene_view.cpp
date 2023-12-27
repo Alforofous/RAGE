@@ -1,5 +1,5 @@
 #include "RAGE.hpp"
-#include "RAGE_scene_view.hpp"
+#include "gui/RAGE_scene_view.hpp"
 
 RAGE_scene_view::RAGE_scene_view()
 {
