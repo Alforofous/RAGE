@@ -9,10 +9,11 @@ static RAGE *get_rage_from_user_data(GLFWwindow *window)
 	if (rage == NULL)
 	{
 		//For ImGui viewport windows
+		printf("Backup from ImGui.\n");
 		ImGuiIO *io = &ImGui::GetIO();
 		if (io == NULL)
 			return (NULL);
-		rage = (RAGE *)io->UserData;
+		rage = (RAGE *)io->BackendPlatformUserData;
 		if (rage == NULL)
 			return (NULL);
 	}

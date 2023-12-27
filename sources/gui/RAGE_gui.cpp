@@ -28,7 +28,7 @@ RAGE_gui::RAGE_gui(RAGE *rage)
 	load_imgui_font(rage, this->io);
 	io->IniFilename = NULL;
 
-	io->UserData = (void *)rage;
+	io->BackendPlatformUserData = (void *)rage;
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(rage->window->glfw_window, true);
 	ImGui_ImplGlfw_SetCallbacksChainForAllWindows(true);
