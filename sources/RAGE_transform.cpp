@@ -17,12 +17,15 @@ glm::mat4 RAGE_transform::get_model_matrix(bool update)
 void RAGE_transform::update_model_matrix()
 {
 	glm::mat4 pos_matrix = glm::translate(m_position);
-	glm::mat4 rot_x_matrix = glm::rotate(m_rotation.x, glm::vec3(1, 0, 0));
-	glm::mat4 rot_y_matrix = glm::rotate(m_rotation.y, glm::vec3(0, 1, 0));
-	glm::mat4 rot_z_matrix = glm::rotate(m_rotation.z, glm::vec3(1, 0, 0));
-	glm::mat4 scale_matrix = glm::scale(m_scale);
+	
+	glm::quat rot_x = glm::angleAxis(glm::radians(m_rotation.x), glm::vec3(1, 0, 0));
+	glm::quat rot_y = glm::angleAxis(glm::radians(m_rotation.y), glm::vec3(0, 1, 0));
+	glm::quat rot_z = glm::angleAxis(glm::radians(m_rotation.z), glm::vec3(0, 0, 1));
+	
+	glm::quat quaternion = rot_y * rot_x * rot_z;
 
-	glm::mat4 rot_matrix = rot_z_matrix * rot_y_matrix * rot_x_matrix;
+	glm::mat4 rot_matrix = glm::mat4_cast(quaternion);
+	glm::mat4 scale_matrix = glm::scale(m_scale);
 
 	this->model_matrix = pos_matrix * rot_matrix * scale_matrix;
 }

@@ -46,8 +46,8 @@ void RAGE_inspector::draw(RAGE *rage)
 		ImGui::Text("UUID: %llu", (unsigned long long)selected_object);
 
 		draw_drag_float3(rage, "Position" + std::to_string(i), selected_object->get_position(), 0.1f);
-		glm::vec3 min_rotation = glm::vec3(glm::radians(-180.0f));
-		glm::vec3 max_rotation = glm::vec3(glm::radians(180.0f));
+		glm::vec3 min_rotation = glm::vec3(-180.0f);
+		glm::vec3 max_rotation = glm::vec3(180.0f);
 		draw_drag_float3(rage, "Rotation" + std::to_string(i), selected_object->get_rotation(), 0.1f, &min_rotation, &max_rotation, true);
 		draw_drag_float3(rage, "Scale" + std::to_string(i), selected_object->get_scale(), 0.1f);
 		ImGui::Separator();
