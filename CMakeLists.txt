@@ -24,6 +24,7 @@ set(
 	gui/RAGE_menu_bar.cpp
 	gui/RAGE_scene_view.cpp
 	gui/RAGE_inspector.cpp
+	physics/RAGE_ray_tracing.cpp
 	RAGE_scene.cpp
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
@@ -46,6 +47,7 @@ set(
 	gui/RAGE_menu_bar.hpp
 	gui/RAGE_scene_view.hpp
 	gui/RAGE_inspector.hpp
+	physics/RAGE_ray_tracing.hpp
 	RAGE_scene.hpp
 	RAGE_mesh.hpp
 	RAGE_primitive_objects.hpp
@@ -78,7 +80,6 @@ add_subdirectory(libraries/)
 
 list(APPEND PROJECT_INCLUDES
 	${INCLUDES_DIRECTORY}
-	${INCLUDES_DIRECTORY}/gui/
 	${LIBRARY_INCLUDE_DIRECTORIES}
 	libraries/
 )
