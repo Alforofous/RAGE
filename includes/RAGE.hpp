@@ -9,11 +9,12 @@
 #include "RAGE_window.hpp"
 #include "RAGE_camera.hpp"
 #include "RAGE_shader.hpp"
-#include "RAGE_gui.hpp"
-#include "RAGE_scene_view.hpp"
 #include "RAGE_scene.hpp"
 #include "RAGE_user_input.hpp"
 #include "RAGE_mesh.hpp"
+
+#include "gui/RAGE_gui.hpp"
+#include "gui/RAGE_scene_view.hpp"
 
 #include <iostream>
 #include <filesystem>
@@ -38,6 +39,7 @@ private:
 	std::vector<RAGE_object *> template_objects;
 };
 
+RAGE *get_rage();
 void set_callbacks(GLFWwindow *window, RAGE *rage);
 void set_shader_variable_values(void *content);
 std::string getExecutableDir();

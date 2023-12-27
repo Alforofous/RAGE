@@ -99,7 +99,7 @@ void RAGE_shader::CreateShader(const std::string& vertexShader, const std::strin
 	glDeleteShader(fs);
 }
 
-void RAGE_shader::InitVariableLocations()
+void RAGE_shader::init_variable_locations()
 {
 	const char	*variable_names[] =
 	{
@@ -112,6 +112,10 @@ void RAGE_shader::InitVariableLocations()
 	for (int i = 0; i < variable_count; i++)
 	{
 		variable_location[variable_names[i]] = glGetUniformLocation(hProgram, variable_names[i]);
+		if (variable_location[variable_names[i]] == -1)
+		{
+			std::cout << "Warning: Failed to locate uniform variable " << variable_names[i] << std::endl;
+		}
 	}
 }
 
@@ -120,13 +124,14 @@ void set_shader_variable_values(void *content)
 	int width;
 	int height;
 	RAGE *rage;
+	RAGE_camera *camera;
+	std::map<std::string, GLint> locations;
 
 	rage = (RAGE *)content;
+	camera = &rage->camera;
+	locations = rage->shader->variable_location;
 	glfwGetWindowSize(rage->window->glfw_window, &width, &height);
-	glUniform2f(rage->shader->variable_location["u_resolution"], (float)width,
-				(float)height);
-	glUniformMatrix4fv(rage->shader->variable_location["u_perspective_matrix"], 1,
-					   GL_FALSE, glm::value_ptr(rage->camera.get_perspective_matrix()));
-	glUniformMatrix4fv(rage->shader->variable_location["u_view_matrix"], 1,
-					   GL_FALSE, glm::value_ptr(rage->camera.get_view_matrix()));
+	glUniform2f(locations["u_resolution"], (float)width, (float)height);
+	glUniformMatrix4fv(locations["u_perspective_matrix"], 1, GL_FALSE, glm::value_ptr(camera->get_perspective_matrix()));
+	glUniformMatrix4fv(locations["u_view_matrix"], 1, GL_FALSE, glm::value_ptr(camera->get_view_matrix()));
 }

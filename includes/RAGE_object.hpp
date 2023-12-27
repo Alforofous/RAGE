@@ -5,6 +5,8 @@
 #include "GLobject.hpp"
 #include <vector>
 
+class RAGE;
+
 class RAGE_object : public RAGE_transform
 {
 public:
@@ -16,7 +18,11 @@ public:
 	RAGE_mesh *get_mesh();
 	std::string get_name();
 	GLobject *get_gl_object();
+	static void draw_objects(RAGE_object **objects, size_t count);
+	void draw();
+
 private:
+	int u_model_matrix_variable_location;
 	std::string name;
 	RAGE_mesh *mesh;
 	GLobject gl_object;

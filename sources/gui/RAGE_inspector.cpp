@@ -35,6 +35,13 @@ static void draw_drag_float3(RAGE *rage, std::string label, glm::vec3 &vector, f
 void RAGE_inspector::draw(RAGE *rage)
 {
 	ImGui::Begin("Inspector", NULL, ImGuiWindowFlags_NoCollapse);
+	ImGui::Text("Camera:");
+	glm::vec3 camera_position = rage->camera.get_position();
+	ImGui::Text("Position: %f, %f, %f", camera_position.x, camera_position.y, camera_position.z);
+	ImGui::Text("Forward: %f, %f, %f", rage->camera.get_forward().x, rage->camera.get_forward().y, rage->camera.get_forward().z);
+	ImGui::Text("Fov: %f", rage->camera.m_perspective_matrix[0][0]);
+
+	ImGui::Separator();
 	ImGui::Text("Scene object count: %zu", rage->scene.get_objects()->size());
 	std::vector<RAGE_object *> *selected_objects = rage->scene.get_selected_objects();
 	ImGui::Text("Selected object count: %zu", selected_objects->size());

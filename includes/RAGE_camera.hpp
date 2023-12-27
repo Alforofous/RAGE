@@ -14,14 +14,14 @@ public:
 	glm::vec3 get_right();
 	void handle_input(RAGE_user_input *user_input, float delta_time);
 	void set_aspect_ratio(glm::ivec2 window_size);
+	glm::mat4 m_perspective_matrix;
+	glm::mat4 m_view_matrix;
+
 private:
 	void handle_movement(RAGE_user_input *user_input, float movement_speed);
 	void handle_rotation(RAGE_user_input *user_input, float rotation_speed);
 
 	void rotate_on_spherical_coordinates(glm::vec2 delta_movement);
-
-	glm::mat4 m_perspective_matrix;
-	glm::mat4 m_view_matrix;
 
 	glm::vec3 m_forward;
 	glm::vec3 m_up;

@@ -2,11 +2,19 @@
 #include "GLobject.hpp"
 #include "RAGE_primitive_objects.hpp"
 
+RAGE *get_rage()
+{
+	static RAGE *rage;
+	if (rage == NULL)
+		rage = new RAGE();
+	return (rage);
+}
+
 int main(void)
 {
 	RAGE *rage;
 
-	rage = new RAGE();
+	rage = get_rage();
 	if (glfwInit() == GLFW_FALSE)
 		return (1);
 
@@ -26,6 +34,15 @@ int main(void)
 	glfwMakeContextCurrent(rage->window->glfw_window);
 	gladLoadGL();
 
+	set_callbacks(rage->window->glfw_window, rage);
+	rage->gui = new RAGE_gui(rage);
+	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
+								   rage->executable_path + "/shaders/fragment_test.glsl");
+	rage->shader->init_variable_locations();
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	RAGE_mesh mesh;
 	RAGE_mesh mesh2;
 	mesh.LoadGLB((rage->executable_path + "/assets/models/SimpleCone.glb").c_str());
@@ -42,14 +59,6 @@ int main(void)
 	cube->translate(glm::vec3(0.0f, -5.0f, 0.0f));
 	rage->scene.add_object(cube);
 
-	set_callbacks(rage->window->glfw_window, rage);
-	rage->gui = new RAGE_gui(rage);
-	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
-								   rage->executable_path + "/shaders/fragment_test.glsl");
-	rage->shader->InitVariableLocations();
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{
 		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();

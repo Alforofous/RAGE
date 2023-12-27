@@ -15,7 +15,7 @@ public:
 	RAGE_shader(const std::string &filePathVertexShader, const std::string &filePathFragmentShader);
 	~RAGE_shader();
 
-	void InitVariableLocations();
+	void init_variable_locations();
 
 	GLuint hProgram;
 	std::map<std::string, int> variable_location;

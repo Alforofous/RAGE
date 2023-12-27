@@ -10,7 +10,7 @@ class RAGE_scene
 public:
 	RAGE_scene(const char *name = "New Scene");
 
-	void draw(RAGE *rage);
+	void draw();
 	bool add_object(RAGE_object *object);
 	std::vector<RAGE_object *> *get_objects();
 	std::vector<RAGE_object *> *get_selected_objects();
