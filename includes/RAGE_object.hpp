@@ -5,6 +5,13 @@
 #include "GLobject.hpp"
 #include <vector>
 
+enum polygon_mode
+{
+	fill,
+	line,
+	point
+};
+
 class RAGE;
 
 class RAGE_object : public RAGE_transform
@@ -19,8 +26,10 @@ public:
 	std::string get_name();
 	GLobject *get_gl_object();
 	static void draw_objects(RAGE_object **objects, size_t count);
+	static void init_objects(RAGE_object **objects, size_t count);
 	void draw();
 
+	polygon_mode polygon_mode;
 private:
 	int u_model_matrix_variable_location;
 	std::string name;

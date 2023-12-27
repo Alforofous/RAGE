@@ -9,15 +9,7 @@ RAGE_scene::RAGE_scene(const char *name)
 
 void RAGE_scene::draw()
 {
-	for (int i = 0; i < this->objects.size(); i++)
-	{
-		RAGE_object *rage_object = this->objects[i];
-		GLobject *gl_object = rage_object->get_gl_object();
-
-		rage_object->update_model_matrix();
-		if (gl_object->is_initialized() == false)
-			gl_object->init(*rage_object->get_mesh());
-	}
+	RAGE_object::init_objects(this->objects.data(), this->objects.size());
 	RAGE_object::draw_objects(this->objects.data(), this->objects.size());
 }
 

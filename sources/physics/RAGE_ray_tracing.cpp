@@ -14,6 +14,12 @@ RAGE_bounding_volume_hierarchy::RAGE_bounding_volume_hierarchy()
 
 void RAGE_bounding_volume_hierarchy::build()
 {
+	for (size_t count = 0; count < this->bounding_box_objects.size(); count++)
+	{
+		RAGE_object *object = this->bounding_box_objects[count];
+		delete object;
+	}
+	this->bounding_box_objects.clear();
 	for (size_t count = 0; count < this->objects.size(); count++)
 	{
 		RAGE_object *object = this->objects[count];
@@ -43,6 +49,8 @@ void RAGE_bounding_volume_hierarchy::build()
 			if (vertex_position.z > max.z)
 				max.z = vertex_position.z;
 		}
+		if (this->root != NULL)
+			delete this->root;
 		bounding_box_node *node = new bounding_box_node();
 		node->bounding_box.min = min;
 		node->bounding_box.max = max;
@@ -52,8 +60,9 @@ void RAGE_bounding_volume_hierarchy::build()
 		bounding_box_object->scale(glm::vec3(max.x - min.x, max.y - min.y, max.z - min.z));
 		bounding_box_object->translate(glm::vec3((max.x + min.x) / 2.0f, (max.y + min.y) / 2.0f, (max.z + min.z) / 2.0f));
 		bounding_box_object->update_model_matrix();
+		bounding_box_object->polygon_mode = polygon_mode::line;
 		this->bounding_box_objects.push_back(bounding_box_object);
-
+		RAGE_object::init_objects(this->bounding_box_objects.data(), this->bounding_box_objects.size());
 	}
 }
 

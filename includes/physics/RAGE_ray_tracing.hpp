@@ -44,14 +44,12 @@ class RAGE_bounding_volume_hierarchy
 {
 public:
 	RAGE_bounding_volume_hierarchy();
-	~RAGE_bounding_volume_hierarchy();
 
-	void add_object(RAGE_object *object);
 	void build();
 	void draw();
-private:
 	std::vector<RAGE_object *> objects;
 	std::vector<RAGE_object *> bounding_box_objects;
+private:
 	bounding_box_node *root;
 	GLobject *gl_object;
 };

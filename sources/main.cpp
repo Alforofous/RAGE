@@ -1,6 +1,7 @@
 #include "RAGE.hpp"
 #include "GLobject.hpp"
 #include "RAGE_primitive_objects.hpp"
+#include "physics/RAGE_ray_tracing.hpp"
 
 RAGE *get_rage()
 {
@@ -54,10 +55,21 @@ int main(void)
 	mesh2.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
 
 	rage->scene.add_object(new RAGE_object(&mesh2, "BoxVertexColors"));
-	rage->scene.add_object(new RAGE_object(&mesh, "WideMonkeyHeadVertexColored"));
+
 	RAGE_object *cube = RAGE_primitive_objects::create_cube(1000.0f, 0.1f, 1000.0f);
 	cube->translate(glm::vec3(0.0f, -5.0f, 0.0f));
 	rage->scene.add_object(cube);
+
+	RAGE_object *monkey_head = new RAGE_object(&mesh, "WideMonkeyHeadVertexColored");
+	rage->scene.add_object(monkey_head);
+
+	RAGE_bounding_volume_hierarchy bounding_volume_hierarchy;
+	bounding_volume_hierarchy.objects.push_back(monkey_head);
+	bounding_volume_hierarchy.build();
+	for (size_t count = 0; count < bounding_volume_hierarchy.bounding_box_objects.size(); count++)
+	{
+		rage->scene.add_object(bounding_volume_hierarchy.bounding_box_objects[count]);
+	}
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{

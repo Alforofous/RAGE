@@ -7,6 +7,7 @@ RAGE_object::RAGE_object(RAGE_mesh *mesh, const char *name)
 {
 	this->mesh = mesh;
 	this->name = name;
+	this->polygon_mode = polygon_mode::fill;
 }
 
 bool RAGE_object::init()
@@ -57,16 +58,36 @@ void RAGE_object::draw_objects(RAGE_object **objects, size_t count)
 	}
 }
 
+void RAGE_object::init_objects(RAGE_object **objects, size_t count)
+{
+	for (int i = 0; i < count; i++)
+	{
+		RAGE_object *rage_object = objects[i];
+		GLobject *gl_object = rage_object->get_gl_object();
+
+		rage_object->update_model_matrix();
+		if (gl_object->is_initialized() == false)
+			gl_object->init(*rage_object->get_mesh());
+	}
+}
+
 void RAGE_object::draw()
 {
 	if (this->has_mesh() == false)
 		return;
+	if (this->polygon_mode == polygon_mode::fill)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	else if (this->polygon_mode == polygon_mode::line)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else if (this->polygon_mode == polygon_mode::point)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 	GLobject *gl_object = this->get_gl_object();
 	RAGE *rage = get_rage();
 
 	const glm::f32 *model_matrix = glm::value_ptr(this->get_model_matrix());
 	glUniformMatrix4fv(rage->shader->variable_location["u_model_matrix"], 1, GL_FALSE, glm::value_ptr(this->get_model_matrix()));
 	gl_object->draw();
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 RAGE_object::~RAGE_object()
