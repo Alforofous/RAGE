@@ -2,18 +2,18 @@
 
 #include "RAGE_mesh.hpp"
 #include "vertex_array.hpp"
-#include "vertex_buffer.hpp"
-#include "element_buffer.hpp"
+#include "object_buffer.hpp"
+#include "object_buffer.hpp"
 
-class GLobject
+class RAGE_geometry
 {
 public:
 	vertex_array *vertex_array_object;
-	vertex_buffer *vertex_buffer_object;
-	element_buffer *element_buffer_object;
+	object_buffer *vertex_buffer_object;
+	object_buffer *element_buffer_object;
 
-	GLobject();
-	~GLobject();
+	RAGE_geometry();
+	~RAGE_geometry();
 	bool init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size);
 	bool init(RAGE_mesh &mesh);
 	void draw();

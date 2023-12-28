@@ -1,5 +1,5 @@
 #include "RAGE.hpp"
-#include "GLobject.hpp"
+#include "RAGE_geometry.hpp"
 #include "RAGE_primitive_objects.hpp"
 #include "physics/RAGE_ray_tracing.hpp"
 

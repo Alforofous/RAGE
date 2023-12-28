@@ -9,7 +9,7 @@ RAGE_ray_tracing::RAGE_ray_tracing()
 RAGE_bounding_volume_hierarchy::RAGE_bounding_volume_hierarchy()
 {
 	this->root = NULL;
-	this->gl_object = NULL;
+	this->geometry = NULL;
 }
 
 void RAGE_bounding_volume_hierarchy::build()

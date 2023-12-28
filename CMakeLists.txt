@@ -29,10 +29,9 @@ set(
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
 	RAGE_keyboard_input.cpp
+	RAGE_geometry.cpp
 	vertex_array.cpp
-	vertex_buffer.cpp
-	element_buffer.cpp
-	GLobject.cpp
+	object_buffer.cpp
 )
 
 set(
@@ -53,10 +52,9 @@ set(
 	RAGE_primitive_objects.hpp
 	RAGE_keyboard_input.hpp
 	RAGE_user_input.hpp
+	RAGE_geometry.hpp
 	vertex_array.hpp
-	vertex_buffer.hpp
-	element_buffer.hpp
-	GLobject.hpp
+	object_buffer.hpp
 )
 
 set(
