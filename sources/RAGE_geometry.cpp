@@ -1,5 +1,4 @@
 #include "RAGE_geometry.hpp"
-#include "RAGE_mesh.hpp"
 #include <iostream>
 
 RAGE_geometry::RAGE_geometry()
@@ -32,12 +31,6 @@ bool RAGE_geometry::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices
 		std::cerr << "Error initializing GL object: " << e.what() << std::endl;
 		return (false);
 	}
-}
-
-bool RAGE_geometry::init(RAGE_mesh &mesh)
-{
-	bool geometry_initialized = this->init(mesh.vertices, mesh.indices, mesh.vertices_size, mesh.indices_size);
-	return (geometry_initialized);
 }
 
 void RAGE_geometry::draw()

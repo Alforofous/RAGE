@@ -112,7 +112,7 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 
 	std::vector<GLfloat> vertices(count * 3);
 	printf("MESH VERTICES COUNT: %d\n", count);
-	std::memcpy(vertices.data(), binary_buffer.data() + byteOffset, byteLength);
+	std::memcpy(vertices.data(), binary_buffer.data() + byteOffset, count * 3 * sizeof(GLfloat));
 	
 	this->vertices_count = count;
 	this->vertices_size = this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT * sizeof(GLfloat);

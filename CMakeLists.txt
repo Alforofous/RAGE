@@ -26,6 +26,7 @@ set(
 	gui/RAGE_inspector.cpp
 	physics/RAGE_ray_tracing.cpp
 	RAGE_scene.cpp
+	RAGE_scene_glb_loader.cpp
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
 	RAGE_keyboard_input.cpp

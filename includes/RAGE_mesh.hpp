@@ -4,6 +4,9 @@
 #include "glad/glad.h"
 #include <vector>
 
+#include "RAGE_geometry.hpp"
+//#include "RAGE_material.hpp"
+
 #define VERTEX_POSITION_ELEMENT_COUNT 3
 #define VERTEX_COLOR_ELEMENT_COUNT 4
 #define VERTEX_ARRAY_ELEMENT_COUNT (VERTEX_POSITION_ELEMENT_COUNT + VERTEX_COLOR_ELEMENT_COUNT)
@@ -31,6 +34,7 @@ private:
 	void set_vertex_positions();
 	void set_vertex_colors();
 	int vertex_color_channel_count;
+	RAGE_geometry geometry;
 };
 
 struct GLBHeader

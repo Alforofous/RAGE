@@ -1,6 +1,5 @@
 #pragma once
 
-#include "RAGE_mesh.hpp"
 #include "vertex_array.hpp"
 #include "object_buffer.hpp"
 #include "object_buffer.hpp"
@@ -15,7 +14,6 @@ public:
 	RAGE_geometry();
 	~RAGE_geometry();
 	bool init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size);
-	bool init(RAGE_mesh &mesh);
 	void draw();
 	bool is_initialized();
 private:

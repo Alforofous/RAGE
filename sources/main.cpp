@@ -44,27 +44,9 @@ int main(void)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	RAGE_object *cube = RAGE_primitive_objects::create_cube();
-	cube->m_scale = glm::vec3(50.0f, 1.0f, 50.0f);
-	cube->m_position = glm::vec3(0.0f, -5.0f, 0.0f);
-	rage->scene.add_object(cube);
-
-	RAGE_mesh monkey_mesh;
-	monkey_mesh.LoadGLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
-	RAGE_object *monkey_head = new RAGE_object(&monkey_mesh, "WideMonkeyHeadVertexColored");
-	rage->scene.add_object(monkey_head);
-
-	RAGE_mesh colored_cube_mesh;
-	colored_cube_mesh.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
-	RAGE_object *colored_cube = new RAGE_object(&colored_cube_mesh, "BoxVertexColors");
-	rage->scene.add_object(colored_cube);
-
-	RAGE_bounding_volume_hierarchy bounding_volume_hierarchy;
-	//bounding_volume_hierarchy.objects.push_back(monkey_head);
-	bounding_volume_hierarchy.objects.push_back(colored_cube);
-	bounding_volume_hierarchy.build();
-	for (size_t count = 0; count < bounding_volume_hierarchy.bounding_box_objects.size(); count++)
-		rage->scene.add_object(bounding_volume_hierarchy.bounding_box_objects[count]);
+	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
+	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
+	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{

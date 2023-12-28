@@ -15,7 +15,10 @@ public:
 	std::vector<RAGE_object *> *get_objects();
 	std::vector<RAGE_object *> *get_selected_objects();
 	void select_all_objects();
+	bool load_from_GLB(const char *path);
+
 private:
+	void read_scene_info_GLB(nlohmann::json &json);
 	std::string name;
 	std::vector<RAGE_object *> objects;
 	std::vector<RAGE_object *> selected_objects;

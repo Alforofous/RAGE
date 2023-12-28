@@ -12,8 +12,6 @@ RAGE_object::RAGE_object(RAGE_mesh *mesh, const char *name)
 
 bool RAGE_object::init()
 {
-	if (this->geometry.init(*this->mesh) == false)
-		return (false);
 	return (true);
 }
 
@@ -21,8 +19,6 @@ bool RAGE_object::load_GLB_mesh(const char *path)
 {
 	this->mesh = new RAGE_mesh();
 	if (this->mesh->LoadGLB(path) == false)
-		return (false);
-	if (this->geometry.init(*this->mesh) == false)
 		return (false);
 	return (true);
 }
@@ -66,8 +62,6 @@ void RAGE_object::init_objects(RAGE_object **objects, size_t count)
 		RAGE_geometry *geometry = rage_object->get_geometry();
 
 		rage_object->update_model_matrix();
-		if (geometry->is_initialized() == false)
-			geometry->init(*rage_object->get_mesh());
 	}
 }
 
