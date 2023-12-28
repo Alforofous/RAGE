@@ -17,11 +17,9 @@ bool GLobject::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size
 		this->vertex_buffer_object = new vertex_buffer(vertices, vertices_size);
 		this->element_buffer_object = new element_buffer(indices, indices_size);
 
-		// position
 		this->vertex_array_object->link_attributes(*this->vertex_buffer_object, 0, 3, GL_FLOAT, 7 * sizeof(GLfloat), (void *)0);
-		// color
 		this->vertex_array_object->link_attributes(*this->vertex_buffer_object, 1, 4, GL_FLOAT, 7 * sizeof(GLfloat), (void *)(3 * sizeof(GLfloat)));
-		vertex_array_object->unbind();
+		this->vertex_array_object->unbind();
 		this->vertex_buffer_object->unbind();
 		this->element_buffer_object->unbind();
 

@@ -67,6 +67,7 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 	{
 		this->vertex_colors.resize(byteLength / sizeof(GLfloat));
 		std::memcpy(this->vertex_colors.data(), binary_buffer.data() + byteOffset, byteLength);
+		printf("MESH COLORS COUNT: %d\n", byteLength / sizeof(GLfloat));
 	}
 	else if (componentType == 5123) // UNSIGNED_SHORT
 	{
@@ -92,29 +93,28 @@ void RAGE_mesh::load_model_vertex_colors(nlohmann::json &json_scene, std::vector
 void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vector<char> &binary_buffer)
 {
 	if (!json_scene["meshes"][0]["primitives"][0]["attributes"].contains("POSITION"))
-	{
 		throw std::runtime_error("No POSITION attribute found");
-	}
 	int positionAccessorIndex = json_scene["meshes"][0]["primitives"][0]["attributes"]["POSITION"];
 	if (json_scene["accessors"].is_null() || json_scene["accessors"][positionAccessorIndex].is_null())
-	{
 		throw std::runtime_error("Invalid or missing accessor for POSITION attribute");
-	}
 	int bufferViewIndex = json_scene["accessors"][positionAccessorIndex]["bufferView"];
 	if (json_scene["bufferViews"].is_null() || json_scene["bufferViews"][bufferViewIndex].is_null())
-	{
 		throw std::runtime_error("Invalid or missing buffer view for POSITION attribute");
-	}
+	if (json_scene["accessors"][positionAccessorIndex].contains("count") == false)
+		throw std::runtime_error("Invalid or missing count for POSITION attribute");
+	int count = json_scene["accessors"][positionAccessorIndex]["count"];
+	int byteOffset = 0;
+	if (json_scene["accessors"][positionAccessorIndex].contains("byteOffset") == true)
+		byteOffset = json_scene["accessors"][positionAccessorIndex]["byteOffset"];
+	int byteStride = 3 * sizeof(GLfloat);
+	if (json_scene["bufferViews"][bufferViewIndex].contains("byteStride"))
+		byteStride = json_scene["bufferViews"][bufferViewIndex]["byteStride"];
 
-	int byteOffset = json_scene["bufferViews"][bufferViewIndex]["byteOffset"];
-	int byteLength = json_scene["bufferViews"][bufferViewIndex]["byteLength"];
-
-	std::vector<GLfloat> vertices(byteLength / sizeof(GLfloat));
+	std::vector<GLfloat> vertices(count * 3);
+	printf("MESH VERTICES COUNT: %d\n", count);
 	std::memcpy(vertices.data(), binary_buffer.data() + byteOffset, byteLength);
-
-	std::vector<GLfloat> colors(byteLength / sizeof(GLfloat));
-	std::fill(colors.begin(), colors.end(), 0.5f);
-	this->vertices_count = byteLength / (3 * sizeof(GLfloat));
+	
+	this->vertices_count = count;
 	this->vertices_size = this->vertices_count * VERTEX_ARRAY_ELEMENT_COUNT * sizeof(GLfloat);
 
 	this->vertex_positions.clear();
@@ -125,6 +125,8 @@ void RAGE_mesh::load_model_vertex_positions(nlohmann::json &json_scene, std::vec
 		this->vertex_positions.push_back(vertices[vertex_position_index + 1]);
 		this->vertex_positions.push_back(vertices[vertex_position_index + 2]);
 	}
+	std::vector<GLfloat> colors(count);
+	std::fill(colors.begin(), colors.end(), 0.5f);
 	this->vertex_color_channel_count = 3;
 	this->vertex_colors.clear();
 	for (GLuint i = 0; i < this->vertices_count; i++)
@@ -280,7 +282,7 @@ bool RAGE_mesh::LoadGLB(const char *path)
 	}
 	catch (const std::exception &e)
 	{
-		std::cerr << "RAGE_mesh error: " << e.what() << std::endl;
+		std::cerr << "RAGE_mesh " << path << " error: " << e.what() << std::endl;
 		return (false);
 	}
 }

@@ -44,32 +44,27 @@ int main(void)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	RAGE_mesh mesh;
-	RAGE_mesh mesh2;
-	mesh.LoadGLB((rage->executable_path + "/assets/models/SimpleCone.glb").c_str());
-	mesh.LoadGLB((rage->executable_path + "/assets/models/MonkeyHead.glb").c_str());
-	mesh.LoadGLB((rage->executable_path + "/assets/models/Duck.glb").c_str());
-
-	mesh.LoadGLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
-	mesh.LoadGLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
-	mesh2.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
-
-	rage->scene.add_object(new RAGE_object(&mesh2, "BoxVertexColors"));
-
-	RAGE_object *cube = RAGE_primitive_objects::create_cube(1000.0f, 0.1f, 1000.0f);
-	cube->translate(glm::vec3(0.0f, -5.0f, 0.0f));
+	RAGE_object *cube = RAGE_primitive_objects::create_cube();
+	cube->m_scale = glm::vec3(50.0f, 1.0f, 50.0f);
+	cube->m_position = glm::vec3(0.0f, -5.0f, 0.0f);
 	rage->scene.add_object(cube);
 
-	RAGE_object *monkey_head = new RAGE_object(&mesh, "WideMonkeyHeadVertexColored");
+	RAGE_mesh monkey_mesh;
+	monkey_mesh.LoadGLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
+	RAGE_object *monkey_head = new RAGE_object(&monkey_mesh, "WideMonkeyHeadVertexColored");
 	rage->scene.add_object(monkey_head);
 
+	RAGE_mesh colored_cube_mesh;
+	colored_cube_mesh.LoadGLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
+	RAGE_object *colored_cube = new RAGE_object(&colored_cube_mesh, "BoxVertexColors");
+	rage->scene.add_object(colored_cube);
+
 	RAGE_bounding_volume_hierarchy bounding_volume_hierarchy;
-	bounding_volume_hierarchy.objects.push_back(monkey_head);
+	//bounding_volume_hierarchy.objects.push_back(monkey_head);
+	bounding_volume_hierarchy.objects.push_back(colored_cube);
 	bounding_volume_hierarchy.build();
 	for (size_t count = 0; count < bounding_volume_hierarchy.bounding_box_objects.size(); count++)
-	{
 		rage->scene.add_object(bounding_volume_hierarchy.bounding_box_objects[count]);
-	}
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{

@@ -31,23 +31,15 @@ void RAGE_bounding_volume_hierarchy::build()
 		std::vector<float> vertex_positions = mesh->vertex_positions;
 		glm::vec3 min = glm::vec3(vertex_positions[0], vertex_positions[1], vertex_positions[2]);
 		glm::vec3 max = glm::vec3(vertex_positions[0], vertex_positions[1], vertex_positions[2]);
-		for (size_t count = 3; count < vertex_positions.size(); count++)
+		printf("New object, mesh vertex count: %u, size: %lu\n", mesh->vertices_count, vertex_positions.size());
+		for (size_t count = 0; count < vertex_positions.size(); count += 3)
 		{
 			glm::vec3 vertex_position = glm::vec3(vertex_positions[count + 0],
 												  vertex_positions[count + 1],
 												  vertex_positions[count + 2]);
-			if (vertex_position.x < min.x)
-				min.x = vertex_position.x;
-			if (vertex_position.y < min.y)
-				min.y = vertex_position.y;
-			if (vertex_position.z < min.z)
-				min.z = vertex_position.z;
-			if (vertex_position.x > max.x)
-				max.x = vertex_position.x;
-			if (vertex_position.y > max.y)
-				max.y = vertex_position.y;
-			if (vertex_position.z > max.z)
-				max.z = vertex_position.z;
+			printf("vertex_position: %f %f %f\n", vertex_position.x, vertex_position.y, vertex_position.z);
+			min = glm::min(min, vertex_position);
+			max = glm::max(max, vertex_position);
 		}
 		if (this->root != NULL)
 			delete this->root;
@@ -58,7 +50,6 @@ void RAGE_bounding_volume_hierarchy::build()
 		this->root = node;
 		RAGE_object *bounding_box_object = RAGE_primitive_objects::create_cube();
 		bounding_box_object->scale(glm::vec3(max.x - min.x, max.y - min.y, max.z - min.z));
-		bounding_box_object->translate(glm::vec3((max.x + min.x) / 2.0f, (max.y + min.y) / 2.0f, (max.z + min.z) / 2.0f));
 		bounding_box_object->update_model_matrix();
 		bounding_box_object->polygon_mode = polygon_mode::line;
 		this->bounding_box_objects.push_back(bounding_box_object);

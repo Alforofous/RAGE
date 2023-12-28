@@ -14,18 +14,11 @@ public:
 	void translate(const glm::vec3 &move);
 	void rotate(const glm::vec3 &rotate);
 	void scale(const glm::vec3 &scale);
-	glm::vec3 &get_position();
-	glm::vec3 &get_rotation();
-	glm::vec3 &get_scale();
 
-	void set_position(glm::vec3 &pos);
-	void set_rotation(glm::vec3 &rot);
-	void set_scale(glm::vec3 &scale);
-
-protected:
 	glm::vec3 m_position;
 	glm::vec3 m_rotation;
 	glm::vec3 m_scale;
+protected:
 	glm::quat quaternion;
 	glm::mat4 model_matrix;
 

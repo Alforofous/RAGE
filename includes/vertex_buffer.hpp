@@ -5,10 +5,10 @@
 class vertex_buffer
 {
 public:
-	GLuint	id;
-	vertex_buffer(GLfloat *vertices, GLsizeiptr size);
-	
-	void	bind();
-	void	unbind();
-	void	delete_object();
+	GLuint id;
+	vertex_buffer(void *vertices, GLsizeiptr size);
+
+	void bind();
+	void unbind();
+	void delete_object();
 };
