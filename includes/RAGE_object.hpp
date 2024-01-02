@@ -30,9 +30,10 @@ public:
 	void draw();
 
 	polygon_mode polygon_mode;
+	std::string name;
+	std::vector<RAGE_object *> children;
 private:
 	int u_model_matrix_variable_location;
-	std::string name;
 	RAGE_mesh *mesh;
 	RAGE_geometry geometry;
 };

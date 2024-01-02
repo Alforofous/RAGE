@@ -31,7 +31,6 @@ void RAGE_bounding_volume_hierarchy::build()
 		std::vector<float> vertex_positions = mesh->vertex_positions;
 		glm::vec3 min = glm::vec3(vertex_positions[0], vertex_positions[1], vertex_positions[2]);
 		glm::vec3 max = glm::vec3(vertex_positions[0], vertex_positions[1], vertex_positions[2]);
-		printf("New object, mesh vertex count: %u, size: %lu\n", mesh->vertices_count, vertex_positions.size());
 		for (size_t count = 0; count < vertex_positions.size(); count += 3)
 		{
 			glm::vec3 vertex_position = glm::vec3(vertex_positions[count + 0],
@@ -49,7 +48,7 @@ void RAGE_bounding_volume_hierarchy::build()
 		node->object = object;
 		this->root = node;
 		RAGE_object *bounding_box_object = RAGE_primitive_objects::create_cube();
-		bounding_box_object->scale(glm::vec3(max.x - min.x, max.y - min.y, max.z - min.z));
+		bounding_box_object->scale = glm::vec3(max.x - min.x, max.y - min.y, max.z - min.z);
 		bounding_box_object->update_model_matrix();
 		bounding_box_object->polygon_mode = polygon_mode::line;
 		this->bounding_box_objects.push_back(bounding_box_object);

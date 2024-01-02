@@ -2,6 +2,7 @@
 #include "nlohmann/json.hpp"
 #include <fstream>
 #include <iostream>
+#include <queue>
 
 static bool check_glb_header(std::ifstream &file)
 {
@@ -15,29 +16,83 @@ static bool check_glb_header(std::ifstream &file)
 
 static bool check_glb_chunk_header(std::ifstream &file, std::vector<char> &header_buffer, uint32_t type)
 {
-	GLBChunkHeader chunkHeader;
+	GLBChunkHeader chunk_header;
 
-	file.read(reinterpret_cast<char *>(&chunkHeader), sizeof(chunkHeader));
-	if (chunkHeader.type != type)
+	file.read(reinterpret_cast<char *>(&chunk_header), sizeof(chunk_header));
+	if (chunk_header.type != type)
 		return (false);
-	header_buffer.resize(chunkHeader.length);
+	header_buffer.resize(chunk_header.length);
 	file.read(header_buffer.data(), header_buffer.size());
 	return (true);
 }
 
-void RAGE_scene::read_scene_info_GLB(nlohmann::json &json)
+nlohmann::json RAGE_scene::read_scene_info_GLB(nlohmann::json &json)
 {
 	if (json["scene"].is_null() || json["scenes"].is_null())
 		throw std::runtime_error("No default scene or scenes array.");
-	int sceneIndex = json["scene"];
-	if (sceneIndex < 0 || sceneIndex >= json["scenes"].size())
+	int scene_index = json["scene"];
+	if (scene_index < 0 || scene_index >= json["scenes"].size())
 		throw std::runtime_error("Invalid scene index.");
-	nlohmann::json scene = json["scenes"][sceneIndex];
-	std::string scene_name = "GlB Scene";
-	if (scene["name"].is_null())
+	nlohmann::json json_scene = json["scenes"][scene_index];
+	std::string scene_name = "GLB Scene";
+	if (json_scene["name"].is_null())
 		this->name = scene_name;
 	else
-		this->name = scene["name"];
+		this->name = json_scene["name"];
+	return (json_scene);
+}
+
+RAGE_object *RAGE_scene::read_scene_node_GLB(nlohmann::json &node)
+{
+	RAGE_object *object = new RAGE_object();
+	if (object == NULL)
+		throw std::runtime_error("Failed to allocate memory for object.");
+
+	if (node["name"].is_null() == false)
+		object->name = node["name"];
+	if (node["mesh"].is_null())
+	{
+		int mesh_index = node["mesh"];
+	}
+
+	if (node["translation"].is_null() == false)
+		object->position = glm::vec3(node["translation"][0], node["translation"][1], node["translation"][2]);
+	if (node["rotation"].is_null() == false)
+		object->rotation = glm::vec3(node["rotation"][1], node["rotation"][0], node["rotation"][2]);
+	if (node["scale"].is_null() == false)
+		object->scale = glm::vec3(node["scale"][0], node["scale"][1], node["scale"][2]);
+
+	printf("object->name: %s\n", object->name.c_str());
+	printf("object->position: %f, %f, %f\n", object->position.x, object->position.y, object->position.z);
+	printf("object->rotation: %f, %f, %f\n", object->rotation.x, object->rotation.y, object->rotation.z);
+	printf("object->scale: %f, %f, %f\n", object->scale.x, object->scale.y, object->scale.z);
+	return (object);
+}
+
+void RAGE_scene::read_scene_nodes_GLB(nlohmann::json &json, nlohmann::json &json_scene)
+{
+	if (json["nodes"].is_null())
+		throw std::runtime_error("No nodes present.");
+
+	for (int root_node_index : json_scene["nodes"])
+	{
+		RAGE_object *object = read_scene_node_GLB(json["nodes"][root_node_index]);
+		this->objects.push_back(object);
+		process_children(json, json["nodes"][root_node_index], object);
+	}
+}
+
+void RAGE_scene::process_children(nlohmann::json &json, nlohmann::json &node, RAGE_object *parent)
+{
+	if (!node["children"].is_null())
+	{
+		for (int child_index : node["children"])
+		{
+			RAGE_object *child = read_scene_node_GLB(json["nodes"][child_index]);
+			parent->children.push_back(child);
+			process_children(json, json["nodes"][child_index], child);
+		}
+	}
 }
 
 bool RAGE_scene::load_from_GLB(const char *path)
@@ -58,11 +113,13 @@ bool RAGE_scene::load_from_GLB(const char *path)
 		if (check_glb_chunk_header(file, binary_buffer, 0x004E4942) == false)
 			throw std::runtime_error("Invalid GLB binary buffer.");
 
-		printf("json_header:\n %s\n", json_header_buffer.data());
-		printf("binary_buffer:\n %s\n", binary_buffer.data());
+		printf("\n**********%s**********\n", path);
+		printf("***json_header:\n %s\n", json_header_buffer.data());
+		printf("binary_buffer[%zu]:\n %s\n", binary_buffer.size(), binary_buffer.data());
 
 		nlohmann::json json = nlohmann::json::parse(json_header_buffer.begin(), json_header_buffer.end());
-		read_scene_info_GLB(json);
+		nlohmann::json json_scene = read_scene_info_GLB(json);
+		read_scene_nodes_GLB(json, json_scene);
 		return (true);
 	}
 	catch (const std::exception &e)
