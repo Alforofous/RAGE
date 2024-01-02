@@ -19,17 +19,18 @@ struct bounding_box_node
 	RAGE_object *object;
 };
 
-struct RAGE_ray
-{
-	glm::vec3 origin;
-	glm::vec3 direction;
-};
-
 struct RAGE_ray_hit_info
 {
 	glm::vec3 position;
 	glm::vec3 normal;
 	RAGE_object *object;
+};
+
+struct RAGE_ray
+{
+	glm::vec3 origin;
+	glm::vec3 direction;
+	RAGE_ray_hit_info hit_info;
 };
 
 class RAGE_ray_tracing
