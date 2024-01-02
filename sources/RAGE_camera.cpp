@@ -3,13 +3,13 @@
 
 bool RAGE_camera::init(RAGE_window *window)
 {
-	m_position = glm::vec3(0.0f, 0.0f, 3.0f);
+	position = glm::vec3(0.0f, 0.0f, 3.0f);
 	m_forward = glm::vec3(0.0f, 0.0f, -1.0f);
 	m_up = glm::vec3(0.0f, 1.0f, 0.0f);
 	m_right = glm::vec3(1.0f, 0.0f, 0.0f);
 	m_fov = 45.0f;
 	m_aspect_ratio = static_cast<float>(window->pixel_size.x) / window->pixel_size.y;
-	m_rotation = direction_to_euler(m_forward);
+	rotation = direction_to_euler(m_forward);
 	m_view_matrix = RAGE_camera::get_view_matrix();
 	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 100.0f);
 	return (true);
@@ -21,8 +21,8 @@ void RAGE_camera::handle_input(RAGE_user_input *user_input, float delta_time)
 	float movement_speed = m_movement_speed * delta_time;
 	handle_movement(user_input, movement_speed);
 
-	m_rotation_speed = 0.002f * delta_time;
-	handle_rotation(user_input, m_rotation_speed);
+	rotation_speed = 0.002f * delta_time;
+	handle_rotation(user_input, rotation_speed);
 }
 
 void RAGE_camera::set_aspect_ratio(glm::ivec2 window_size)
@@ -54,17 +54,17 @@ void RAGE_camera::handle_movement(RAGE_user_input *user_input, float movement_sp
 {
 	glm::vec3 new_up = glm::cross(this->get_right(), this->get_forward());
 	if (user_input->keyboard.pressed_keys[GLFW_KEY_W])
-		this->translate(this->get_forward() * movement_speed);
+		this->position += this->get_forward() * movement_speed;
 	if (user_input->keyboard.pressed_keys[GLFW_KEY_S])
-		this->translate(-this->get_forward() * movement_speed);
+		this->position += -this->get_forward() * movement_speed;
 	if (user_input->keyboard.pressed_keys[GLFW_KEY_A])
-		this->translate(-this->get_right() * movement_speed);
+		this->position += -this->get_right() * movement_speed;
 	if (user_input->keyboard.pressed_keys[GLFW_KEY_D])
-		this->translate(this->get_right() * movement_speed);
+		this->position += this->get_right() * movement_speed;
 	if (user_input->keyboard.pressed_keys[GLFW_KEY_E])
-		this->translate(new_up * movement_speed);
+		this->position += new_up * movement_speed;
 	if (user_input->keyboard.pressed_keys[GLFW_KEY_Q])
-		this->translate(-new_up * movement_speed);
+		this->position += -new_up * movement_speed;
 }
 
 void RAGE_camera::handle_rotation(RAGE_user_input *user_input, float rotation_speed)
@@ -83,11 +83,11 @@ void RAGE_camera::handle_rotation(RAGE_user_input *user_input, float rotation_sp
 
 void RAGE_camera::rotate_on_spherical_coordinates(glm::vec2 delta_movement)
 {
-	m_rotation.x += delta_movement.y;
-	m_rotation.y += delta_movement.x;
-	m_rotation.x = glm::clamp(m_rotation.x, -glm::half_pi<float>() + 0.001f, glm::half_pi<float>() - 0.001f);
+	rotation.x += delta_movement.y;
+	rotation.y += delta_movement.x;
+	rotation.x = glm::clamp(rotation.x, -glm::half_pi<float>() + 0.001f, glm::half_pi<float>() - 0.001f);
 
-	m_forward = euler_to_direction(m_rotation);
+	m_forward = euler_to_direction(rotation);
 
 	m_forward = glm::normalize(m_forward);
 	m_right = glm::normalize(glm::cross(m_forward, this->get_up()));
@@ -102,7 +102,7 @@ glm::mat4 RAGE_camera::get_view_matrix(bool update)
 {
 	if (update)
 	{
-		m_view_matrix = glm::lookAt(m_position, m_position + m_forward, m_up);
+		m_view_matrix = glm::lookAt(position, position + m_forward, m_up);
 	}
 	return (m_view_matrix);
 }

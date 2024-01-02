@@ -11,13 +11,10 @@ public:
 
 	glm::mat4 get_model_matrix(bool update = false);
 	void update_model_matrix();
-	void translate(const glm::vec3 &move);
-	void rotate(const glm::vec3 &rotate);
-	void scale(const glm::vec3 &scale);
 
-	glm::vec3 m_position;
-	glm::vec3 m_rotation;
-	glm::vec3 m_scale;
+	glm::vec3 position;
+	glm::vec3 rotation;
+	glm::vec3 scale;
 protected:
 	glm::quat quaternion;
 	glm::mat4 model_matrix;

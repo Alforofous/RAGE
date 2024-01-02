@@ -28,7 +28,7 @@ private:
 	glm::vec3 m_right;
 
 	float m_movement_speed;
-	float m_rotation_speed;
+	float rotation_speed;
 	float m_aspect_ratio;
 	float m_fov;
 };
