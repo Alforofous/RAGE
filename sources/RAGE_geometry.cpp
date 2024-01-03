@@ -49,8 +49,16 @@ bool RAGE_geometry::is_initialized()
 
 RAGE_geometry::~RAGE_geometry()
 {
-	this->vertex_array_object->delete_object();
-	this->vertex_buffer_object->delete_object();
-	this->element_buffer_object->delete_object();
+	if (this->initialized == false)
+		return;
+	if (this->vertex_array_object != NULL)
+		this->vertex_array_object->delete_object();
+	if (this->vertex_buffer_object != NULL)
+		this->vertex_buffer_object->delete_object();
+	if (this->element_buffer_object != NULL)
+		this->element_buffer_object->delete_object();
+	this->vertex_array_object = NULL;
+	this->vertex_buffer_object = NULL;
+	this->element_buffer_object = NULL;
 	this->initialized = false;
 }

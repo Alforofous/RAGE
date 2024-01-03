@@ -2,6 +2,7 @@
 #include "RAGE_mesh.hpp"
 #include "RAGE.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include <queue>
 
 RAGE_object::RAGE_object(RAGE_mesh *mesh, const char *name)
 {
@@ -82,6 +83,46 @@ void RAGE_object::draw()
 	glUniformMatrix4fv(rage->shader->variable_location["u_model_matrix"], 1, GL_FALSE, glm::value_ptr(this->get_model_matrix()));
 	geometry->draw();
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+
+void RAGE_object::print_name(RAGE_object *object)
+{
+	printf("%s\n", object->name.c_str());
+}
+
+void RAGE_object::delete_object(RAGE_object *object)
+{
+	if (object != NULL)
+		delete object;
+	object = NULL;
+}
+
+void RAGE_object::traverse(void (*function)(RAGE_object *object))
+{
+	std::queue<RAGE_object *> queue;
+	queue.push(this);
+	while (queue.empty() == false)
+	{
+		RAGE_object *object = queue.front();
+		queue.pop();
+		function(object);
+		for (size_t i = 0; i < object->children.size(); i++)
+			queue.push(object->children[i]);
+	}
+}
+
+void RAGE_object::traverse(void (*function)(RAGE_object *object, void *data), void *data)
+{
+	std::queue<RAGE_object *> queue;
+	queue.push(this);
+	while (queue.empty() == false)
+	{
+		RAGE_object *object = queue.front();
+		queue.pop();
+		function(object, data);
+		for (size_t i = 0; i < object->children.size(); i++)
+			queue.push(object->children[i]);
+	}
 }
 
 RAGE_object::~RAGE_object()

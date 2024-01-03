@@ -28,6 +28,10 @@ public:
 	static void draw_objects(RAGE_object **objects, size_t count);
 	static void init_objects(RAGE_object **objects, size_t count);
 	void draw();
+	static void print_name(RAGE_object *object);
+	static void delete_object(RAGE_object *object);
+	void traverse(void (*function)(RAGE_object *object));
+	void traverse(void (*func)(RAGE_object *object, void *data), void *data);
 
 	polygon_mode polygon_mode;
 	std::string name;
