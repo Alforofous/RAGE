@@ -1,6 +1,6 @@
-#include "object_buffer.hpp"
+#include "buffer_object.hpp"
 
-object_buffer::object_buffer(GLenum type, void *data, GLsizeiptr byte_size)
+buffer_object::buffer_object(GLenum type, void *data, GLsizeiptr byte_size)
 {
 	this->type = type;
 	glGenBuffers(1, &this->id);
@@ -8,17 +8,17 @@ object_buffer::object_buffer(GLenum type, void *data, GLsizeiptr byte_size)
 	glBufferData(this->type, byte_size, data, GL_STATIC_DRAW);
 }
 
-void object_buffer::bind()
+void buffer_object::bind()
 {
 	glBindBuffer(this->type, this->id);
 }
 
-void object_buffer::unbind()
+void buffer_object::unbind()
 {
 	glBindBuffer(this->type, 0);
 }
 
-void object_buffer::delete_object()
+void buffer_object::delete_object()
 {
 	glDeleteBuffers(1, &this->id);
 }

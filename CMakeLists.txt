@@ -59,7 +59,7 @@ set(
 	RAGE_keyboard_input.cpp
 	RAGE_primitive.cpp
 	vertex_array.cpp
-	object_buffer.cpp
+	buffer_object.cpp
 )
 list(TRANSFORM SOURCES PREPEND ${SOURCES_DIRECTORY}/)
 
@@ -78,7 +78,7 @@ set(
 	RAGE_user_input.hpp
 	RAGE_primitive.hpp
 	vertex_array.hpp
-	object_buffer.hpp
+	buffer_object.hpp
 )
 list(TRANSFORM INCLUDES PREPEND ${INCLUDES_DIRECTORY}/)
 

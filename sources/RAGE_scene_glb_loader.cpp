@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <queue>
+#include "buffer_object.hpp"
 
 static bool check_glb_header(std::ifstream &file)
 {
@@ -48,7 +49,29 @@ void RAGE_scene::read_indices_GLB(nlohmann::json &json, nlohmann::json &primitiv
 		return;
 
 	int indices_accessor_index = primitive["indices"];
+	if (json["accessors"][indices_accessor_index].is_null())
+		return;
 	nlohmann::json &indices_accessor = json["accessors"][indices_accessor_index];
+	if (indices_accessor["componentType"].is_null())
+		return;
+	int componentType = indices_accessor["componentType"];
+	if (componentType == 5123)
+	{
+		printf("UNSIGNED_SHORT\n");
+	}
+	else if (componentType == 5125)
+	{
+		printf("UNSIGNED_INT\n");
+	}
+	else if (componentType == 5121)
+	{
+		printf("UNSIGNED_BYTE\n");
+	}
+	else
+	{
+		throw std::runtime_error("Indices error. Unsupported componentType.");
+	}
+	buffer_object *indices_buffer_object = new buffer_object();
 	// Now you can use indices_accessor to set your EBO
 	printf("indices_accessor: %s\n", indices_accessor.dump().c_str());
 }
@@ -61,6 +84,8 @@ void RAGE_scene::read_node_mesh_GLB(nlohmann::json &node, nlohmann::json &json, 
 	int mesh_index = node["mesh"];
 	nlohmann::json &mesh = json["meshes"][mesh_index];
 	if (mesh["primitives"].is_null())
+		return;
+	if (json["accessors"].is_null())
 		return;
 
 	for (int i = 0; i < mesh["primitives"].size(); i += 1)

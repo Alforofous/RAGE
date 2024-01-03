@@ -2,11 +2,11 @@
 
 #include "glad/glad.h"
 
-class object_buffer
+class buffer_object
 {
 public:
 	GLuint id;
-	object_buffer(GLenum type, void *data, GLsizeiptr byte_size);
+	buffer_object(GLenum type, void *data, GLsizeiptr byte_size);
 
 	void bind();
 	void unbind();

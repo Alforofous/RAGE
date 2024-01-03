@@ -16,8 +16,8 @@ bool RAGE_primitive::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertice
 		this->vertex_array_object = new vertex_array();
 		this->vertex_array_object->bind();
 
-		this->vertex_buffer_object = new object_buffer(GL_ARRAY_BUFFER, vertices, vertices_size);
-		this->element_buffer_object = new object_buffer(GL_ELEMENT_ARRAY_BUFFER, indices, indices_size);
+		this->vertex_buffer_object = new buffer_object(GL_ARRAY_BUFFER, vertices, vertices_size);
+		this->element_buffer_object = new buffer_object(GL_ELEMENT_ARRAY_BUFFER, indices, indices_size);
 
 		this->vertex_array_object->link_attributes(*this->vertex_buffer_object, 0, 3, GL_FLOAT, 7 * sizeof(GLfloat), (void *)0);
 		this->vertex_array_object->link_attributes(*this->element_buffer_object, 1, 4, GL_FLOAT, 7 * sizeof(GLfloat), (void *)(3 * sizeof(GLfloat)));
