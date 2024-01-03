@@ -9,7 +9,6 @@ RAGE_scene::RAGE_scene(const char *name)
 
 void RAGE_scene::draw()
 {
-	RAGE_object::init_objects(this->objects.data(), this->objects.size());
 	RAGE_object::draw_objects(this->objects.data(), this->objects.size());
 }
 

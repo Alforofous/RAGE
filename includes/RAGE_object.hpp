@@ -25,7 +25,6 @@ public:
 	RAGE_mesh *get_mesh();
 	std::string get_name();
 	static void draw_objects(RAGE_object **objects, size_t count);
-	static void init_objects(RAGE_object **objects, size_t count);
 	void draw();
 	static void print_name(RAGE_object *object);
 	static void delete_object(RAGE_object *object);

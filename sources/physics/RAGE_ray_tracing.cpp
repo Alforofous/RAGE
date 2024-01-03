@@ -52,7 +52,6 @@ void RAGE_bounding_volume_hierarchy::build()
 		bounding_box_object->update_model_matrix();
 		bounding_box_object->polygon_mode = polygon_mode::line;
 		this->bounding_box_objects.push_back(bounding_box_object);
-		RAGE_object::init_objects(this->bounding_box_objects.data(), this->bounding_box_objects.size());
 	}
 }
 

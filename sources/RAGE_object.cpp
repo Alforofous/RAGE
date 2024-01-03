@@ -41,28 +41,12 @@ std::string RAGE_object::get_name()
 	return (this->name);
 }
 
-RAGE_primitive *RAGE_object::get_primitive()
-{
-	return (&this->primitive);
-}
-
 void RAGE_object::draw_objects(RAGE_object **objects, size_t count)
 {
 	for (size_t i = 0; i < count; i++)
 	{
 		RAGE_object *object = objects[i];
 		object->draw();
-	}
-}
-
-void RAGE_object::init_objects(RAGE_object **objects, size_t count)
-{
-	for (int i = 0; i < count; i++)
-	{
-		RAGE_object *rage_object = objects[i];
-		RAGE_primitive *primitive = rage_object->get_primitive();
-
-		rage_object->update_model_matrix();
 	}
 }
 
@@ -76,12 +60,10 @@ void RAGE_object::draw()
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	else if (this->polygon_mode == polygon_mode::point)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
-	RAGE_primitive *primitive = this->get_primitive();
 	RAGE *rage = get_rage();
 
 	const glm::f32 *model_matrix = glm::value_ptr(this->get_model_matrix());
 	glUniformMatrix4fv(rage->shader->variable_location["u_model_matrix"], 1, GL_FALSE, glm::value_ptr(this->get_model_matrix()));
-	primitive->draw();
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
