@@ -4,7 +4,7 @@
 #include "glad/glad.h"
 #include <vector>
 
-#include "RAGE_geometry.hpp"
+#include "RAGE_primitive.hpp"
 //#include "RAGE_material.hpp"
 
 #define VERTEX_POSITION_ELEMENT_COUNT 3
@@ -27,6 +27,8 @@ public:
 	void set_indices(GLuint *indices, unsigned int count);
 	GLuint vertices_count;
 	GLuint indices_count;
+	std::vector<RAGE_primitive *> primitives;
+	//RAGE_material *material;
 private:
 	void load_model_vertex_positions(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
 	void load_model_vertex_colors(nlohmann::json &json_scene, std::vector<char> &binary_buffer);
@@ -34,7 +36,6 @@ private:
 	void set_vertex_positions();
 	void set_vertex_colors();
 	int vertex_color_channel_count;
-	RAGE_geometry geometry;
 };
 
 struct GLBHeader

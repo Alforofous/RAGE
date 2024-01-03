@@ -42,6 +42,41 @@ nlohmann::json RAGE_scene::read_scene_info_GLB(nlohmann::json &json)
 	return (json_scene);
 }
 
+void RAGE_scene::read_indices_GLB(nlohmann::json &json, nlohmann::json &primitive, RAGE_object *object)
+{
+	if (primitive["indices"].is_null())
+		return;
+
+	int indices_accessor_index = primitive["indices"];
+	nlohmann::json &indices_accessor = json["accessors"][indices_accessor_index];
+	// Now you can use indices_accessor to set your EBO
+	printf("indices_accessor: %s\n", indices_accessor.dump().c_str());
+}
+
+void RAGE_scene::read_node_mesh_GLB(nlohmann::json &node, nlohmann::json &json, RAGE_object *object)
+{
+	if (node["mesh"].is_null())
+		return;
+
+	int mesh_index = node["mesh"];
+	nlohmann::json &mesh = json["meshes"][mesh_index];
+	if (mesh["primitives"].is_null())
+		return;
+
+	for (int i = 0; i < mesh["primitives"].size(); i += 1)
+	{
+		nlohmann::json &primitive = mesh["primitives"][i];
+		read_indices_GLB(json, primitive, object);
+		if (!primitive["attributes"].is_null() && !primitive["attributes"]["POSITION"].is_null())
+		{
+			int position_accessor_index = primitive["attributes"]["POSITION"];
+			nlohmann::json &position_accessor = json["accessors"][position_accessor_index];
+			// Now you can use position_accessor to set your VBO
+			printf("position_accessor: %s\n", position_accessor.dump().c_str());
+		}
+	}
+}
+
 RAGE_object *RAGE_scene::read_scene_node_GLB(nlohmann::json &node)
 {
 	RAGE_object *object = new RAGE_object();
@@ -76,21 +111,22 @@ void RAGE_scene::read_scene_nodes_GLB(nlohmann::json &json, nlohmann::json &json
 
 	for (int i = 0; i < json["nodes"].size(); i++)
 	{
-		RAGE_object *object = read_scene_node_GLB(json["nodes"][i]);
+		nlohmann::json &node = json["nodes"][i];
+		RAGE_object *object = read_scene_node_GLB(node);
 		this->objects.push_back(object);
+		read_node_mesh_GLB(node, json, object);
 	}
 	for (int i = 0; i < this->objects.size(); i++)
 	{
-		RAGE_object *object = this->objects[i];
 		if (json["nodes"][i]["children"].is_null())
 			continue;
 		for (int j = 0; j < json["nodes"][i]["children"].size(); j++)
 		{
 			int child_index = json["nodes"][i]["children"][j];
-			object->children_indices.push_back(child_index);
+			this->objects[i]->children_indices.push_back(child_index);
 		}
 	}
-	printf("this->objects.size(): %zu\n", this->objects.size());
+	printf("OBJECT COUNT: %zu\n", this->objects.size());
 	for (int i = 0; i < this->objects.size(); i++)
 	{
 		RAGE_object *object = this->objects[i];
@@ -129,6 +165,11 @@ bool RAGE_scene::load_from_GLB(const char *path)
 		nlohmann::json json = nlohmann::json::parse(json_header_buffer.begin(), json_header_buffer.end());
 		nlohmann::json json_scene = read_scene_info_GLB(json);
 		read_scene_nodes_GLB(json, json_scene);
+		for (int i = 0; i < json["bufferViews"].size(); i++)
+		{
+			nlohmann::json &buffer_view = json["bufferViews"][i];
+			printf("buffer_view[%d]: %s\n", i, buffer_view.dump().c_str());
+		}
 		return (true);
 	}
 	catch (const std::exception &e)

@@ -20,6 +20,8 @@ public:
 private:
 	nlohmann::json read_scene_info_GLB(nlohmann::json &json);
 	void read_scene_nodes_GLB(nlohmann::json &json, nlohmann::json &json_scene);
+	void read_node_mesh_GLB(nlohmann::json &node, nlohmann::json &json, RAGE_object *object);
+	void read_indices_GLB(nlohmann::json &node, nlohmann::json &primitive, RAGE_object *object);
 	void delete_objects();
 	RAGE_object *read_scene_node_GLB(nlohmann::json &node);
 	std::string name;

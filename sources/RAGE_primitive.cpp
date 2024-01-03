@@ -1,12 +1,15 @@
-#include "RAGE_geometry.hpp"
+#include "RAGE_primitive.hpp"
 #include <iostream>
 
-RAGE_geometry::RAGE_geometry()
+RAGE_primitive::RAGE_primitive()
 {
 	this->initialized = false;
+	this->vertex_array_object = NULL;
+	this->vertex_buffer_object = NULL;
+	this->element_buffer_object = NULL;
 }
 
-bool RAGE_geometry::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size)
+bool RAGE_primitive::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size)
 {
 	try
 	{
@@ -28,12 +31,12 @@ bool RAGE_geometry::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices
 	}
 	catch (const std::exception &e)
 	{
-		std::cerr << "Error initializing GL object: " << e.what() << std::endl;
+		std::cerr << "Error initializing primitive: " << e.what() << std::endl;
 		return (false);
 	}
 }
 
-void RAGE_geometry::draw()
+void RAGE_primitive::draw()
 {
 	this->vertex_array_object->bind();
 	this->element_buffer_object->bind();
@@ -42,12 +45,12 @@ void RAGE_geometry::draw()
 	this->vertex_array_object->unbind();
 }
 
-bool RAGE_geometry::is_initialized()
+bool RAGE_primitive::is_initialized()
 {
 	return (this->initialized);
 }
 
-RAGE_geometry::~RAGE_geometry()
+RAGE_primitive::~RAGE_primitive()
 {
 	if (this->initialized == false)
 		return;

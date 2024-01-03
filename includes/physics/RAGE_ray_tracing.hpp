@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 #include "RAGE_object.hpp"
 #include "RAGE_primitive_objects.hpp"
-#include "RAGE_geometry.hpp"
+#include "RAGE_primitive.hpp"
 
 struct axis_aligned_bounding_box
 {
@@ -52,5 +52,5 @@ public:
 	std::vector<RAGE_object *> bounding_box_objects;
 private:
 	bounding_box_node *root;
-	RAGE_geometry *geometry;
+	RAGE_primitive *primitive;
 };

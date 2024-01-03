@@ -57,7 +57,7 @@ set(
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
 	RAGE_keyboard_input.cpp
-	RAGE_geometry.cpp
+	RAGE_primitive.cpp
 	vertex_array.cpp
 	object_buffer.cpp
 )
@@ -76,7 +76,7 @@ set(
 	RAGE_primitive_objects.hpp
 	RAGE_keyboard_input.hpp
 	RAGE_user_input.hpp
-	RAGE_geometry.hpp
+	RAGE_primitive.hpp
 	vertex_array.hpp
 	object_buffer.hpp
 )

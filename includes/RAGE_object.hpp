@@ -2,7 +2,7 @@
 
 #include "RAGE_transform.hpp"
 #include "RAGE_mesh.hpp"
-#include "RAGE_geometry.hpp"
+#include "RAGE_primitive.hpp"
 #include <vector>
 
 enum polygon_mode
@@ -24,7 +24,6 @@ public:
 	bool has_mesh();
 	RAGE_mesh *get_mesh();
 	std::string get_name();
-	RAGE_geometry *get_geometry();
 	static void draw_objects(RAGE_object **objects, size_t count);
 	static void init_objects(RAGE_object **objects, size_t count);
 	void draw();
@@ -35,7 +34,5 @@ public:
 	std::string name;
 	std::vector<unsigned int> children_indices;
 private:
-	int u_model_matrix_variable_location;
 	RAGE_mesh *mesh;
-	RAGE_geometry geometry;
 };
