@@ -29,6 +29,13 @@ bool RAGE_scene::add_object(RAGE_object *object)
 	return true;
 }
 
+void RAGE_scene::delete_objects()
+{
+	if (this->objects.size() > 0)
+		this->objects[0]->traverse(&RAGE_object::delete_object);
+	this->objects.clear();
+}
+
 void RAGE_scene::select_all_objects()
 {
 	this->selected_objects = this->objects;
