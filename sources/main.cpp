@@ -2,6 +2,7 @@
 #include "RAGE_primitive.hpp"
 #include "RAGE_primitive_objects.hpp"
 #include "physics/RAGE_ray_tracing.hpp"
+#include "loaders/RAGE_GLB_loader.hpp"
 
 RAGE *get_rage()
 {
@@ -44,11 +45,9 @@ int main(void)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/WideMonkeyHeadVertexColored.glb").c_str());
-	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
-	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
-	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
-	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());
+	RAGE_GLB_loader glb_loader;
+	glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
+	glb_loader.load((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());	
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{

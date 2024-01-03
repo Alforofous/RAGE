@@ -52,28 +52,55 @@ void RAGE_scene::read_indices_GLB(nlohmann::json &json, nlohmann::json &primitiv
 	if (json["accessors"][indices_accessor_index].is_null())
 		return;
 	nlohmann::json &indices_accessor = json["accessors"][indices_accessor_index];
+	printf("indices_accessor: %s\n", indices_accessor.dump().c_str());
+	if (indices_accessor["bufferView"].is_null())
+		return;
+	int buffer_view_index = indices_accessor["bufferView"];
+	if (json["bufferViews"][buffer_view_index].is_null())
+		return;
+	nlohmann::json &buffer_view = json["bufferViews"][buffer_view_index];
+	if (buffer_view["buffer"].is_null())
+		return;
+	int buffer_index = buffer_view["buffer"];
+	if (json["buffers"][buffer_index].is_null())
+		return;
+	nlohmann::json &buffer = json["buffers"][buffer_index];
 	if (indices_accessor["componentType"].is_null())
 		return;
+	if (indices_accessor["count"].is_null())
+		return;
+	void *indices_data = NULL;
+	size_t indices_data_size = 0;
+	size_t count = indices_accessor["count"];
 	int componentType = indices_accessor["componentType"];
-	if (componentType == 5123)
+	if (componentType == 5121)
 	{
-		printf("UNSIGNED_SHORT\n");
+		indices_data = new unsigned char[indices_accessor["count"]];
+		indices_data_size = sizeof(unsigned char);
+	}
+	else if (componentType == 5123)
+	{
+		indices_data = new unsigned short[indices_accessor["count"]];
+		indices_data_size = sizeof(unsigned short);
 	}
 	else if (componentType == 5125)
 	{
-		printf("UNSIGNED_INT\n");
-	}
-	else if (componentType == 5121)
-	{
-		printf("UNSIGNED_BYTE\n");
+		indices_data = new unsigned int[indices_accessor["count"]];
+		indices_data_size = sizeof(unsigned int);
 	}
 	else
-	{
 		throw std::runtime_error("Indices error. Unsupported componentType.");
-	}
-	buffer_object *indices_buffer_object = new buffer_object();
-	// Now you can use indices_accessor to set your EBO
-	printf("indices_accessor: %s\n", indices_accessor.dump().c_str());
+	if (indices_data == NULL)
+		throw std::runtime_error("Indices error. Failed to allocate memory.");
+	int accessors_byte_offset = 0;
+	if (indices_accessor["byteOffset"].is_null() == false)
+		accessors_byte_offset = indices_accessor["byteOffset"];
+	int buffer_views_byte_offset = 0;
+	if (buffer_view["byteOffset"].is_null() == false)
+		buffer_views_byte_offset = buffer_view["byteOffset"];
+	int byte_offset = accessors_byte_offset + buffer_views_byte_offset;
+	std::memcpy(indices_data, &this->binary_buffer[byte_offset], count * indices_data_size);
+	
 }
 
 void RAGE_scene::read_node_mesh_GLB(nlohmann::json &node, nlohmann::json &json, RAGE_object *object)
@@ -186,10 +213,16 @@ bool RAGE_scene::load_from_GLB(const char *path)
 		printf("\n**********%s**********\n", path);
 		printf("***json_header:\n %s\n", json_header_buffer.data());
 		printf("binary_buffer[%zu]:\n %s\n", binary_buffer.size(), binary_buffer.data());
+		this->binary_buffer = binary_buffer;
 
 		nlohmann::json json = nlohmann::json::parse(json_header_buffer.begin(), json_header_buffer.end());
 		nlohmann::json json_scene = read_scene_info_GLB(json);
 		read_scene_nodes_GLB(json, json_scene);
+		for (int i = 0; i < json["buffers"].size(); i++)
+		{
+			nlohmann::json &buffer = json["buffers"][i];
+			printf("buffer[%d]: %s\n", i, buffer.dump().c_str());
+		}
 		for (int i = 0; i < json["bufferViews"].size(); i++)
 		{
 			nlohmann::json &buffer_view = json["bufferViews"][i];

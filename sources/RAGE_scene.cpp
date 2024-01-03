@@ -42,3 +42,8 @@ void RAGE_scene::select_all_objects()
 {
 	this->selected_objects = this->objects;
 }
+
+RAGE_scene::~RAGE_scene()
+{
+	this->delete_objects();
+}
