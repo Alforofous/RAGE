@@ -30,12 +30,10 @@ public:
 	void draw();
 	static void print_name(RAGE_object *object);
 	static void delete_object(RAGE_object *object);
-	void traverse(void (*function)(RAGE_object *object));
-	void traverse(void (*func)(RAGE_object *object, void *data), void *data);
 
 	polygon_mode polygon_mode;
 	std::string name;
-	std::vector<RAGE_object *> children;
+	std::vector<unsigned int> children_indices;
 private:
 	int u_model_matrix_variable_location;
 	RAGE_mesh *mesh;

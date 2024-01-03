@@ -73,26 +73,33 @@ void RAGE_scene::read_scene_nodes_GLB(nlohmann::json &json, nlohmann::json &json
 {
 	if (json["nodes"].is_null())
 		throw std::runtime_error("No nodes present.");
-	for (int i = 0; i < json_scene["nodes"].size(); i++)
-	{
-		int node_index = json_scene["nodes"][i];
-		RAGE_object *object = read_scene_node_GLB(json["nodes"][node_index]);
-		this->objects.push_back(object);
-		process_children(json, json["nodes"][node_index], object);
-	}
-	this->objects[0]->traverse(&RAGE_object::print_name);
-}
 
-void RAGE_scene::process_children(nlohmann::json &json, nlohmann::json &node, RAGE_object *parent)
-{
-	if (node["children"].is_null())
-		return;
-	for (int i = 0; i < node["children"].size(); i++)
+	for (int i = 0; i < json["nodes"].size(); i++)
 	{
-		int child_index = node["children"][i];
-		RAGE_object *child = read_scene_node_GLB(json["nodes"][child_index]);
-		parent->children.push_back(child);
-		process_children(json, json["nodes"][child_index], child);
+		RAGE_object *object = read_scene_node_GLB(json["nodes"][i]);
+		this->objects.push_back(object);
+	}
+	for (int i = 0; i < this->objects.size(); i++)
+	{
+		RAGE_object *object = this->objects[i];
+		if (json["nodes"][i]["children"].is_null())
+			continue;
+		for (int j = 0; j < json["nodes"][i]["children"].size(); j++)
+		{
+			int child_index = json["nodes"][i]["children"][j];
+			object->children_indices.push_back(child_index);
+		}
+	}
+	printf("this->objects.size(): %zu\n", this->objects.size());
+	for (int i = 0; i < this->objects.size(); i++)
+	{
+		RAGE_object *object = this->objects[i];
+		object->print_name(object);
+		for (int j = 0; j < object->children_indices.size(); j++)
+		{
+			int child_index = object->children_indices[j];
+			printf("	->child_index: %d\n", child_index);
+		}
 	}
 }
 

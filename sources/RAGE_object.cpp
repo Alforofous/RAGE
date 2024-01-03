@@ -97,34 +97,6 @@ void RAGE_object::delete_object(RAGE_object *object)
 	object = NULL;
 }
 
-void RAGE_object::traverse(void (*function)(RAGE_object *object))
-{
-	std::queue<RAGE_object *> queue;
-	queue.push(this);
-	while (queue.empty() == false)
-	{
-		RAGE_object *object = queue.front();
-		queue.pop();
-		function(object);
-		for (size_t i = 0; i < object->children.size(); i++)
-			queue.push(object->children[i]);
-	}
-}
-
-void RAGE_object::traverse(void (*function)(RAGE_object *object, void *data), void *data)
-{
-	std::queue<RAGE_object *> queue;
-	queue.push(this);
-	while (queue.empty() == false)
-	{
-		RAGE_object *object = queue.front();
-		queue.pop();
-		function(object, data);
-		for (size_t i = 0; i < object->children.size(); i++)
-			queue.push(object->children[i]);
-	}
-}
-
 RAGE_object::~RAGE_object()
 {
 	if (this->mesh != NULL)
