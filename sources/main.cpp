@@ -48,6 +48,7 @@ int main(void)
 	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
 	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
 	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
+	rage->scene.load_from_GLB((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{
