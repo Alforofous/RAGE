@@ -75,17 +75,17 @@ void RAGE_scene::read_indices_GLB(nlohmann::json &json, nlohmann::json &primitiv
 	int componentType = indices_accessor["componentType"];
 	if (componentType == 5121)
 	{
-		indices_data = new unsigned char[indices_accessor["count"]];
+		indices_data = new unsigned char[count];
 		indices_data_size = sizeof(unsigned char);
 	}
 	else if (componentType == 5123)
 	{
-		indices_data = new unsigned short[indices_accessor["count"]];
+		indices_data = new unsigned short[count];
 		indices_data_size = sizeof(unsigned short);
 	}
 	else if (componentType == 5125)
 	{
-		indices_data = new unsigned int[indices_accessor["count"]];
+		indices_data = new unsigned int[count];
 		indices_data_size = sizeof(unsigned int);
 	}
 	else
@@ -109,7 +109,7 @@ void RAGE_scene::read_node_mesh_GLB(nlohmann::json &node, nlohmann::json &json, 
 		return;
 
 	int mesh_index = node["mesh"];
-	nlohmann::json &mesh = json["meshes"][mesh_index];
+	nlohmann::json mesh = json["meshes"][mesh_index];
 	if (mesh["primitives"].is_null())
 		return;
 	if (json["accessors"].is_null())

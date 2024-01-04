@@ -81,17 +81,17 @@ void RAGE_GLB_loader::load_mesh_primitive(nlohmann::json &primitive, RAGE_object
 	int componentType = indices_accessor["componentType"];
 	if (componentType == 5121)
 	{
-		indices_data = new unsigned char[indices_accessor["count"]];
+		indices_data = new unsigned char[count];
 		indices_data_size = sizeof(unsigned char);
 	}
 	else if (componentType == 5123)
 	{
-		indices_data = new unsigned short[indices_accessor["count"]];
+		indices_data = new unsigned short[count];
 		indices_data_size = sizeof(unsigned short);
 	}
 	else if (componentType == 5125)
 	{
-		indices_data = new unsigned int[indices_accessor["count"]];
+		indices_data = new unsigned int[count];
 		indices_data_size = sizeof(unsigned int);
 	}
 	else
