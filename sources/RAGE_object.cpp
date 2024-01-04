@@ -16,31 +16,6 @@ bool RAGE_object::init()
 	return (true);
 }
 
-bool RAGE_object::load_GLB_mesh(const char *path)
-{
-	this->mesh = new RAGE_mesh();
-	if (this->mesh->LoadGLB(path) == false)
-		return (false);
-	return (true);
-}
-
-bool RAGE_object::has_mesh()
-{
-	if (this->mesh == NULL)
-		return (false);
-	return (true);
-}
-
-RAGE_mesh *RAGE_object::get_mesh()
-{
-	return (this->mesh);
-}
-
-std::string RAGE_object::get_name()
-{
-	return (this->name);
-}
-
 void RAGE_object::draw_objects(RAGE_object **objects, size_t count)
 {
 	for (size_t i = 0; i < count; i++)
@@ -52,7 +27,7 @@ void RAGE_object::draw_objects(RAGE_object **objects, size_t count)
 
 void RAGE_object::draw()
 {
-	if (this->has_mesh() == false)
+	if (this->mesh == NULL)
 		return;
 	if (this->polygon_mode == polygon_mode::fill)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -79,8 +54,14 @@ void RAGE_object::delete_object(RAGE_object *object)
 	object = NULL;
 }
 
-RAGE_object::~RAGE_object()
+void RAGE_object::remove_mesh()
 {
 	if (this->mesh != NULL)
 		delete this->mesh;
+	this->mesh = NULL;
+}
+
+RAGE_object::~RAGE_object()
+{
+	this->remove_mesh();
 }

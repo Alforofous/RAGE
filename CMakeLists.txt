@@ -66,7 +66,6 @@ set(
 	RAGE_object.cpp
 	RAGE_transform.cpp
 	RAGE_scene.cpp
-	RAGE_scene_glb_loader.cpp
 	RAGE_mesh.cpp
 	RAGE_primitive_objects.cpp
 	RAGE_keyboard_input.cpp

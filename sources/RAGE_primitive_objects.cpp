@@ -36,8 +36,6 @@ RAGE_object *RAGE_primitive_objects::create_cube(float width, float height, floa
 		return (NULL);
 
 	RAGE_mesh *mesh = new RAGE_mesh();
-	mesh->set_vertex_positions(vertex_positions, CUBE_VERTEX_COUNT * 3);
-	mesh->set_indices(indices, CUBE_TRIANGLE_COUNT * 3);
 	RAGE_object *object = new RAGE_object(mesh, "Cube");
 	return (object);
 }

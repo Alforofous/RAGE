@@ -49,7 +49,7 @@ void RAGE_inspector::draw(RAGE *rage)
 	for (int i = 0; i < selected_objects->size(); i++)
 	{
 		RAGE_object *selected_object = selected_objects->at(i);
-		ImGui::Text("Selected object name: %s", selected_object->get_name().c_str());
+		ImGui::Text("Selected object name: %s", selected_object->name.c_str());
 		ImGui::Text("UUID: %llu", (unsigned long long)selected_object);
 
 		draw_drag_float3(rage, "Position" + std::to_string(i), selected_object->position, 0.1f);

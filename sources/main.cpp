@@ -47,7 +47,7 @@ int main(void)
 
 	RAGE_GLB_loader glb_loader;
 	glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
-	glb_loader.load((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());	
+	//glb_loader.load((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());	
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{

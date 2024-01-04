@@ -9,7 +9,7 @@
 
 static bool check_glb_header(std::ifstream &file)
 {
-	GLBHeader header;
+	GLB_header header;
 
 	file.read(reinterpret_cast<char *>(&header), sizeof(header));
 	if (header.magic != 0x46546C67)
@@ -19,7 +19,7 @@ static bool check_glb_header(std::ifstream &file)
 
 static bool check_glb_chunk_header(std::ifstream &file, std::vector<char> &header_buffer, uint32_t type)
 {
-	GLBChunkHeader chunk_header;
+	GLB_chunk_header chunk_header;
 
 	file.read(reinterpret_cast<char *>(&chunk_header), sizeof(chunk_header));
 	if (chunk_header.type != type)
@@ -49,64 +49,73 @@ RAGE_scene *RAGE_GLB_loader::load_scene_at_index(size_t scene_index)
 	return (scene);
 }
 
-void RAGE_GLB_loader::load_mesh_primitive(nlohmann::json &primitive, RAGE_object *object)
+void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
+{
+	//Work on this next
+}
+
+void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
 {
 	if (primitive["indices"].is_null())
 		return;
-
 	int indices_accessor_index = primitive["indices"];
+
 	if (this->json["accessors"][indices_accessor_index].is_null())
 		return;
 	nlohmann::json &indices_accessor = this->json["accessors"][indices_accessor_index];
-	printf("indices_accessor: %s\n", indices_accessor.dump().c_str());
+
 	if (indices_accessor["bufferView"].is_null())
 		return;
 	int buffer_view_index = indices_accessor["bufferView"];
+
 	if (this->json["bufferViews"][buffer_view_index].is_null())
 		return;
 	nlohmann::json &buffer_view = this->json["bufferViews"][buffer_view_index];
+
 	if (buffer_view["buffer"].is_null())
 		return;
 	int buffer_index = buffer_view["buffer"];
+
 	if (this->json["buffers"][buffer_index].is_null())
 		return;
 	nlohmann::json &buffer = this->json["buffers"][buffer_index];
+
 	if (indices_accessor["componentType"].is_null())
 		return;
+	int componentType = indices_accessor["componentType"];
+
 	if (indices_accessor["count"].is_null())
 		return;
-	void *indices_data = NULL;
-	size_t indices_data_size = 0;
 	size_t count = indices_accessor["count"];
-	int componentType = indices_accessor["componentType"];
-	if (componentType == 5121)
-	{
-		indices_data = new unsigned char[count];
-		indices_data_size = sizeof(unsigned char);
-	}
-	else if (componentType == 5123)
-	{
-		indices_data = new unsigned short[count];
-		indices_data_size = sizeof(unsigned short);
-	}
-	else if (componentType == 5125)
-	{
-		indices_data = new unsigned int[count];
-		indices_data_size = sizeof(unsigned int);
-	}
-	else
-		throw std::runtime_error("Indices error. Unsupported componentType.");
-	if (indices_data == NULL)
-		throw std::runtime_error("Indices error. Failed to allocate memory.");
+
 	int accessors_byte_offset = 0;
 	if (indices_accessor["byteOffset"].is_null() == false)
 		accessors_byte_offset = indices_accessor["byteOffset"];
+
 	int buffer_views_byte_offset = 0;
 	if (buffer_view["byteOffset"].is_null() == false)
 		buffer_views_byte_offset = buffer_view["byteOffset"];
 	int byte_offset = accessors_byte_offset + buffer_views_byte_offset;
-	std::memcpy(indices_data, &this->binary_buffer[byte_offset], count * indices_data_size);
-	
+
+	std::vector<RAGE_primitive *> *primitives = &object->mesh->primitives;
+	if (primitives->size() <= primitive_index)
+	{
+		RAGE_primitive *primitive = new RAGE_primitive();
+		primitives->push_back(primitive);
+	}
+	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
+	if (componentType == 5121)
+		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<uint8_t>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
+	else if (componentType == 5123)
+		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<uint16_t>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
+	else if (componentType == 5125)
+		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<uint32_t>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
+	else if (componentType == 5126)
+		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<float>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
+	else
+		throw std::runtime_error("Indices error. Unsupported componentType.");
+	if (current_primitive->element_buffer_object == NULL)
+		throw std::runtime_error("Indices error. Failed to allocate memory.");
 }
 
 void RAGE_GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object)
@@ -124,14 +133,8 @@ void RAGE_GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json,
 	for (int i = 0; i < mesh["primitives"].size(); i += 1)
 	{
 		nlohmann::json &primitive = mesh["primitives"][i];
-		load_mesh_primitive(primitive, object);
-		if (!primitive["attributes"].is_null() && !primitive["attributes"]["POSITION"].is_null())
-		{
-			int position_accessor_index = primitive["attributes"]["POSITION"];
-			nlohmann::json &position_accessor = json["accessors"][position_accessor_index];
-			// Now you can use position_accessor to set your VBO
-			printf("position_accessor: %s\n", position_accessor.dump().c_str());
-		}
+		load_primitive_ebo(primitive, object, i);
+		load_primitive_vbo(primitive, object, i);
 	}
 }
 
@@ -140,6 +143,9 @@ RAGE_object *RAGE_GLB_loader::load_node(nlohmann::json &node)
 	RAGE_object *object = new RAGE_object();
 	if (object == NULL)
 		throw std::runtime_error("Failed to allocate memory for object.");
+	object->mesh = new RAGE_mesh();
+	if (object->mesh == NULL)
+		throw std::runtime_error("Failed to allocate memory for object mesh.");
 
 	if (node["name"].is_null() == false)
 		object->name = node["name"];
@@ -182,7 +188,6 @@ void RAGE_GLB_loader::load_nodes(RAGE_scene *scene, nlohmann::json &json_scene)
 		for (int j = 0; j < object->children_indices.size(); j++)
 		{
 			int child_index = object->children_indices[j];
-			printf("	->child_index: %d\n", child_index);
 		}
 	}
 }
@@ -200,9 +205,6 @@ void RAGE_GLB_loader::delete_scenes()
 void RAGE_GLB_loader::print_info()
 {
 	std::string debug_string = "\n*** RAGE_GLB_loader::debug ***\n";
-	debug_string += "json: " + this->json.dump() + "\n";
-	debug_string += "json_header_buffer: " + std::string(this->json_header_buffer.begin(), this->json_header_buffer.end()) + "\n";
-	debug_string += "binary_buffer size: " + std::to_string(this->binary_buffer.size()) + "\n";
 	debug_string += "scenes: " + std::to_string(this->scenes.size()) + "\n";
 	for (size_t scene_index = 0; scene_index < this->scenes.size(); scene_index += 1)
 	{
