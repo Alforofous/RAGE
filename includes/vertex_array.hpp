@@ -3,6 +3,15 @@
 #include "buffer_object.hpp"
 #include <map>
 
+struct GL_attribute
+{
+	buffer_object *buffer_object;
+	GLuint component_count;
+	GLenum type;
+	GLsizei stride;
+	void *offset;
+};
+
 class vertex_array
 {
 public:
@@ -16,13 +25,4 @@ public:
 private:
 	GLuint	id;
 	std::map<GLuint, GL_attribute> attributes;
-};
-
-struct GL_attribute
-{
-	buffer_object buffer_object;
-	GLuint component_count;
-	GLenum type;
-	GLsizei stride;
-	void *offset;
 };

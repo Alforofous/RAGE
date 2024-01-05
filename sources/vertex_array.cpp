@@ -8,7 +8,7 @@ vertex_array::vertex_array()
 
 void vertex_array::link_attributes(buffer_object &buffer_object, GLuint layout, GLuint component_count, GLenum type, GLsizei stride, void *offset)
 {
-	attributes[layout] = {buffer_object, component_count, type, stride, offset};
+	attributes[layout] = {&buffer_object, component_count, type, stride, offset};
 
 	buffer_object.bind();
 	glVertexAttribPointer(layout, component_count, type, GL_FALSE, stride, offset);
@@ -38,8 +38,8 @@ std::string vertex_array::get_linked_attribute_data(GLuint layout)
 		return ("No attribute found for layout " + std::to_string(layout) + ".");
 	GL_attribute attribute = attributes[layout];
 	std::string result = "Attribute for layout " + std::to_string(layout) + ":\n";
-	void *data = attribute.buffer_object.get_data();
-	GLuint byte_size = attribute.buffer_object.get_byte_size();
+	void *data = attribute.buffer_object->get_data();
+	GLuint byte_size = attribute.buffer_object->get_byte_size();
 	if (attribute.type == GL_BYTE)
 		result += get_attribute_data_with_type<GLbyte>(data, byte_size, attribute.component_count);
 	else if (attribute.type == GL_UNSIGNED_BYTE)
