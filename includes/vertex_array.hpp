@@ -5,9 +5,9 @@
 
 struct GL_attribute
 {
-	buffer_object *buffer_object;
+	buffer_object *vertex_buffer_object;
 	GLuint component_count;
-	GLenum type;
+	GLenum data_type;
 	GLsizei stride;
 	void *offset;
 };
@@ -16,13 +16,13 @@ class vertex_array
 {
 public:
 	vertex_array();
+	~vertex_array();
 
-	void	link_attributes(buffer_object &buffer_object, GLuint layout, GLuint component_count, GLenum type, GLsizei stride, void *offset);
-	void	bind();
-	void	unbind();
-	void	delete_object();
+	void link_attributes(buffer_object &vertex_buffer_object, GLuint layout, GLuint component_count, GLenum type, GLsizei stride, void *offset);
+	void bind();
+	void unbind();
 	std::string get_linked_attribute_data(GLuint layout);
 private:
-	GLuint	id;
+	GLuint id;
 	std::map<GLuint, GL_attribute> attributes;
 };

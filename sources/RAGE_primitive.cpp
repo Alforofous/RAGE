@@ -3,30 +3,69 @@
 
 RAGE_primitive::RAGE_primitive()
 {
-	this->initialized = false;
 	this->vertex_array_object = NULL;
-	this->vertex_buffer_object = NULL;
+	this->interleaved_vertex_buffer_object = NULL;
 	this->element_buffer_object = NULL;
+}
+
+bool RAGE_primitive::interleave_vbos()
+{
+	if (this->non_interleaved_vertex_buffer_objects.size() == 0)
+		return (false);
+	else if (this->non_interleaved_vertex_buffer_objects.size() == 1)
+	{
+		this->interleaved_vertex_buffer_object = this->non_interleaved_vertex_buffer_objects.begin()->second;
+		return (true);
+	}
+
+	size_t max_vertex_count = 0;
+	for (std::pair<const std::string, buffer_object *> &pair : non_interleaved_vertex_buffer_objects)
+		max_vertex_count = std::max(max_vertex_count, pair.second->get_vertex_count());
+
+	buffer_object *interleaved_vbo = new (std::nothrow) buffer_object(GL_ARRAY_BUFFER, GL_NONE, NULL, 0);
+	if (interleaved_vbo == NULL)
+		return (false);
+	for (size_t i = 0; i < max_vertex_count; i++)
+	{
+		for (std::pair<const std::string, buffer_object *> &pair : non_interleaved_vertex_buffer_objects)
+		{
+			buffer_object *vbo = pair.second;
+			size_t component_byte_size = vbo->get_byte_size() / vbo->get_vertex_count();
+			if (i < vbo->get_vertex_count())
+				interleaved_vbo->push_back((uint8_t *)vbo->get_data() + i * component_byte_size, component_byte_size);
+			else
+				interleaved_vbo->push_empty(component_byte_size);
+		}
+	}
+	if (this->interleaved_vertex_buffer_object != NULL)
+		delete this->interleaved_vertex_buffer_object;
+	this->interleaved_vertex_buffer_object = interleaved_vbo;
 }
 
 bool RAGE_primitive::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size)
 {
 	try
 	{
-		this->vertex_array_object = new vertex_array();
+		if (this->vertex_array_object == NULL)
+			this->vertex_array_object = new vertex_array();
 		this->vertex_array_object->bind();
 
-		this->vertex_buffer_object = new buffer_object(GL_ARRAY_BUFFER, vertices, vertices_size);
-		this->element_buffer_object = new buffer_object(GL_ELEMENT_ARRAY_BUFFER, indices, indices_size);
+		if (this->interleaved_vertex_buffer_object == NULL)
+			this->interleaved_vertex_buffer_object = new buffer_object(GL_ARRAY_BUFFER, GL_NONE, vertices, vertices_size);
+		else
+			this->interleaved_vertex_buffer_object->update_data(vertices, vertices_size);
+		if (this->element_buffer_object == NULL)
+			this->element_buffer_object = new buffer_object(GL_ELEMENT_ARRAY_BUFFER, GL_NONE, indices, indices_size);
+		else
+			this->element_buffer_object->update_data(indices, indices_size);
 
-		this->vertex_array_object->link_attributes(*this->vertex_buffer_object, 0, 3, GL_FLOAT, 7 * sizeof(GLfloat), (void *)0);
+		this->vertex_array_object->link_attributes(*this->interleaved_vertex_buffer_object, 0, 3, GL_FLOAT, 7 * sizeof(GLfloat), (void *)0);
 		this->vertex_array_object->link_attributes(*this->element_buffer_object, 1, 4, GL_FLOAT, 7 * sizeof(GLfloat), (void *)(3 * sizeof(GLfloat)));
 		this->vertex_array_object->unbind();
-		this->vertex_buffer_object->unbind();
+		this->interleaved_vertex_buffer_object->unbind();
 		this->element_buffer_object->unbind();
 
 		this->indices_count = (GLuint)(indices_size / sizeof(GLuint));
-		this->initialized = true;
 		return (true);
 	}
 	catch (const std::exception &e)
@@ -47,21 +86,27 @@ void RAGE_primitive::draw()
 
 bool RAGE_primitive::is_initialized()
 {
-	return (this->initialized);
+	bool result;
+
+	result |= this->interleaved_vertex_buffer_object != NULL;
+	result |= this->vertex_array_object != NULL;
+	result |= this->element_buffer_object != NULL;
+	return (result);
 }
 
 RAGE_primitive::~RAGE_primitive()
 {
-	if (this->initialized == false)
-		return;
 	if (this->vertex_array_object != NULL)
-		this->vertex_array_object->delete_object();
-	if (this->vertex_buffer_object != NULL)
-		this->vertex_buffer_object->delete_object();
+		delete this->vertex_array_object;
+	if (this->interleaved_vertex_buffer_object != NULL)
+		delete this->interleaved_vertex_buffer_object;
 	if (this->element_buffer_object != NULL)
-		this->element_buffer_object->delete_object();
-	this->vertex_array_object = NULL;
-	this->vertex_buffer_object = NULL;
-	this->element_buffer_object = NULL;
-	this->initialized = false;
+		delete this->element_buffer_object;
+
+	for (std::pair<const std::string, buffer_object *> &pair : non_interleaved_vertex_buffer_objects)
+	{
+		delete pair.second;
+		pair.second = nullptr;
+	}
+	non_interleaved_vertex_buffer_objects.clear();
 }

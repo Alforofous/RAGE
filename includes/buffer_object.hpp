@@ -6,26 +6,26 @@
 class buffer_object
 {
 public:
-	GLuint id;
-	buffer_object(GLenum type, void *data, GLsizeiptr byte_size);
+	buffer_object(GLenum buffer_type, GLenum data_type, void *data, GLsizeiptr byte_size);
+	buffer_object();
+	~buffer_object();
 
 	void *get_data();
 	GLuint get_byte_size();
+	size_t get_vertex_count();
 	void bind();
 	void unbind();
-	void delete_object();
-	template <typename buffer_data_type>
-	static buffer_object *create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count)
-	{
-		buffer_data_type *gl_buffer_data;
-		buffer_object *gl_buffer_object;
-
-		gl_buffer_data = reinterpret_cast<buffer_data_type *>(&glb_buffer[byte_offset]);
-		gl_buffer_object = new buffer_object(gl_buffer_type, (void *)gl_buffer_data, count * sizeof(buffer_data_type));
-		return (gl_buffer_object);
-	};
+	void push_back(void *data, GLsizeiptr byte_size);
+	void push_empty(GLsizeiptr byte_size);
+	void update_data(void *data, GLsizeiptr byte_size);
+	static buffer_object *create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type);
 private:
+	void init(GLenum buffer_type, GLenum data_type, void *data, GLsizeiptr byte_size);
+
+	GLuint id;
 	void *data;
 	GLuint byte_size;
-	GLenum type;
+	GLenum data_type;
+	GLenum buffer_type;
+	size_t vertex_count;
 };

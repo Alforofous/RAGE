@@ -7,6 +7,66 @@
 #include <queue>
 #include "buffer_object.hpp"
 
+GLsizeiptr RAGE_GLB_loader::sizeof_gl_data_type(GLenum gl_type)
+{
+	if (gl_type == GL_BYTE)
+		return (sizeof(GLbyte));
+	else if (gl_type == GL_UNSIGNED_BYTE)
+		return (sizeof(GLubyte));
+	else if (gl_type == GL_SHORT)
+		return (sizeof(GLshort));
+	else if (gl_type == GL_UNSIGNED_SHORT)
+		return (sizeof(GLushort));
+	else if (gl_type == GL_INT)
+		return (sizeof(GLint));
+	else if (gl_type == GL_UNSIGNED_INT)
+		return (sizeof(GLuint));
+	else if (gl_type == GL_HALF_FLOAT)
+		return (sizeof(GLhalf));
+	else if (gl_type == GL_FLOAT)
+		return (sizeof(GLfloat));
+	else if (gl_type == GL_DOUBLE)
+		return (sizeof(GLdouble));
+	else
+		return (0);
+}
+
+GLenum RAGE_GLB_loader::component_type_to_gl_type(int glb_component_type)
+{
+	if (glb_component_type == 5120)
+		return (GL_BYTE);
+	else if (glb_component_type == 5121)
+		return (GL_UNSIGNED_BYTE);
+	else if (glb_component_type == 5122)
+		return (GL_SHORT);
+	else if (glb_component_type == 5123)
+		return (GL_UNSIGNED_SHORT);
+	else if (glb_component_type == 5125)
+		return (GL_UNSIGNED_INT);
+	else if (glb_component_type == 5126)
+		return (GL_FLOAT);
+	else
+		return (GL_NONE);
+}
+
+int RAGE_GLB_loader::gl_type_to_component_type(GLenum gl_type)
+{
+	if (gl_type == GL_BYTE)
+		return (5120);
+	else if (gl_type == GL_UNSIGNED_BYTE)
+		return (5121);
+	else if (gl_type == GL_SHORT)
+		return (5122);
+	else if (gl_type == GL_UNSIGNED_SHORT)
+		return (5123);
+	else if (gl_type == GL_UNSIGNED_INT)
+		return (5125);
+	else if (gl_type == GL_FLOAT)
+		return (5126);
+	else
+		return (-1);
+}
+
 static bool check_glb_header(std::ifstream &file)
 {
 	GLB_header header;
@@ -51,7 +111,59 @@ RAGE_scene *RAGE_GLB_loader::load_scene_at_index(size_t scene_index)
 
 void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
 {
-	//Work on this next
+	if (primitive["attributes"].is_null())
+		return;
+	nlohmann::json &attributes = primitive["attributes"];
+
+	std::vector<RAGE_primitive *> *primitives = &object->mesh->primitives;
+	if (primitives->size() <= primitive_index)
+	{
+		RAGE_primitive *primitive = new RAGE_primitive();
+		primitives->push_back(primitive);
+	}
+	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
+
+	for (nlohmann::json::iterator it = attributes.begin(); it != attributes.end(); ++it)
+	{
+		std::string key = it.key();
+		int value = it.value();
+
+		if (this->json["accessors"][value].is_null())
+			continue;
+		nlohmann::json &accessor = this->json["accessors"][value];
+
+		if (accessor["bufferView"].is_null())
+			continue;
+		int buffer_view_index = accessor["bufferView"];
+
+		if (this->json["bufferViews"][buffer_view_index].is_null())
+			continue;
+		nlohmann::json &buffer_view = this->json["bufferViews"][buffer_view_index];
+
+		if (accessor["componentType"].is_null())
+			continue;
+		int componentType = accessor["componentType"];
+
+		if (accessor["count"].is_null())
+			continue;
+		size_t count = accessor["count"];
+
+		int byte_offset = 0;
+		if (accessor["byteOffset"].is_null() == false)
+			byte_offset += accessor["byteOffset"].get<int>();
+		if (buffer_view["byteOffset"].is_null() == false)
+			byte_offset += buffer_view["byteOffset"].get<int>();
+
+		GLenum gl_data_type = RAGE_GLB_loader::component_type_to_gl_type(componentType);
+		if (gl_data_type == GL_NONE)
+			continue;
+
+		if (current_primitive->non_interleaved_vertex_buffer_objects.find(key) != current_primitive->non_interleaved_vertex_buffer_objects.end())
+			delete current_primitive->non_interleaved_vertex_buffer_objects[key];
+		current_primitive->non_interleaved_vertex_buffer_objects[key] = buffer_object::create_from_glb_buffer(GL_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
+		if (current_primitive->non_interleaved_vertex_buffer_objects[key] == NULL)
+			throw std::runtime_error("Vertices error. Failed to allocate memory.");
+	}
 }
 
 void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
@@ -72,14 +184,6 @@ void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object 
 		return;
 	nlohmann::json &buffer_view = this->json["bufferViews"][buffer_view_index];
 
-	if (buffer_view["buffer"].is_null())
-		return;
-	int buffer_index = buffer_view["buffer"];
-
-	if (this->json["buffers"][buffer_index].is_null())
-		return;
-	nlohmann::json &buffer = this->json["buffers"][buffer_index];
-
 	if (indices_accessor["componentType"].is_null())
 		return;
 	int componentType = indices_accessor["componentType"];
@@ -88,14 +192,11 @@ void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object 
 		return;
 	size_t count = indices_accessor["count"];
 
-	int accessors_byte_offset = 0;
+	int byte_offset = 0;
 	if (indices_accessor["byteOffset"].is_null() == false)
-		accessors_byte_offset = indices_accessor["byteOffset"];
-
-	int buffer_views_byte_offset = 0;
+		byte_offset += indices_accessor["byteOffset"].get<int>();
 	if (buffer_view["byteOffset"].is_null() == false)
-		buffer_views_byte_offset = buffer_view["byteOffset"];
-	int byte_offset = accessors_byte_offset + buffer_views_byte_offset;
+		byte_offset += buffer_view["byteOffset"].get<int>();
 
 	std::vector<RAGE_primitive *> *primitives = &object->mesh->primitives;
 	if (primitives->size() <= primitive_index)
@@ -104,16 +205,10 @@ void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object 
 		primitives->push_back(primitive);
 	}
 	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
-	if (componentType == 5121)
-		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<uint8_t>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
-	else if (componentType == 5123)
-		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<uint16_t>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
-	else if (componentType == 5125)
-		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<uint32_t>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
-	else if (componentType == 5126)
-		current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer<float>(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count);
-	else
-		throw std::runtime_error("Indices error. Unsupported componentType.");
+	GLenum gl_data_type = RAGE_GLB_loader::component_type_to_gl_type(componentType);
+	if (gl_data_type == GL_NONE)
+		return;
+	current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
 	if (current_primitive->element_buffer_object == NULL)
 		throw std::runtime_error("Indices error. Failed to allocate memory.");
 }

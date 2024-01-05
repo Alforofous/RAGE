@@ -11,6 +11,9 @@ public:
 	// If default scene is not found, returns first available scene.
 	// On fail, it returns NULL.
 	RAGE_scene *load(const char *path);
+	static GLenum component_type_to_gl_type(int glb_component_type);
+	static int gl_type_to_component_type(GLenum gl_type);
+	static GLsizeiptr sizeof_gl_data_type(GLenum gl_type);
 
 private:
 	void delete_scenes();
