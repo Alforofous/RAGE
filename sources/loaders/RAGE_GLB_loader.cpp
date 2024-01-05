@@ -123,6 +123,7 @@ void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object 
 	}
 	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
 
+	printf("PRIMITIVE[%d]\n", primitive_index);
 	for (nlohmann::json::iterator it = attributes.begin(); it != attributes.end(); ++it)
 	{
 		std::string key = it.key();
@@ -144,6 +145,10 @@ void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object 
 			continue;
 		int componentType = accessor["componentType"];
 
+		if (accessor["type"].is_null())
+			continue;
+		std::string type = accessor["type"];
+
 		if (accessor["count"].is_null())
 			continue;
 		size_t count = accessor["count"];
@@ -163,6 +168,25 @@ void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object 
 		current_primitive->non_interleaved_vertex_buffer_objects[key] = buffer_object::create_from_glb_buffer(GL_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
 		if (current_primitive->non_interleaved_vertex_buffer_objects[key] == NULL)
 			throw std::runtime_error("Vertices error. Failed to allocate memory.");
+		printf("key: %s\n", key.c_str());
+		int component_count = 0;
+		if (type == "SCALAR")
+			component_count = 1;
+		else if (type == "VEC2")
+			component_count = 2;
+		else if (type == "VEC3")
+			component_count = 3;
+		else if (type == "VEC4")
+			component_count = 4;
+		else if (type == "MAT2")
+			component_count = 4;
+		else if (type == "MAT3")
+			component_count = 9;
+		else if (type == "MAT4")
+			component_count = 16;
+		else
+			continue;
+		current_primitive->non_interleaved_vertex_buffer_objects[key]->print_data(component_count);
 	}
 }
 

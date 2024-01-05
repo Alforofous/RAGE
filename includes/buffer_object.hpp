@@ -18,6 +18,7 @@ public:
 	void push_back(void *data, GLsizeiptr byte_size);
 	void push_empty(GLsizeiptr byte_size);
 	void update_data(void *data, GLsizeiptr byte_size);
+	void print_data(int stride_size);
 	static buffer_object *create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type);
 private:
 	void init(GLenum buffer_type, GLenum data_type, void *data, GLsizeiptr byte_size);

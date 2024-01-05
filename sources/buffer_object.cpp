@@ -1,5 +1,6 @@
 #include "buffer_object.hpp"
 #include "loaders/RAGE_GLB_loader.hpp"
+#include <iostream>
 
 buffer_object::buffer_object(GLenum buffer_type, GLenum data_type, void *data, GLsizeiptr byte_size)
 {
@@ -58,6 +59,39 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 	gl_buffer_data = &glb_buffer[byte_offset];
 	gl_buffer_object = new buffer_object(gl_buffer_type, data_type, (void *)gl_buffer_data, size);
 	return (gl_buffer_object);
+}
+
+void buffer_object::print_data(int stride_size)
+{
+	GLsizeiptr data_type_size = RAGE_GLB_loader::sizeof_gl_data_type(this->data_type);
+
+	int stride = 0;
+	for (uint8_t *ptr = (uint8_t *)this->data; ptr < (uint8_t *)this->data + this->byte_size; ptr += data_type_size)
+	{
+		if (this->data_type == GL_BYTE)
+			std::cout << (int)*(int8_t *)ptr;
+		else if (this->data_type == GL_UNSIGNED_BYTE)
+			std::cout << (int)*(uint8_t *)ptr;
+		else if (this->data_type == GL_SHORT)
+			std::cout << *(int16_t *)ptr;
+		else if (this->data_type == GL_UNSIGNED_SHORT)
+			std::cout << *(uint16_t *)ptr;
+		else if (this->data_type == GL_INT)
+			std::cout << *(int32_t *)ptr;
+		else if (this->data_type == GL_UNSIGNED_INT)
+			std::cout << *(uint32_t *)ptr;
+		else if (this->data_type == GL_FLOAT)
+			std::cout << *(float *)ptr;
+		else if (this->data_type == GL_DOUBLE)
+			std::cout << *(double *)ptr;
+		else
+			std::cout << "Unknown data type";
+		if (stride % stride_size == stride_size - 1)
+			std::cout << std::endl;
+		else
+			std::cout << " ";
+		stride += 1;
+	}
 }
 
 void *buffer_object::get_data()

@@ -40,6 +40,7 @@ bool RAGE_primitive::interleave_vbos()
 	if (this->interleaved_vertex_buffer_object != NULL)
 		delete this->interleaved_vertex_buffer_object;
 	this->interleaved_vertex_buffer_object = interleaved_vbo;
+	return (true);
 }
 
 bool RAGE_primitive::init(GLfloat *vertices, GLuint *indices, GLsizeiptr vertices_size, GLsizeiptr indices_size)
