@@ -103,7 +103,6 @@ void RAGE_shader::init_variable_locations()
 {
 	const char	*variable_names[] =
 	{
-		"u_resolution",
 		"u_perspective_matrix",
 		"u_view_matrix",
 		"u_model_matrix",
