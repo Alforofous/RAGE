@@ -31,6 +31,26 @@ GLsizeiptr RAGE_GLB_loader::sizeof_gl_data_type(GLenum gl_type)
 		return (0);
 }
 
+GLsizeiptr RAGE_GLB_loader::get_attribute_type_size(std::string attribute_type)
+{
+	if (attribute_type == "SCALAR")
+		return (1);
+	else if (attribute_type == "VEC2")
+		return (2);
+	else if (attribute_type == "VEC3")
+		return (3);
+	else if (attribute_type == "VEC4")
+		return (4);
+	else if (attribute_type == "MAT2")
+		return (4);
+	else if (attribute_type == "MAT3")
+		return (9);
+	else if (attribute_type == "MAT4")
+		return (16);
+	else
+		return (0);
+}
+
 GLenum RAGE_GLB_loader::component_type_to_gl_type(int glb_component_type)
 {
 	if (glb_component_type == 5120)
@@ -147,7 +167,7 @@ void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object 
 
 		if (accessor["type"].is_null())
 			continue;
-		std::string type = accessor["type"];
+		std::string attribute_type = accessor["type"];
 
 		if (accessor["count"].is_null())
 			continue;
@@ -169,24 +189,7 @@ void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object 
 		if (current_primitive->non_interleaved_vertex_buffer_objects[key] == NULL)
 			throw std::runtime_error("Vertices error. Failed to allocate memory.");
 		printf("key: %s\n", key.c_str());
-		int component_count = 0;
-		if (type == "SCALAR")
-			component_count = 1;
-		else if (type == "VEC2")
-			component_count = 2;
-		else if (type == "VEC3")
-			component_count = 3;
-		else if (type == "VEC4")
-			component_count = 4;
-		else if (type == "MAT2")
-			component_count = 4;
-		else if (type == "MAT3")
-			component_count = 9;
-		else if (type == "MAT4")
-			component_count = 16;
-		else
-			continue;
-		current_primitive->non_interleaved_vertex_buffer_objects[key]->print_data(component_count);
+		current_primitive->non_interleaved_vertex_buffer_objects[key]->print_data(this->get_attribute_type_size(attribute_type));
 	}
 }
 
@@ -249,6 +252,7 @@ void RAGE_GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json,
 	if (json["accessors"].is_null())
 		return;
 
+	printf("primitive count: %d\n", mesh["primitives"].size());
 	for (int i = 0; i < mesh["primitives"].size(); i += 1)
 	{
 		nlohmann::json &primitive = mesh["primitives"][i];

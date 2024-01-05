@@ -14,6 +14,7 @@ public:
 	static GLenum component_type_to_gl_type(int glb_component_type);
 	static int gl_type_to_component_type(GLenum gl_type);
 	static GLsizeiptr sizeof_gl_data_type(GLenum gl_type);
+	static GLsizeiptr get_attribute_type_size(std::string attribute_type);
 
 private:
 	void delete_scenes();

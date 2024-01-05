@@ -2,6 +2,7 @@
 #include <glad/glad.h>
 #include "buffer_object.hpp"
 #include <map>
+#include <string>
 
 struct GL_attribute
 {
