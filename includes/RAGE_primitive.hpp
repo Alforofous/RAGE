@@ -15,9 +15,10 @@ public:
 	void draw();
 	bool is_initialized();
 
-	vertex_array *vertex_array_object;
+	vertex_array *interleaved_vertex_array_object;
 	buffer_object *interleaved_vertex_buffer_object;
 	buffer_object *element_buffer_object;
+	std::map<std::string, vertex_array *> non_interleaved_vertex_array_objects;
 	std::map<std::string, buffer_object *> non_interleaved_vertex_buffer_objects;
 private:
 	GLuint indices_count;

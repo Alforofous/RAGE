@@ -19,11 +19,13 @@ public:
 	vertex_array();
 	~vertex_array();
 
-	void link_attributes(buffer_object &vertex_buffer_object, GLuint layout, GLuint component_count, GLenum type, GLsizei stride, void *offset);
+	void link_attributes(buffer_object *vertex_buffer_object, GLuint layout, GLuint component_count, GLenum gl_data_type, GLsizei stride, void *offset);
 	void bind();
 	void unbind();
 	std::string get_linked_attribute_data(GLuint layout);
+	std::string get_linked_attributes_data();
+	const std::map<GLuint, GL_attribute> *get_linked_attributes() const;
 private:
 	GLuint id;
-	std::map<GLuint, GL_attribute> attributes;
+	std::map<GLuint, GL_attribute> linked_attributes;
 };

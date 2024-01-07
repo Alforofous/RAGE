@@ -24,7 +24,7 @@ private:
 	RAGE_object *load_node(nlohmann::json &node);
 	void load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object);
 	void load_primitive_ebo(nlohmann::json &primitive, RAGE_object *object, int primitive_index);
-	void load_primitive_vbo(nlohmann::json &primitive, RAGE_object *object, int primitive_index);
+	void load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_object *object, int primitive_index);
 	void print_info();
 
 	std::vector<RAGE_scene *> scenes;

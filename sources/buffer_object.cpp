@@ -55,6 +55,8 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 	void *gl_buffer_data;
 	buffer_object *gl_buffer_object;
 	GLsizeiptr size = count * RAGE_GLB_loader::sizeof_gl_data_type(data_type);
+	if (size == 0)
+		return (NULL);
 
 	gl_buffer_data = &glb_buffer[byte_offset];
 	gl_buffer_object = new buffer_object(gl_buffer_type, data_type, (void *)gl_buffer_data, size);
@@ -64,6 +66,8 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 void buffer_object::print_data(int stride_size)
 {
 	GLsizeiptr data_type_size = RAGE_GLB_loader::sizeof_gl_data_type(this->data_type);
+	if (data_type_size == 0)
+		return;
 
 	int stride = 0;
 	for (uint8_t *ptr = (uint8_t *)this->data; ptr < (uint8_t *)this->data + this->byte_size; ptr += data_type_size)

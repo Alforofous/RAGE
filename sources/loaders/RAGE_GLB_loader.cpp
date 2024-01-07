@@ -129,7 +129,7 @@ RAGE_scene *RAGE_GLB_loader::load_scene_at_index(size_t scene_index)
 	return (scene);
 }
 
-void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
+void RAGE_GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
 {
 	if (primitive["attributes"].is_null())
 		return;
@@ -183,14 +183,20 @@ void RAGE_GLB_loader::load_primitive_vbo(nlohmann::json &primitive, RAGE_object 
 		if (gl_data_type == GL_NONE)
 			continue;
 
+		//load_vertex_buffer_object VBO
 		if (current_primitive->non_interleaved_vertex_buffer_objects.find(key) != current_primitive->non_interleaved_vertex_buffer_objects.end())
 			delete current_primitive->non_interleaved_vertex_buffer_objects[key];
 		current_primitive->non_interleaved_vertex_buffer_objects[key] = buffer_object::create_from_glb_buffer(GL_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
 		if (current_primitive->non_interleaved_vertex_buffer_objects[key] == NULL)
 			throw std::runtime_error("Vertices error. Failed to allocate memory.");
-		printf("key: %s\n", key.c_str());
-		current_primitive->non_interleaved_vertex_buffer_objects[key]->print_data(this->get_attribute_type_size(attribute_type));
+
+		//load_vertex_array_object VAO
+		if (current_primitive->non_interleaved_vertex_array_objects.find(key) != current_primitive->non_interleaved_vertex_array_objects.end())
+			delete current_primitive->non_interleaved_vertex_array_objects[key];
+		current_primitive->non_interleaved_vertex_array_objects[key]->link_attributes(current_primitive->non_interleaved_vertex_buffer_objects[key], value, RAGE_GLB_loader::get_attribute_type_size(attribute_type), gl_data_type, 0, 0);
 	}
+	if (current_primitive->interleave_vbos() == false)
+		throw std::runtime_error("Failed to interleave vbos for primitive: " + std::to_string(primitive_index) + ".");
 }
 
 void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
@@ -257,7 +263,7 @@ void RAGE_GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json,
 	{
 		nlohmann::json &primitive = mesh["primitives"][i];
 		load_primitive_ebo(primitive, object, i);
-		load_primitive_vbo(primitive, object, i);
+		load_primitive_vbo_and_vao(primitive, object, i);
 	}
 }
 
