@@ -48,13 +48,13 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 	return (gl_buffer_object);
 }
 
-void buffer_object::print_data(int stride_size)
+void buffer_object::print_data(int component_count)
 {
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(this->data_type);
 	if (data_type_size == 0)
 		data_type_size = 1;
 
-	int stride = 0;
+	int count = 0;
 	std::cout << "BUFFER DATA [" << this->byte_size << " bytes]:\n";
 	for (uint8_t *ptr = (uint8_t *)this->data.data(); ptr < (uint8_t *)this->data.data() + this->byte_size; ptr += data_type_size)
 	{
@@ -76,21 +76,21 @@ void buffer_object::print_data(int stride_size)
 			std::cout << *(double *)ptr;
 		else
 			std::cout << "GL_NONE: [" << (int)*(uint8_t *)ptr << "]";
-		if (stride % stride_size == stride_size - 1)
+		if (count % component_count == component_count - 1)
 			std::cout << std::endl;
 		else
 			std::cout << " ";
-		stride += 1;
+		count += 1;
 	}
 }
 
-void buffer_object::print_data(int stride_size, GLenum data_type)
+void buffer_object::print_data(int component_count, GLenum data_type)
 {
-	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(this->data_type);
+	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(data_type);
 	if (data_type_size == 0)
 		data_type_size = 1;
 
-	int stride = 0;
+	int count = 0;
 	std::cout << "BUFFER DATA [" << this->byte_size << " bytes]:\n";
 	for (uint8_t *ptr = (uint8_t *)this->data.data(); ptr < (uint8_t *)this->data.data() + this->byte_size; ptr += data_type_size)
 	{
@@ -112,11 +112,11 @@ void buffer_object::print_data(int stride_size, GLenum data_type)
 			std::cout << *(double *)ptr;
 		else
 			std::cout << "GL_NONE: [" << (int)*(uint8_t *)ptr << "]";
-		if (stride % stride_size == stride_size - 1)
+		if (count % component_count == component_count - 1)
 			std::cout << std::endl;
 		else
 			std::cout << " ";
-		stride += 1;
+		count += 1;
 	}
 }
 

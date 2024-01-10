@@ -26,8 +26,6 @@ bool RAGE_primitive::interleave_vbos()
 	buffer_object *interleaved_vbo = new (std::nothrow) buffer_object();
 	if (interleaved_vbo == NULL)
 		return (false);
-	printf("max_vertex_count: %zu\n", max_vertex_count);
-	printf("attribute_buffers.size(): %zu\n", this->attribute_buffers.size());
 	for (size_t j = 0; j < max_vertex_count; j++)
 	{
 		for (size_t i = 0; i < this->attribute_buffers.size(); i++)
@@ -43,7 +41,6 @@ bool RAGE_primitive::interleave_vbos()
 				if (j < attribute_buffer->get_vertex_count())
 				{
 					interleaved_vbo->data.insert(interleaved_vbo->data.end(), start, end);
-					printf("[%zu] start: %f end: %f %p %p\n", offset, *(float *)start, *(float *)end, start, end);
 				}
 				else
 				{
@@ -53,8 +50,6 @@ bool RAGE_primitive::interleave_vbos()
 		}
 	}
 	interleaved_vbo->update_gl_buffer();
-	interleaved_vbo->print_data(3, GL_FLOAT);
-	printf("interleaved_vbo->get_byte_size(): %zu\n", interleaved_vbo->get_byte_size());
 	if (this->vertex_array_object != NULL)
 		delete this->vertex_array_object;
 	this->vertex_array_object = new (std::nothrow) vertex_array();
@@ -75,8 +70,9 @@ bool RAGE_primitive::interleave_vbos()
 
 		GLsizeiptr offset = 0;
 		GLsizeiptr attribute_type_byte_size = GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type());
-		this->vertex_array_object->link_attributes(interleaved_vbo, i, attribute_buffer->get_component_count(), attribute_buffer->get_gl_data_type(), stride, (void *)offset, attribute_buffer->get_name());
-		offset += attribute_type_byte_size;
+		GLuint layout = GLB_utilities::get_attribute_layout_from_attribute_string(attribute_buffer->get_name());
+		this->vertex_array_object->link_attributes(interleaved_vbo, layout, attribute_buffer->get_component_count(), attribute_buffer->get_gl_data_type(), stride, (void *)offset, attribute_buffer->get_name());
+		offset += attribute_type_byte_size * attribute_buffer->get_component_count();
 	}
 	if (this->interleaved_vertex_buffer_object != NULL)
 		delete this->interleaved_vertex_buffer_object;

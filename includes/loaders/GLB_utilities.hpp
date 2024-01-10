@@ -11,4 +11,5 @@ public:
 	static GLenum component_type_to_gl_type(int glb_component_type);
 	static int gl_type_to_component_type(GLenum gl_type);
 	static std::string gl_data_type_to_string(GLenum gl_type);
+	static GLuint get_attribute_layout_from_attribute_string(std::string attribute_name);
 };

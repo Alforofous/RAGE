@@ -17,17 +17,24 @@ void vertex_array::link_attributes(buffer_object *vertex_buffer_object, GLuint l
 }
 
 template <typename T>
-static std::string get_attribute_data_with_data_type(void *data, size_t size, GLuint component_count)
+static std::string get_attribute_data_with_data_type(void *data, size_t size, GL_attribute attribute)
 {
-	T *typed_data = reinterpret_cast<T *>(data);
 	std::string result;
-	for (size_t i = 0; i < size / sizeof(T); i++)
+	uint8_t *start = (uint8_t *)data + (size_t)attribute.offset;
+	uint8_t *end = (uint8_t *)data + size;
+	printf("offset: %p\n", attribute.offset);
+	printf("start: %p\n", start);
+	printf("end: %p\n", end);
+	printf("stride: %d\n", attribute.stride);
+	int i = 0;
+	for (uint8_t *typed_data = start; typed_data < end; typed_data += attribute.stride)
 	{
-		result += std::to_string(typed_data[i]);
-		if ((i + 1) % component_count == 0)
+		result += std::to_string(*((T *)typed_data));
+		if (i % attribute.component_count == attribute.component_count - 1)
 			result += "\n";
 		else
 			result += " ";
+		i += 1;
 	}
 	return (result);
 }
@@ -37,27 +44,27 @@ std::string vertex_array::get_linked_attribute_data(GLuint layout)
 	if (linked_attributes.find(layout) == linked_attributes.end())
 		return ("No attribute found for layout " + std::to_string(layout) + ".");
 	GL_attribute linked_attribute = linked_attributes[layout];
-	std::string result = linked_attribute.name + " ATTRIBUTE:\n";
+	std::string result = linked_attribute.name + " ATTRIBUTE AT LAYOUT " + std::to_string(layout) + ":\n";
 	void *data = linked_attribute.vertex_buffer_object->get_data();
 	if (data == NULL)
 		return ("Data is NULL.");
 	GLuint byte_size = linked_attribute.vertex_buffer_object->get_byte_size();
 	if (linked_attribute.data_type == GL_BYTE)
-		result += get_attribute_data_with_data_type<GLbyte>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLbyte>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_UNSIGNED_BYTE)
-		result += get_attribute_data_with_data_type<GLubyte>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLubyte>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_SHORT)
-		result += get_attribute_data_with_data_type<GLshort>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLshort>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_UNSIGNED_SHORT)
-		result += get_attribute_data_with_data_type<GLushort>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLushort>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_INT)
-		result += get_attribute_data_with_data_type<GLint>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLint>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_UNSIGNED_INT)
-		result += get_attribute_data_with_data_type<GLuint>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLuint>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_FLOAT)
-		result += get_attribute_data_with_data_type<GLfloat>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLfloat>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_DOUBLE)
-		result += get_attribute_data_with_data_type<GLdouble>(data, byte_size, linked_attribute.component_count);
+		result += get_attribute_data_with_data_type<GLdouble>(data, byte_size, linked_attribute);
 	else
 		result += "Unknown type.";
 	return result;

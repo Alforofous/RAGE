@@ -170,6 +170,7 @@ void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *obje
 	if (gl_data_type == GL_NONE)
 		return;
 	current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
+	current_primitive->indices_count = count;
 	if (current_primitive->element_buffer_object == NULL)
 		throw std::runtime_error("Indices error. Failed to allocate memory.");
 }
@@ -303,7 +304,7 @@ void GLB_loader::print_info()
 			{
 				RAGE_primitive *primitive = mesh->primitives[primitive_index];
 				debug_string += "\t\tprimitive_index: " + std::to_string(primitive_index) + "\n";
-				//debug_string += primitive->vertex_array_object->get_linked_attributes_data();
+				debug_string += primitive->vertex_array_object->get_linked_attributes_data();
 			}
 		}
 		if (scene_index == this->scenes.size() - 1)

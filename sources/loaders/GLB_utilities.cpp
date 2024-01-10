@@ -1,4 +1,5 @@
 #include "loaders/GLB_utilities.hpp"
+#include "RAGE_shader.hpp"
 
 GLsizeiptr GLB_utilities::gl_data_type_size(GLenum gl_type)
 {
@@ -22,6 +23,19 @@ GLsizeiptr GLB_utilities::gl_data_type_size(GLenum gl_type)
 		return (sizeof(GLdouble));
 	else
 		return (0);
+}
+
+GLuint GLB_utilities::get_attribute_layout_from_attribute_string(std::string attribute_name)
+{
+	if (attribute_name == "POSITION")
+		return (POSITION_LAYOUT);
+	else if (attribute_name == "COLOR_0")
+		return (COLOR_LAYOUT);
+	else if (attribute_name == "NORMAL")
+		return (NORMAL_LAYOUT);
+	else
+		throw std::runtime_error("Unknown attribute name: " + attribute_name);
+	return (0);
 }
 
 GLsizeiptr GLB_utilities::get_attribute_component_count(std::string attribute_type)

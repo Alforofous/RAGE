@@ -20,6 +20,6 @@ public:
 	buffer_object *interleaved_vertex_buffer_object;
 	buffer_object *element_buffer_object;
 	std::vector<GLB_attribute_buffer *> attribute_buffers;
-private:
 	GLuint indices_count;
+private:
 };

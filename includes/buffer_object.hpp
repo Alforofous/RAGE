@@ -16,8 +16,8 @@ public:
 	void bind();
 	void unbind();
 	static buffer_object *create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type);
-	void print_data(int stride_size);
-	void print_data(int stride_size, GLenum data_type);
+	void print_data(int component_count);
+	void print_data(int component_count, GLenum data_type);
 	void update_gl_buffer();
 	std::vector<GLubyte> data;
 

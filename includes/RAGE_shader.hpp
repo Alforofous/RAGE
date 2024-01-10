@@ -9,6 +9,10 @@
 #include <map>
 #include <vector>
 
+#define POSITION_LAYOUT 0
+#define COLOR_LAYOUT 1
+#define NORMAL_LAYOUT 2
+
 class RAGE_shader
 {
 public:
