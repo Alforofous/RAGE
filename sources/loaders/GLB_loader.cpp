@@ -1,4 +1,4 @@
-#include "loaders/RAGE_GLB_loader.hpp"
+#include "loaders/GLB_loader.hpp"
 #include "nlohmann/json.hpp"
 #include <fstream>
 #include <iostream>
@@ -7,7 +7,7 @@
 #include <queue>
 #include "buffer_object.hpp"
 
-GLsizeiptr RAGE_GLB_loader::sizeof_gl_data_type(GLenum gl_type)
+GLsizeiptr GLB_loader::sizeof_gl_data_type(GLenum gl_type)
 {
 	if (gl_type == GL_BYTE)
 		return (sizeof(GLbyte));
@@ -31,7 +31,7 @@ GLsizeiptr RAGE_GLB_loader::sizeof_gl_data_type(GLenum gl_type)
 		return (0);
 }
 
-GLsizeiptr RAGE_GLB_loader::get_attribute_type_size(std::string attribute_type)
+GLsizeiptr GLB_loader::get_attribute_type_size(std::string attribute_type)
 {
 	if (attribute_type == "SCALAR")
 		return (1);
@@ -51,7 +51,7 @@ GLsizeiptr RAGE_GLB_loader::get_attribute_type_size(std::string attribute_type)
 		return (0);
 }
 
-GLenum RAGE_GLB_loader::component_type_to_gl_type(int glb_component_type)
+GLenum GLB_loader::component_type_to_gl_type(int glb_component_type)
 {
 	if (glb_component_type == 5120)
 		return (GL_BYTE);
@@ -69,7 +69,7 @@ GLenum RAGE_GLB_loader::component_type_to_gl_type(int glb_component_type)
 		return (GL_NONE);
 }
 
-int RAGE_GLB_loader::gl_type_to_component_type(GLenum gl_type)
+int GLB_loader::gl_type_to_component_type(GLenum gl_type)
 {
 	if (gl_type == GL_BYTE)
 		return (5120);
@@ -109,7 +109,7 @@ static bool check_glb_chunk_header(std::ifstream &file, std::vector<char> &heade
 	return (true);
 }
 
-void RAGE_GLB_loader::load_scene_info(RAGE_scene *scene, size_t scene_index)
+void GLB_loader::load_scene_info(RAGE_scene *scene, size_t scene_index)
 {
 	nlohmann::json json_scene = this->json["scenes"][scene_index];
 	if (json_scene["nodes"].is_null())
@@ -117,7 +117,7 @@ void RAGE_GLB_loader::load_scene_info(RAGE_scene *scene, size_t scene_index)
 	this->load_nodes(scene, json_scene);
 }
 
-RAGE_scene *RAGE_GLB_loader::load_scene_at_index(size_t scene_index)
+RAGE_scene *GLB_loader::load_scene_at_index(size_t scene_index)
 {
 	nlohmann::json json_scene = this->json["scenes"][scene_index];
 	std::string scene_name = "GLB Scene";
@@ -129,7 +129,7 @@ RAGE_scene *RAGE_GLB_loader::load_scene_at_index(size_t scene_index)
 	return (scene);
 }
 
-void RAGE_GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
+void GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
 {
 	if (primitive["attributes"].is_null())
 		return;
@@ -179,7 +179,7 @@ void RAGE_GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE
 		if (buffer_view["byteOffset"].is_null() == false)
 			byte_offset += buffer_view["byteOffset"].get<int>();
 
-		GLenum gl_data_type = RAGE_GLB_loader::component_type_to_gl_type(componentType);
+		GLenum gl_data_type = GLB_loader::component_type_to_gl_type(componentType);
 		if (gl_data_type == GL_NONE)
 			continue;
 
@@ -193,13 +193,16 @@ void RAGE_GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE
 		//load_vertex_array_object VAO
 		if (current_primitive->non_interleaved_vertex_array_objects.find(key) != current_primitive->non_interleaved_vertex_array_objects.end())
 			delete current_primitive->non_interleaved_vertex_array_objects[key];
-		current_primitive->non_interleaved_vertex_array_objects[key]->link_attributes(current_primitive->non_interleaved_vertex_buffer_objects[key], value, RAGE_GLB_loader::get_attribute_type_size(attribute_type), gl_data_type, 0, 0);
+		current_primitive->non_interleaved_vertex_array_objects[key] = new vertex_array();
+		if (current_primitive->non_interleaved_vertex_array_objects[key] == NULL)
+			throw std::runtime_error("Vertices error. Failed to allocate memory.");
+		current_primitive->non_interleaved_vertex_array_objects[key]->link_attributes(current_primitive->non_interleaved_vertex_buffer_objects[key], value, GLB_loader::get_attribute_type_size(attribute_type), gl_data_type, 0, 0);
 	}
 	if (current_primitive->interleave_vbos() == false)
 		throw std::runtime_error("Failed to interleave vbos for primitive: " + std::to_string(primitive_index) + ".");
 }
 
-void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
+void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
 {
 	if (primitive["indices"].is_null())
 		return;
@@ -238,7 +241,7 @@ void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object 
 		primitives->push_back(primitive);
 	}
 	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
-	GLenum gl_data_type = RAGE_GLB_loader::component_type_to_gl_type(componentType);
+	GLenum gl_data_type = GLB_loader::component_type_to_gl_type(componentType);
 	if (gl_data_type == GL_NONE)
 		return;
 	current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
@@ -246,7 +249,7 @@ void RAGE_GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object 
 		throw std::runtime_error("Indices error. Failed to allocate memory.");
 }
 
-void RAGE_GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object)
+void GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object)
 {
 	if (node["mesh"].is_null())
 		return;
@@ -267,7 +270,7 @@ void RAGE_GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json,
 	}
 }
 
-RAGE_object *RAGE_GLB_loader::load_node(nlohmann::json &node)
+RAGE_object *GLB_loader::load_node(nlohmann::json &node)
 {
 	RAGE_object *object = new RAGE_object();
 	if (object == NULL)
@@ -290,7 +293,7 @@ RAGE_object *RAGE_GLB_loader::load_node(nlohmann::json &node)
 	return (object);
 }
 
-void RAGE_GLB_loader::load_nodes(RAGE_scene *scene, nlohmann::json &json_scene)
+void GLB_loader::load_nodes(RAGE_scene *scene, nlohmann::json &json_scene)
 {
 	std::vector<RAGE_object *> *objects = scene->get_objects();
 	for (int i = 0; i < json["nodes"].size(); i++)
@@ -321,7 +324,7 @@ void RAGE_GLB_loader::load_nodes(RAGE_scene *scene, nlohmann::json &json_scene)
 	}
 }
 
-void RAGE_GLB_loader::delete_scenes()
+void GLB_loader::delete_scenes()
 {
 	for (size_t count = 0; count < this->scenes.size(); count += 1)
 	{
@@ -331,9 +334,9 @@ void RAGE_GLB_loader::delete_scenes()
 	this->scenes.clear();
 }
 
-void RAGE_GLB_loader::print_info()
+void GLB_loader::print_info()
 {
-	std::string debug_string = "\n*** RAGE_GLB_loader::debug ***\n";
+	std::string debug_string = "\n*** GLB_loader::debug ***\n";
 	debug_string += "scenes: " + std::to_string(this->scenes.size()) + "\n";
 	for (size_t scene_index = 0; scene_index < this->scenes.size(); scene_index += 1)
 	{
@@ -380,7 +383,7 @@ void RAGE_GLB_loader::print_info()
 	std::cout << debug_string;
 }
 
-RAGE_scene *RAGE_GLB_loader::load(const char *path)
+RAGE_scene *GLB_loader::load(const char *path)
 {
 	std::ifstream file;
 
@@ -418,7 +421,7 @@ RAGE_scene *RAGE_GLB_loader::load(const char *path)
 	}
 	catch (const std::exception &e)
 	{
-		std::cerr << "RAGE_GLB_loader::load with path: \"" << path << "\", has error: " << e.what() << std::endl;
+		std::cerr << "GLB_loader::load with path: \"" << path << "\", has error: " << e.what() << std::endl;
 		return (NULL);
 	}
 }

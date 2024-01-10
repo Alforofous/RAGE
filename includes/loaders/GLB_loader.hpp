@@ -4,7 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 
-class RAGE_GLB_loader
+class GLB_loader
 {
 public:
 	// Load a GLB file from the given path. Returns a pointer to default scene.

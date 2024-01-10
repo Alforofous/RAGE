@@ -2,7 +2,7 @@
 #include "RAGE_primitive.hpp"
 #include "RAGE_primitive_objects.hpp"
 #include "physics/RAGE_ray_tracing.hpp"
-#include "loaders/RAGE_GLB_loader.hpp"
+#include "loaders/GLB_loader.hpp"
 
 RAGE *get_rage()
 {
@@ -45,7 +45,7 @@ int main(void)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	RAGE_GLB_loader glb_loader;
+	GLB_loader glb_loader;
 	glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
 	//glb_loader.load((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());	
 

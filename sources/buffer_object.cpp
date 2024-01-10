@@ -1,5 +1,5 @@
 #include "buffer_object.hpp"
-#include "loaders/RAGE_GLB_loader.hpp"
+#include "loaders/GLB_loader.hpp"
 #include <iostream>
 
 buffer_object::buffer_object(GLenum buffer_type, GLenum data_type, void *data, GLsizeiptr byte_size)
@@ -18,7 +18,7 @@ void buffer_object::init(GLenum buffer_type, GLenum data_type, void *data, GLsiz
 	this->data_type = data_type;
 	this->data = data;
 	this->byte_size = byte_size;
-	GLsizeiptr gl_data_type_size = RAGE_GLB_loader::sizeof_gl_data_type(data_type);
+	GLsizeiptr gl_data_type_size = GLB_loader::sizeof_gl_data_type(data_type);
 	if (gl_data_type_size != 0)
 		this->vertex_count = byte_size / gl_data_type_size;
 	else
@@ -54,7 +54,7 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 {
 	void *gl_buffer_data;
 	buffer_object *gl_buffer_object;
-	GLsizeiptr size = count * RAGE_GLB_loader::sizeof_gl_data_type(data_type);
+	GLsizeiptr size = count * GLB_loader::sizeof_gl_data_type(data_type);
 	if (size == 0)
 		return (NULL);
 
@@ -65,7 +65,7 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 
 void buffer_object::print_data(int stride_size)
 {
-	GLsizeiptr data_type_size = RAGE_GLB_loader::sizeof_gl_data_type(this->data_type);
+	GLsizeiptr data_type_size = GLB_loader::sizeof_gl_data_type(this->data_type);
 	if (data_type_size == 0)
 		return;
 
