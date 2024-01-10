@@ -25,6 +25,7 @@ set(
 	LOADERS_SOURCES
 	GLB_loader.cpp
 	GLB_attribute_buffer.cpp
+	GLB_utilities.cpp
 )
 list(TRANSFORM LOADERS_SOURCES PREPEND ${SOURCES_DIRECTORY}/${LOADERS_DIRECTORY}/)
 
@@ -47,6 +48,7 @@ set(
 	LOADERS_INCLUDES
 	GLB_loader.hpp
 	GLB_attribute_buffer.hpp
+	GLB_utilities.hpp
 )
 list(TRANSFORM LOADERS_INCLUDES PREPEND ${INCLUDES_DIRECTORY}/${LOADERS_DIRECTORY}/)
 

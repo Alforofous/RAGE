@@ -1,5 +1,5 @@
 #include "buffer_object.hpp"
-#include "loaders/GLB_loader.hpp"
+#include "loaders/GLB_utilities.hpp"
 #include <iostream>
 
 buffer_object::buffer_object(GLenum buffer_type, GLenum data_type, void *data, GLsizeiptr byte_size)
@@ -16,45 +16,30 @@ void buffer_object::init(GLenum buffer_type, GLenum data_type, void *data, GLsiz
 {
 	this->buffer_type = buffer_type;
 	this->data_type = data_type;
-	this->data = data;
+	this->data.assign((uint8_t *)data, (uint8_t *)data + byte_size);
 	this->byte_size = byte_size;
-	GLsizeiptr gl_data_type_size = GLB_loader::sizeof_gl_data_type(data_type);
+	GLsizeiptr gl_data_type_size = GLB_utilities::gl_data_type_size(data_type);
 	if (gl_data_type_size != 0)
 		this->vertex_count = byte_size / gl_data_type_size;
 	else
 		this->vertex_count = 0;
 	glGenBuffers(1, &this->id);
 	glBindBuffer(this->buffer_type, this->id);
-	glBufferData(this->buffer_type, this->byte_size, this->data, GL_STATIC_DRAW);
+	glBufferData(this->buffer_type, this->byte_size, this->data.data(), GL_STATIC_DRAW);
 }
 
-void buffer_object::push_back(void *data, GLsizeiptr byte_size)
+void buffer_object::update_gl_buffer()
 {
 	glBindBuffer(this->buffer_type, this->id);
-	glBufferData(this->buffer_type, this->byte_size + byte_size, NULL, GL_STATIC_DRAW);
-	glBufferSubData(this->buffer_type, this->byte_size, byte_size, data);
-	this->byte_size += byte_size;
-}
-
-void buffer_object::push_empty(GLsizeiptr byte_size)
-{
-	glBindBuffer(this->buffer_type, this->id);
-	glBufferData(this->buffer_type, this->byte_size + byte_size, NULL, GL_STATIC_DRAW);
-	glBufferSubData(this->buffer_type, this->byte_size, byte_size, NULL);
-	this->byte_size += byte_size;
-}
-
-void buffer_object::update_data(void *data, GLsizeiptr byte_size)
-{
-	glBindBuffer(this->buffer_type, this->id);
-	glBufferSubData(this->buffer_type, 0, byte_size, data);
+	this->byte_size = this->data.size();
+	glBufferData(this->buffer_type, this->byte_size, this->data.data(), GL_STATIC_DRAW);
 }
 
 buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type)
 {
 	void *gl_buffer_data;
 	buffer_object *gl_buffer_object;
-	GLsizeiptr size = count * GLB_loader::sizeof_gl_data_type(data_type);
+	GLsizeiptr size = count * GLB_utilities::gl_data_type_size(data_type);
 	if (size == 0)
 		return (NULL);
 
@@ -65,12 +50,13 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 
 void buffer_object::print_data(int stride_size)
 {
-	GLsizeiptr data_type_size = GLB_loader::sizeof_gl_data_type(this->data_type);
+	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(this->data_type);
 	if (data_type_size == 0)
-		return;
+		data_type_size = 1;
 
 	int stride = 0;
-	for (uint8_t *ptr = (uint8_t *)this->data; ptr < (uint8_t *)this->data + this->byte_size; ptr += data_type_size)
+	std::cout << "BUFFER DATA [" << this->byte_size << " bytes]:\n";
+	for (uint8_t *ptr = (uint8_t *)this->data.data(); ptr < (uint8_t *)this->data.data() + this->byte_size; ptr += data_type_size)
 	{
 		if (this->data_type == GL_BYTE)
 			std::cout << (int)*(int8_t *)ptr;
@@ -89,7 +75,43 @@ void buffer_object::print_data(int stride_size)
 		else if (this->data_type == GL_DOUBLE)
 			std::cout << *(double *)ptr;
 		else
-			std::cout << "Unknown data type";
+			std::cout << "GL_NONE: [" << (int)*(uint8_t *)ptr << "]";
+		if (stride % stride_size == stride_size - 1)
+			std::cout << std::endl;
+		else
+			std::cout << " ";
+		stride += 1;
+	}
+}
+
+void buffer_object::print_data(int stride_size, GLenum data_type)
+{
+	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(this->data_type);
+	if (data_type_size == 0)
+		data_type_size = 1;
+
+	int stride = 0;
+	std::cout << "BUFFER DATA [" << this->byte_size << " bytes]:\n";
+	for (uint8_t *ptr = (uint8_t *)this->data.data(); ptr < (uint8_t *)this->data.data() + this->byte_size; ptr += data_type_size)
+	{
+		if (data_type == GL_BYTE)
+			std::cout << (int)*(int8_t *)ptr;
+		else if (data_type == GL_UNSIGNED_BYTE)
+			std::cout << (int)*(uint8_t *)ptr;
+		else if (data_type == GL_SHORT)
+			std::cout << *(int16_t *)ptr;
+		else if (data_type == GL_UNSIGNED_SHORT)
+			std::cout << *(uint16_t *)ptr;
+		else if (data_type == GL_INT)
+			std::cout << *(int32_t *)ptr;
+		else if (data_type == GL_UNSIGNED_INT)
+			std::cout << *(uint32_t *)ptr;
+		else if (data_type == GL_FLOAT)
+			std::cout << *(float *)ptr;
+		else if (data_type == GL_DOUBLE)
+			std::cout << *(double *)ptr;
+		else
+			std::cout << "GL_NONE: [" << (int)*(uint8_t *)ptr << "]";
 		if (stride % stride_size == stride_size - 1)
 			std::cout << std::endl;
 		else
@@ -100,7 +122,7 @@ void buffer_object::print_data(int stride_size)
 
 void *buffer_object::get_data()
 {
-	return (this->data);
+	return (this->data.data());
 }
 
 GLuint buffer_object::get_byte_size()

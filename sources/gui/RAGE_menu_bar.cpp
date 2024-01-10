@@ -9,7 +9,7 @@ static void exit_callback(RAGE *rage)
 
 static void add_cube_callback(RAGE *rage)
 {
-	rage->scene.add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f));
+	rage->scene->add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f));
 }
 
 RAGE_menu_bar::RAGE_menu_bar()

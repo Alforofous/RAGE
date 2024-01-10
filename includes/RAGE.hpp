@@ -28,7 +28,7 @@ public:
 	RAGE_shader *shader;
 	RAGE_gui *gui;
 	RAGE_user_input *user_input;
-	RAGE_scene scene;
+	RAGE_scene *scene;
 	double delta_time;
 	std::string executable_path;
 

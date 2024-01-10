@@ -46,8 +46,12 @@ int main(void)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	GLB_loader glb_loader;
-	glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
+	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
+	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
+	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
 	//glb_loader.load((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());	
+	if (rage->scene == NULL)
+		return (1);
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{

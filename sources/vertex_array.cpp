@@ -6,9 +6,9 @@ vertex_array::vertex_array()
 	glGenVertexArrays(1, &id);
 }
 
-void vertex_array::link_attributes(buffer_object *vertex_buffer_object, GLuint layout, GLuint component_count, GLenum gl_data_type, GLsizei stride, void *offset)
+void vertex_array::link_attributes(buffer_object *vertex_buffer_object, GLuint layout, GLuint component_count, GLenum gl_data_type, GLsizei stride, void *offset, std::string name)
 {
-	linked_attributes[layout] = {vertex_buffer_object, component_count, gl_data_type, stride, offset};
+	linked_attributes[layout] = {vertex_buffer_object, component_count, gl_data_type, stride, offset, name};
 
 	vertex_buffer_object->bind();
 	glVertexAttribPointer(layout, component_count, gl_data_type, GL_FALSE, stride, offset);
@@ -37,8 +37,10 @@ std::string vertex_array::get_linked_attribute_data(GLuint layout)
 	if (linked_attributes.find(layout) == linked_attributes.end())
 		return ("No attribute found for layout " + std::to_string(layout) + ".");
 	GL_attribute linked_attribute = linked_attributes[layout];
-	std::string result = "Attribute for layout " + std::to_string(layout) + ":\n";
+	std::string result = linked_attribute.name + " ATTRIBUTE:\n";
 	void *data = linked_attribute.vertex_buffer_object->get_data();
+	if (data == NULL)
+		return ("Data is NULL.");
 	GLuint byte_size = linked_attribute.vertex_buffer_object->get_byte_size();
 	if (linked_attribute.data_type == GL_BYTE)
 		result += get_attribute_data_with_data_type<GLbyte>(data, byte_size, linked_attribute.component_count);
@@ -75,6 +77,13 @@ std::string vertex_array::get_linked_attributes_data()
 const std::map<GLuint, GL_attribute> *vertex_array::get_linked_attributes() const
 {
 	return (&linked_attributes);
+}
+
+const GL_attribute *vertex_array::get_linked_attribute(GLuint layout)
+{
+	if (linked_attributes.find(layout) == linked_attributes.end())
+		return (NULL);
+	return (&linked_attributes[layout]);
 }
 
 void vertex_array::bind()

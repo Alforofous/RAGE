@@ -42,8 +42,8 @@ void RAGE_inspector::draw(RAGE *rage)
 	ImGui::Text("Fov: %f", rage->camera.m_perspective_matrix[0][0]);
 
 	ImGui::Separator();
-	ImGui::Text("Scene object count: %zu", rage->scene.get_objects()->size());
-	std::vector<RAGE_object *> *selected_objects = rage->scene.get_selected_objects();
+	ImGui::Text("Scene object count: %zu", rage->scene->get_objects()->size());
+	std::vector<RAGE_object *> *selected_objects = rage->scene->get_selected_objects();
 	ImGui::Text("Selected object count: %zu", selected_objects->size());
 	ImGui::Separator();
 	for (int i = 0; i < selected_objects->size(); i++)

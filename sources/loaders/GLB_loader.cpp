@@ -1,91 +1,15 @@
 #include "loaders/GLB_loader.hpp"
+#include "loaders/GLB_utilities.hpp"
+#include "loaders/GLB_attribute_buffer.hpp"
+#include "buffer_object.hpp"
+
 #include "nlohmann/json.hpp"
+
 #include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <queue>
-#include "buffer_object.hpp"
-
-GLsizeiptr GLB_loader::sizeof_gl_data_type(GLenum gl_type)
-{
-	if (gl_type == GL_BYTE)
-		return (sizeof(GLbyte));
-	else if (gl_type == GL_UNSIGNED_BYTE)
-		return (sizeof(GLubyte));
-	else if (gl_type == GL_SHORT)
-		return (sizeof(GLshort));
-	else if (gl_type == GL_UNSIGNED_SHORT)
-		return (sizeof(GLushort));
-	else if (gl_type == GL_INT)
-		return (sizeof(GLint));
-	else if (gl_type == GL_UNSIGNED_INT)
-		return (sizeof(GLuint));
-	else if (gl_type == GL_HALF_FLOAT)
-		return (sizeof(GLhalf));
-	else if (gl_type == GL_FLOAT)
-		return (sizeof(GLfloat));
-	else if (gl_type == GL_DOUBLE)
-		return (sizeof(GLdouble));
-	else
-		return (0);
-}
-
-GLsizeiptr GLB_loader::get_attribute_type_size(std::string attribute_type)
-{
-	if (attribute_type == "SCALAR")
-		return (1);
-	else if (attribute_type == "VEC2")
-		return (2);
-	else if (attribute_type == "VEC3")
-		return (3);
-	else if (attribute_type == "VEC4")
-		return (4);
-	else if (attribute_type == "MAT2")
-		return (4);
-	else if (attribute_type == "MAT3")
-		return (9);
-	else if (attribute_type == "MAT4")
-		return (16);
-	else
-		return (0);
-}
-
-GLenum GLB_loader::component_type_to_gl_type(int glb_component_type)
-{
-	if (glb_component_type == 5120)
-		return (GL_BYTE);
-	else if (glb_component_type == 5121)
-		return (GL_UNSIGNED_BYTE);
-	else if (glb_component_type == 5122)
-		return (GL_SHORT);
-	else if (glb_component_type == 5123)
-		return (GL_UNSIGNED_SHORT);
-	else if (glb_component_type == 5125)
-		return (GL_UNSIGNED_INT);
-	else if (glb_component_type == 5126)
-		return (GL_FLOAT);
-	else
-		return (GL_NONE);
-}
-
-int GLB_loader::gl_type_to_component_type(GLenum gl_type)
-{
-	if (gl_type == GL_BYTE)
-		return (5120);
-	else if (gl_type == GL_UNSIGNED_BYTE)
-		return (5121);
-	else if (gl_type == GL_SHORT)
-		return (5122);
-	else if (gl_type == GL_UNSIGNED_SHORT)
-		return (5123);
-	else if (gl_type == GL_UNSIGNED_INT)
-		return (5125);
-	else if (gl_type == GL_FLOAT)
-		return (5126);
-	else
-		return (-1);
-}
 
 static bool check_glb_header(std::ifstream &file)
 {
@@ -129,7 +53,7 @@ RAGE_scene *GLB_loader::load_scene_at_index(size_t scene_index)
 	return (scene);
 }
 
-void GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
+void GLB_loader::load_glb_attribute_buffers(nlohmann::json &primitive, RAGE_object *object, int primitive_index)
 {
 	if (primitive["attributes"].is_null())
 		return;
@@ -142,8 +66,16 @@ void GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_obje
 		primitives->push_back(primitive);
 	}
 	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
+	if (current_primitive->attribute_buffers.size() > 0)
+	{
+		for (size_t count = 0; count < current_primitive->attribute_buffers.size(); count += 1)
+		{
+			if (current_primitive->attribute_buffers[count] != NULL)
+				delete current_primitive->attribute_buffers[count];
+		}
+		current_primitive->attribute_buffers.clear();
+	}
 
-	printf("PRIMITIVE[%d]\n", primitive_index);
 	for (nlohmann::json::iterator it = attributes.begin(); it != attributes.end(); ++it)
 	{
 		std::string key = it.key();
@@ -169,6 +101,8 @@ void GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_obje
 			continue;
 		std::string attribute_type = accessor["type"];
 
+		printf("Key: %s\n", key.c_str());
+		printf("Attribute type: %s\n", attribute_type.c_str());
 		if (accessor["count"].is_null())
 			continue;
 		size_t count = accessor["count"];
@@ -179,24 +113,15 @@ void GLB_loader::load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_obje
 		if (buffer_view["byteOffset"].is_null() == false)
 			byte_offset += buffer_view["byteOffset"].get<int>();
 
-		GLenum gl_data_type = GLB_loader::component_type_to_gl_type(componentType);
+		GLenum gl_data_type = GLB_utilities::component_type_to_gl_type(componentType);
 		if (gl_data_type == GL_NONE)
 			continue;
 
-		//load_vertex_buffer_object VBO
-		if (current_primitive->non_interleaved_vertex_buffer_objects.find(key) != current_primitive->non_interleaved_vertex_buffer_objects.end())
-			delete current_primitive->non_interleaved_vertex_buffer_objects[key];
-		current_primitive->non_interleaved_vertex_buffer_objects[key] = buffer_object::create_from_glb_buffer(GL_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
-		if (current_primitive->non_interleaved_vertex_buffer_objects[key] == NULL)
-			throw std::runtime_error("Vertices error. Failed to allocate memory.");
-
-		//load_vertex_array_object VAO
-		if (current_primitive->non_interleaved_vertex_array_objects.find(key) != current_primitive->non_interleaved_vertex_array_objects.end())
-			delete current_primitive->non_interleaved_vertex_array_objects[key];
-		current_primitive->non_interleaved_vertex_array_objects[key] = new vertex_array();
-		if (current_primitive->non_interleaved_vertex_array_objects[key] == NULL)
-			throw std::runtime_error("Vertices error. Failed to allocate memory.");
-		current_primitive->non_interleaved_vertex_array_objects[key]->link_attributes(current_primitive->non_interleaved_vertex_buffer_objects[key], value, GLB_loader::get_attribute_type_size(attribute_type), gl_data_type, 0, 0);
+		GLsizeiptr component_count = GLB_utilities::get_attribute_component_count(attribute_type);
+		GLB_attribute_buffer *attribute_buffer = new GLB_attribute_buffer(this->binary_buffer.data(), byte_offset, count / component_count, key, component_count, gl_data_type);
+		if (attribute_buffer == NULL)
+			throw std::runtime_error("Failed to allocate memory for attribute buffer.");
+		current_primitive->attribute_buffers.push_back(attribute_buffer);
 	}
 	if (current_primitive->interleave_vbos() == false)
 		throw std::runtime_error("Failed to interleave vbos for primitive: " + std::to_string(primitive_index) + ".");
@@ -241,7 +166,7 @@ void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *obje
 		primitives->push_back(primitive);
 	}
 	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
-	GLenum gl_data_type = GLB_loader::component_type_to_gl_type(componentType);
+	GLenum gl_data_type = GLB_utilities::component_type_to_gl_type(componentType);
 	if (gl_data_type == GL_NONE)
 		return;
 	current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
@@ -266,7 +191,7 @@ void GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE
 	{
 		nlohmann::json &primitive = mesh["primitives"][i];
 		load_primitive_ebo(primitive, object, i);
-		load_primitive_vbo_and_vao(primitive, object, i);
+		load_glb_attribute_buffers(primitive, object, i);
 	}
 }
 
@@ -373,6 +298,13 @@ void GLB_loader::print_info()
 				debug_string += "\t}\n";
 			else
 				debug_string += "\t},\n";
+			RAGE_mesh *mesh = object->mesh;
+			for (size_t primitive_index = 0; primitive_index < mesh->primitives.size(); primitive_index += 1)
+			{
+				RAGE_primitive *primitive = mesh->primitives[primitive_index];
+				debug_string += "\t\tprimitive_index: " + std::to_string(primitive_index) + "\n";
+				//debug_string += primitive->vertex_array_object->get_linked_attributes_data();
+			}
 		}
 		if (scene_index == this->scenes.size() - 1)
 			debug_string += "}\n";

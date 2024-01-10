@@ -37,7 +37,7 @@ void RAGE_scene_view::draw(RAGE *rage)
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	rage->scene.draw();
+	rage->scene->draw();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
