@@ -1,4 +1,6 @@
 #include "vertex_array.hpp"
+#include "loaders/GLB_utilities.hpp"
+
 #include <string>
 
 vertex_array::vertex_array()
@@ -27,13 +29,17 @@ static std::string get_attribute_data_with_data_type(void *data, size_t size, GL
 	printf("end: %p\n", end);
 	printf("stride: %d\n", attribute.stride);
 	int i = 0;
+	GLenum data_type = attribute.data_type;
+	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(data_type);
 	for (uint8_t *typed_data = start; typed_data < end; typed_data += attribute.stride)
 	{
-		result += std::to_string(*((T *)typed_data));
-		if (i % attribute.component_count == attribute.component_count - 1)
-			result += "\n";
-		else
-			result += " ";
+		result += "offset: " + std::to_string((size_t)typed_data - (size_t)data) + " ";
+		for (size_t j = 0; j < attribute.component_count; j++)
+		{
+			result += std::to_string(*((T *)(typed_data + j * data_type_size))) + " ";
+		}
+
+		result += "\n";
 		i += 1;
 	}
 	return (result);

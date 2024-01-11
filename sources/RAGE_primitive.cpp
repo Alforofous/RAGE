@@ -50,6 +50,7 @@ bool RAGE_primitive::interleave_vbos()
 		}
 	}
 	interleaved_vbo->update_gl_buffer();
+	interleaved_vbo->print_data(3, GL_FLOAT);
 	if (this->vertex_array_object != NULL)
 		delete this->vertex_array_object;
 	this->vertex_array_object = new (std::nothrow) vertex_array();
@@ -61,14 +62,14 @@ bool RAGE_primitive::interleave_vbos()
 	{
 		GLB_attribute_buffer *attribute_buffer = this->attribute_buffers[i];
 		attribute_buffer->print_data();
-		stride += GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type());
+		stride += GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type()) * attribute_buffer->get_component_count();
 	}
 
+	GLsizeiptr offset = 0;
 	for (size_t i = 0; i < this->attribute_buffers.size(); i++)
 	{
 		GLB_attribute_buffer *attribute_buffer = this->attribute_buffers[i];
 
-		GLsizeiptr offset = 0;
 		GLsizeiptr attribute_type_byte_size = GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type());
 		GLuint layout = GLB_utilities::get_attribute_layout_from_attribute_string(attribute_buffer->get_name());
 		this->vertex_array_object->link_attributes(interleaved_vbo, layout, attribute_buffer->get_component_count(), attribute_buffer->get_gl_data_type(), stride, (void *)offset, attribute_buffer->get_name());

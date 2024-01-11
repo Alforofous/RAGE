@@ -28,11 +28,21 @@ GLsizeiptr GLB_utilities::gl_data_type_size(GLenum gl_type)
 GLuint GLB_utilities::get_attribute_layout_from_attribute_string(std::string attribute_name)
 {
 	if (attribute_name == "POSITION")
-		return (POSITION_LAYOUT);
+		return POSITION_LAYOUT;
 	else if (attribute_name == "COLOR_0")
-		return (COLOR_LAYOUT);
+		return COLOR_0_LAYOUT;
 	else if (attribute_name == "NORMAL")
-		return (NORMAL_LAYOUT);
+		return NORMAL_LAYOUT;
+	else if (attribute_name == "TANGENT")
+		return TANGENT_LAYOUT;
+	else if (attribute_name == "TEXCOORD_0")
+		return TEXCOORD_0_LAYOUT;
+	else if (attribute_name == "TEXCOORD_1")
+		return TEXCOORD_1_LAYOUT;
+	else if (attribute_name == "JOINTS_0")
+		return JOINTS_0_LAYOUT;
+	else if (attribute_name == "WEIGHTS_0")
+		return WEIGHTS_0_LAYOUT;
 	else
 		throw std::runtime_error("Unknown attribute name: " + attribute_name);
 	return (0);
