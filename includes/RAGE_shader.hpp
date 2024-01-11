@@ -10,8 +10,13 @@
 #include <vector>
 
 #define POSITION_LAYOUT 0
-#define COLOR_LAYOUT 1
-#define NORMAL_LAYOUT 2
+#define NORMAL_LAYOUT 1
+#define TEXCOORD_0_LAYOUT 2
+#define COLOR_0_LAYOUT 3
+#define TEXCOORD_1_LAYOUT 4
+#define JOINTS_0_LAYOUT 5
+#define WEIGHTS_0_LAYOUT 6
+#define TANGENT_LAYOUT 7
 
 class RAGE_shader
 {
