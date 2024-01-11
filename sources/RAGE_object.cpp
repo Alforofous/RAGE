@@ -21,6 +21,7 @@ void RAGE_object::draw_objects(RAGE_object **objects, size_t count)
 	for (size_t i = 0; i < count; i++)
 	{
 		RAGE_object *object = objects[i];
+		object->update_model_matrix();
 		object->draw();
 	}
 }
