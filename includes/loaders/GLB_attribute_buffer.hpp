@@ -9,7 +9,7 @@ public:
 	GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_offset, GLsizeiptr vertex_count, std::string name, GLsizeiptr component_count, GLenum gl_data_type);
 	~GLB_attribute_buffer();
 
-	void print_data();
+	std::string get_data_string();
 	std::string get_name();
 	GLsizeiptr get_component_count();
 	GLsizeiptr get_vertex_count();

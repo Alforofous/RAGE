@@ -2,6 +2,7 @@
 
 #include "glad/glad.h"
 #include <vector>
+#include <string>
 
 class buffer_object
 {
@@ -13,11 +14,12 @@ public:
 	void *get_data();
 	GLuint get_byte_size();
 	size_t get_vertex_count();
+	GLenum get_data_type();
 	void bind();
 	void unbind();
 	static buffer_object *create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type);
-	void print_data(int component_count);
-	void print_data(int component_count, GLenum data_type);
+	std::string get_buffer_data(int component_count);
+	std::string get_buffer_data(int component_count, GLenum data_type);
 	void update_gl_buffer();
 	std::vector<GLubyte> data;
 

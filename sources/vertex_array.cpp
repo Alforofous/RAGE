@@ -24,10 +24,6 @@ static std::string get_attribute_data_with_data_type(void *data, size_t size, GL
 	std::string result;
 	uint8_t *start = (uint8_t *)data + (size_t)attribute.offset;
 	uint8_t *end = (uint8_t *)data + size;
-	printf("offset: %p\n", attribute.offset);
-	printf("start: %p\n", start);
-	printf("end: %p\n", end);
-	printf("stride: %d\n", attribute.stride);
 	int i = 0;
 	GLenum data_type = attribute.data_type;
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(data_type);

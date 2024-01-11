@@ -50,7 +50,6 @@ bool RAGE_primitive::interleave_vbos()
 		}
 	}
 	interleaved_vbo->update_gl_buffer();
-	interleaved_vbo->print_data(3, GL_FLOAT);
 	if (this->vertex_array_object != NULL)
 		delete this->vertex_array_object;
 	this->vertex_array_object = new (std::nothrow) vertex_array();
@@ -61,7 +60,6 @@ bool RAGE_primitive::interleave_vbos()
 	for (size_t i = 0; i < this->attribute_buffers.size(); i++)
 	{
 		GLB_attribute_buffer *attribute_buffer = this->attribute_buffers[i];
-		attribute_buffer->print_data();
 		stride += GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type()) * attribute_buffer->get_component_count();
 	}
 
@@ -81,13 +79,26 @@ bool RAGE_primitive::interleave_vbos()
 	return (true);
 }
 
+#include "imgui/imgui.h"
+
 void RAGE_primitive::draw()
 {
+	this->interleaved_vertex_buffer_object->bind();
 	this->vertex_array_object->bind();
 	this->element_buffer_object->bind();
-	glDrawElements(GL_TRIANGLES, this->indices_count, GL_UNSIGNED_INT, 0);
+
+	ImGui::Text("Primitive: %s", this->name.c_str());
+	ImGui::Text("Indices count: %d", this->indices_count);
+	for (size_t i = 0; i < this->attribute_buffers.size(); i++)
+	{
+		ImGui::Text("Primitive attribute buffer info: %s", this->attribute_buffers[i]->get_data_string().c_str());
+	}
+	ImGui::Text("Primitive ebo info: %s", this->element_buffer_object->get_buffer_data(-1).c_str());
+	ImGui::Text("Primitive vao info: %s", this->vertex_array_object->get_linked_attributes_data().c_str());
+	glDrawElements(GL_TRIANGLES, this->indices_count, this->element_buffer_object->get_data_type(), (void *)0);
 	this->element_buffer_object->unbind();
 	this->vertex_array_object->unbind();
+	this->interleaved_vertex_buffer_object->unbind();
 }
 
 bool RAGE_primitive::is_initialized()

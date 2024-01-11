@@ -47,8 +47,8 @@ int main(void)
 
 	GLB_loader glb_loader;
 	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
-	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/CubeVertexColored3.glb").c_str());
-	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
+	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/CubeVertexColored3.glb").c_str());
+	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
 	//glb_loader.load((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());	
 	if (rage->scene == NULL)
 		return (1);

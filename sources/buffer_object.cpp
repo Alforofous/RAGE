@@ -48,76 +48,78 @@ buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std:
 	return (gl_buffer_object);
 }
 
-void buffer_object::print_data(int component_count)
+std::string buffer_object::get_buffer_data(int component_count)
 {
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(this->data_type);
 	if (data_type_size == 0)
 		data_type_size = 1;
 
 	int count = 0;
-	std::cout << "BUFFER DATA [" << this->byte_size << " bytes]:\n";
+	std::string buffer_data = "";
 	for (uint8_t *ptr = (uint8_t *)this->data.data(); ptr < (uint8_t *)this->data.data() + this->byte_size; ptr += data_type_size)
 	{
 		if (this->data_type == GL_BYTE)
-			std::cout << (int)*(int8_t *)ptr;
+			buffer_data += std::to_string((int)*(int8_t *)ptr);
 		else if (this->data_type == GL_UNSIGNED_BYTE)
-			std::cout << (int)*(uint8_t *)ptr;
+			buffer_data += std::to_string((int)*(uint8_t *)ptr);
 		else if (this->data_type == GL_SHORT)
-			std::cout << *(int16_t *)ptr;
+			buffer_data += std::to_string(*(int16_t *)ptr);
 		else if (this->data_type == GL_UNSIGNED_SHORT)
-			std::cout << *(uint16_t *)ptr;
+			buffer_data += std::to_string(*(uint16_t *)ptr);
 		else if (this->data_type == GL_INT)
-			std::cout << *(int32_t *)ptr;
+			buffer_data += std::to_string(*(int32_t *)ptr);
 		else if (this->data_type == GL_UNSIGNED_INT)
-			std::cout << *(uint32_t *)ptr;
+			buffer_data += std::to_string(*(uint32_t *)ptr);
 		else if (this->data_type == GL_FLOAT)
-			std::cout << *(float *)ptr;
+			buffer_data += std::to_string(*(float *)ptr);
 		else if (this->data_type == GL_DOUBLE)
-			std::cout << *(double *)ptr;
+			buffer_data += std::to_string(*(double *)ptr);
 		else
-			std::cout << "GL_NONE: [" << (int)*(uint8_t *)ptr << "]";
+			buffer_data += "GL_NONE: [" + std::to_string((int)*(uint8_t *)ptr) + "]";
 		if (count % component_count == component_count - 1)
-			std::cout << std::endl;
+			buffer_data += "\n";
 		else
-			std::cout << " ";
+			buffer_data += " ";
 		count += 1;
 	}
+	return (buffer_data);
 }
 
-void buffer_object::print_data(int component_count, GLenum data_type)
+std::string buffer_object::get_buffer_data(int component_count, GLenum data_type)
 {
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(data_type);
 	if (data_type_size == 0)
 		data_type_size = 1;
 
 	int count = 0;
-	std::cout << "BUFFER DATA [" << this->byte_size << " bytes]:\n";
+	std::string buffer_data = "";
 	for (uint8_t *ptr = (uint8_t *)this->data.data(); ptr < (uint8_t *)this->data.data() + this->byte_size; ptr += data_type_size)
 	{
 		if (data_type == GL_BYTE)
-			std::cout << (int)*(int8_t *)ptr;
+			buffer_data += std::to_string((int)*(int8_t *)ptr);
 		else if (data_type == GL_UNSIGNED_BYTE)
-			std::cout << (int)*(uint8_t *)ptr;
+			buffer_data += std::to_string((int)*(uint8_t *)ptr);
 		else if (data_type == GL_SHORT)
-			std::cout << *(int16_t *)ptr;
+			buffer_data += std::to_string(*(int16_t *)ptr);
 		else if (data_type == GL_UNSIGNED_SHORT)
-			std::cout << *(uint16_t *)ptr;
+			buffer_data += std::to_string(*(uint16_t *)ptr);
 		else if (data_type == GL_INT)
-			std::cout << *(int32_t *)ptr;
+			buffer_data += std::to_string(*(int32_t *)ptr);
 		else if (data_type == GL_UNSIGNED_INT)
-			std::cout << *(uint32_t *)ptr;
+			buffer_data += std::to_string(*(uint32_t *)ptr);
 		else if (data_type == GL_FLOAT)
-			std::cout << *(float *)ptr;
+			buffer_data += std::to_string(*(float *)ptr);
 		else if (data_type == GL_DOUBLE)
-			std::cout << *(double *)ptr;
+			buffer_data += std::to_string(*(double *)ptr);
 		else
-			std::cout << "GL_NONE: [" << (int)*(uint8_t *)ptr << "]";
+			buffer_data += "GL_NONE: [" + std::to_string((int)*(uint8_t *)ptr) + "]";
 		if (count % component_count == component_count - 1)
-			std::cout << std::endl;
+			buffer_data += "\n";
 		else
-			std::cout << " ";
+			buffer_data += " ";
 		count += 1;
 	}
+	return (buffer_data);
 }
 
 void *buffer_object::get_data()
@@ -133,6 +135,11 @@ GLuint buffer_object::get_byte_size()
 size_t buffer_object::get_vertex_count()
 {
 	return (this->vertex_count);
+}
+
+GLenum buffer_object::get_data_type()
+{
+	return (this->data_type);
 }
 
 void buffer_object::bind()

@@ -35,43 +35,44 @@ GLB_attribute_buffer::GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_o
 	memcpy(this->data, (GLubyte *)glb_buffer + byte_offset, this->byte_size);
 }
 
-void GLB_attribute_buffer::print_data()
+std::string GLB_attribute_buffer::get_data_string()
 {
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(this->gl_data_type);
 	if (data_type_size == 0)
-		return;
+		return ("");
 
 	int component_count = 0;
-	std::cout << this->name << " ATTRIBUTE [" << this->byte_size << " bytes] of type [" << GLB_utilities::gl_data_type_to_string(this->gl_data_type) << "] with [" << this->component_count << "] components and [" << this->vertex_count << "] vertices:" << std::endl;
+	std::string buffer_data = this->name + " ATTRIBUTE [" + std::to_string(this->byte_size) + " bytes] of type [" + GLB_utilities::gl_data_type_to_string(this->gl_data_type) + "] with [" + std::to_string(this->component_count) + "] components and [" + std::to_string(this->vertex_count) + "] vertices:\n";
 	for (uint8_t *ptr = (uint8_t *)this->data; ptr < (uint8_t *)this->data + this->byte_size; ptr += data_type_size)
 	{
 		if (this->gl_data_type == GL_BYTE)
-			std::cout << (int)*(int8_t *)ptr;
+			buffer_data += std::to_string((int)*(int8_t *)ptr);
 		else if (this->gl_data_type == GL_UNSIGNED_BYTE)
-			std::cout << (int)*(uint8_t *)ptr;
+			buffer_data += std::to_string((int)*(uint8_t *)ptr);
 		else if (this->gl_data_type == GL_SHORT)
-			std::cout << *(int16_t *)ptr;
+			buffer_data += std::to_string(*(int16_t *)ptr);
 		else if (this->gl_data_type == GL_UNSIGNED_SHORT)
-			std::cout << *(uint16_t *)ptr;
+			buffer_data += std::to_string(*(uint16_t *)ptr);
 		else if (this->gl_data_type == GL_INT)
-			std::cout << *(int32_t *)ptr;
+			buffer_data += std::to_string(*(int32_t *)ptr);
 		else if (this->gl_data_type == GL_UNSIGNED_INT)
-			std::cout << *(uint32_t *)ptr;
+			buffer_data += std::to_string(*(uint32_t *)ptr);
 		else if (this->gl_data_type == GL_HALF_FLOAT)
-			std::cout << *(uint16_t *)ptr;
+			buffer_data += std::to_string(*(uint16_t *)ptr);
 		else if (this->gl_data_type == GL_FLOAT)
-			std::cout << *(float *)ptr;
+			buffer_data += std::to_string(*(float *)ptr);
 		else if (this->gl_data_type == GL_DOUBLE)
-			std::cout << *(double *)ptr;
+			buffer_data += std::to_string(*(double *)ptr);
 		else
-			std::cout << "GL_NONE: [" << (int)*(uint8_t *)ptr << "]";
+			buffer_data += "GL_NONE: [" + std::to_string((int)*(uint8_t *)ptr) + "]";
 		if (component_count % this->component_count == this->component_count - 1)
-			std::cout << std::endl;
+			buffer_data += "\n";
 		else
-			std::cout << " ";
+			buffer_data += " ";
 		component_count += 1;
 	}
-	std::cout << std::endl;
+	buffer_data += "\n";
+	return (buffer_data);
 }
 
 std::string GLB_attribute_buffer::get_name()

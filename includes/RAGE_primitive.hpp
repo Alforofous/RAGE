@@ -21,5 +21,6 @@ public:
 	buffer_object *element_buffer_object;
 	std::vector<GLB_attribute_buffer *> attribute_buffers;
 	GLuint indices_count;
+	std::string name;
 private:
 };

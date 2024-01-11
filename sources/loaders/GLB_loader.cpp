@@ -101,8 +101,6 @@ void GLB_loader::load_glb_attribute_buffers(nlohmann::json &primitive, RAGE_obje
 			continue;
 		std::string attribute_type = accessor["type"];
 
-		printf("Key: %s\n", key.c_str());
-		printf("Attribute type: %s\n", attribute_type.c_str());
 		if (accessor["count"].is_null())
 			continue;
 		size_t count = accessor["count"];
@@ -166,6 +164,9 @@ void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *obje
 		primitives->push_back(primitive);
 	}
 	RAGE_primitive *current_primitive = (*primitives)[primitive_index];
+
+	if (primitive["name"].is_null() == false)
+		current_primitive->name = primitive["name"];
 	GLenum gl_data_type = GLB_utilities::component_type_to_gl_type(componentType);
 	if (gl_data_type == GL_NONE)
 		return;
@@ -187,7 +188,6 @@ void GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE
 	if (json["accessors"].is_null())
 		return;
 
-	printf("primitive count: %d\n", mesh["primitives"].size());
 	for (int i = 0; i < mesh["primitives"].size(); i += 1)
 	{
 		nlohmann::json &primitive = mesh["primitives"][i];
@@ -349,7 +349,7 @@ RAGE_scene *GLB_loader::load(const char *path)
 		if (this->json["scene"].is_null() == false)
 			default_scene_index = this->json["scene"];
 		RAGE_scene *default_scene = this->scenes[default_scene_index];
-		this->print_info();
+		//this->print_info();
 		return (default_scene);
 	}
 	catch (const std::exception &e)
