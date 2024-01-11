@@ -87,14 +87,13 @@ void RAGE_primitive::draw()
 	this->vertex_array_object->bind();
 	this->element_buffer_object->bind();
 
-	ImGui::Text("Primitive: %s", this->name.c_str());
-	ImGui::Text("Indices count: %d", this->indices_count);
-	for (size_t i = 0; i < this->attribute_buffers.size(); i++)
-	{
-		ImGui::Text("Primitive attribute buffer info: %s", this->attribute_buffers[i]->get_data_string().c_str());
-	}
-	ImGui::Text("Primitive ebo info: %s", this->element_buffer_object->get_buffer_data(-1).c_str());
-	ImGui::Text("Primitive vao info: %s", this->vertex_array_object->get_linked_attributes_data().c_str());
+	std::string debug_string;
+	debug_string += this->name + "\n";
+	debug_string += "Indices count: " + std::to_string(this->indices_count) + "\n";
+	debug_string += this->vertex_array_object->get_linked_attributes_data() + "\n";
+	debug_string += this->element_buffer_object->get_buffer_data(-1) + "\n";
+	debug_string += this->interleaved_vertex_buffer_object->get_buffer_data(3, GL_FLOAT) + "\n";
+	ImGui::Text(debug_string.c_str());
 	glDrawElements(GL_TRIANGLES, this->indices_count, this->element_buffer_object->get_data_type(), (void *)0);
 	this->element_buffer_object->unbind();
 	this->vertex_array_object->unbind();
