@@ -24,7 +24,6 @@ public:
 	void remove_mesh();
 
 	static void draw_objects(RAGE_object **objects, size_t count);
-	static void print_name(RAGE_object *object);
 	static void delete_object(RAGE_object *object);
 
 	polygon_mode polygon_mode;

@@ -48,11 +48,6 @@ void RAGE_object::draw()
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
-void RAGE_object::print_name(RAGE_object *object)
-{
-	printf("%s\n", object->name.c_str());
-}
-
 void RAGE_object::delete_object(RAGE_object *object)
 {
 	if (object != NULL)

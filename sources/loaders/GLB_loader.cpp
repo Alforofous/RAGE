@@ -242,7 +242,6 @@ void GLB_loader::load_nodes(RAGE_scene *scene, nlohmann::json &json_scene)
 	for (int i = 0; i < objects->size(); i++)
 	{
 		RAGE_object *object = (*objects)[i];
-		object->print_name(object);
 		for (int j = 0; j < object->children_indices.size(); j++)
 		{
 			int child_index = object->children_indices[j];
