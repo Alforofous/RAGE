@@ -1,7 +1,7 @@
 #version 330 core
 
 layout (location = 0) in vec3 position_attr;
-layout (location = 1) in vec4 color_attr;
+layout (location = 3) in vec4 color_attr;
 
 uniform vec2 u_resolution;
 uniform mat4 u_perspective_matrix;
