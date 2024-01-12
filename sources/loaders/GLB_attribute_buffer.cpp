@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <iostream>
 
-GLB_attribute_buffer::GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_offset, GLsizeiptr vertex_count, std::string name, GLsizeiptr component_count, GLenum gl_data_type)
+GLB_attribute_buffer::GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_offset, GLsizeiptr byte_stride, GLsizeiptr vertex_count, std::string name, GLsizeiptr component_count, GLenum gl_data_type)
 {
 	this->name = name;
 	this->component_count = component_count;
@@ -32,7 +32,23 @@ GLB_attribute_buffer::GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_o
 	else
 		throw std::runtime_error("GLB_attribute_buffer::GLB_attribute_buffer(): unknown gl_data_type for attribute: " + name);
 
-	memcpy(this->data, (GLubyte *)glb_buffer + byte_offset, this->byte_size);
+	GLubyte *src = (GLubyte *)glb_buffer + byte_offset;
+	GLubyte *dst = (GLubyte *)this->data;
+
+	if (byte_stride == 0 || byte_stride == component_count * GLB_utilities::gl_data_type_size(gl_data_type))
+	{
+		memcpy(dst, src, this->byte_size);
+	}
+	else
+	{
+		GLsizeiptr element_size = component_count * GLB_utilities::gl_data_type_size(gl_data_type);
+		for (GLsizeiptr i = 0; i < vertex_count; ++i)
+		{
+			memcpy(dst, src, element_size);
+			src += byte_stride;
+			dst += element_size;
+		}
+	}
 }
 
 std::string GLB_attribute_buffer::get_data_string()

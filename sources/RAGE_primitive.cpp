@@ -98,8 +98,12 @@ void RAGE_primitive::draw()
 	debug_string += "Indices count: " + std::to_string(this->indices_count) + "\n";
 	debug_string += this->vertex_array_object->get_linked_attributes_data() + "\n";
 	debug_string += this->element_buffer_object->get_buffer_data(-1) + "\n";
-	debug_string += this->interleaved_vertex_buffer_object->get_buffer_data(3, GL_FLOAT) + "\n";
-	ImGui::Text(debug_string.c_str());
+	for (size_t i = 0; i < this->attribute_buffers.size(); i++)
+	{
+		debug_string += this->attribute_buffers[i]->get_data_string() + "\n";
+	}
+	ImGui::Text("%s\n", debug_string.c_str());
+	ImGui::SetClipboardText(debug_string.c_str());
 	glDrawElements(GL_TRIANGLES, this->indices_count, this->element_buffer_object->get_data_type(), (void *)0);
 	glGetError();
 	this->interleaved_vertex_buffer_object->unbind();

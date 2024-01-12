@@ -30,12 +30,12 @@ void buffer_object::init(GLenum buffer_type, GLenum data_type, void *data, GLsiz
 
 void buffer_object::update_gl_buffer()
 {
-	glBindBuffer(this->buffer_type, this->id);
+	this->bind();
 	this->byte_size = this->data.size();
 	glBufferData(this->buffer_type, this->byte_size, this->data.data(), GL_STATIC_DRAW);
 }
 
-buffer_object *buffer_object::create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type)
+buffer_object *buffer_object::create_ebo_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type)
 {
 	void *gl_buffer_data;
 	buffer_object *gl_buffer_object;

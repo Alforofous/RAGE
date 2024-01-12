@@ -6,7 +6,7 @@
 class GLB_attribute_buffer
 {
 public:
-	GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_offset, GLsizeiptr vertex_count, std::string name, GLsizeiptr component_count, GLenum gl_data_type);
+	GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_offset, GLsizeiptr byte_stride, GLsizeiptr vertex_count, std::string name, GLsizeiptr component_count, GLenum gl_data_type);
 	~GLB_attribute_buffer();
 
 	std::string get_data_string();

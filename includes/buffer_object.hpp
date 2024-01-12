@@ -17,7 +17,7 @@ public:
 	GLenum get_data_type();
 	void bind();
 	void unbind();
-	static buffer_object *create_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type);
+	static buffer_object *create_ebo_from_glb_buffer(GLenum gl_buffer_type, std::vector<char> &glb_buffer, size_t byte_offset, size_t count, GLenum data_type);
 	std::string get_buffer_data(int component_count);
 	std::string get_buffer_data(int component_count, GLenum data_type);
 	void update_gl_buffer();

@@ -111,12 +111,16 @@ void GLB_loader::load_glb_attribute_buffers(nlohmann::json &primitive, RAGE_obje
 		if (buffer_view["byteOffset"].is_null() == false)
 			byte_offset += buffer_view["byteOffset"].get<int>();
 
+		int byte_stride = 0;
+		if (buffer_view["byteStride"].is_null() == false)
+			byte_stride = buffer_view["byteStride"].get<int>();
+
 		GLenum gl_data_type = GLB_utilities::component_type_to_gl_type(componentType);
 		if (gl_data_type == GL_NONE)
 			continue;
 
 		GLsizeiptr component_count = GLB_utilities::get_attribute_component_count(attribute_type);
-		GLB_attribute_buffer *attribute_buffer = new GLB_attribute_buffer(this->binary_buffer.data(), byte_offset, count / component_count, key, component_count, gl_data_type);
+		GLB_attribute_buffer *attribute_buffer = new GLB_attribute_buffer(this->binary_buffer.data(), byte_offset, byte_stride, count, key, component_count, gl_data_type);
 		if (attribute_buffer == NULL)
 			throw std::runtime_error("Failed to allocate memory for attribute buffer.");
 		current_primitive->attribute_buffers.push_back(attribute_buffer);
@@ -146,10 +150,18 @@ void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *obje
 	if (indices_accessor["componentType"].is_null())
 		return;
 	int componentType = indices_accessor["componentType"];
+	if (componentType != GL_UNSIGNED_BYTE && componentType != GL_UNSIGNED_SHORT && componentType != GL_UNSIGNED_INT)
+		return;
 
 	if (indices_accessor["count"].is_null())
 		return;
 	size_t count = indices_accessor["count"];
+
+	if (buffer_view["target"].is_null() == false && buffer_view["target"] != GL_ELEMENT_ARRAY_BUFFER)
+		return;
+
+	if (buffer_view["byteStride"].is_null() == false)
+		return;
 
 	int byte_offset = 0;
 	if (indices_accessor["byteOffset"].is_null() == false)
@@ -170,7 +182,8 @@ void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *obje
 	GLenum gl_data_type = GLB_utilities::component_type_to_gl_type(componentType);
 	if (gl_data_type == GL_NONE)
 		return;
-	current_primitive->element_buffer_object = buffer_object::create_from_glb_buffer(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
+	current_primitive->element_buffer_object = buffer_object::create_ebo_from_glb_buffer(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
+	std::cout << "ebo after set: " << current_primitive->element_buffer_object->get_buffer_data(1);
 	current_primitive->indices_count = count;
 	if (current_primitive->element_buffer_object == NULL)
 		throw std::runtime_error("Indices error. Failed to allocate memory.");
