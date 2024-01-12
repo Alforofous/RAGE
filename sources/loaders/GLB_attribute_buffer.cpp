@@ -59,7 +59,7 @@ std::string GLB_attribute_buffer::get_data_string()
 		return ("");
 
 	int component_count = 0;
-	std::string buffer_data = this->name + " ATTRIBUTE [" + std::to_string(this->byte_size) + " bytes] of type [" + GLB_utilities::gl_data_type_to_string(this->gl_data_type) + "] with [" + std::to_string(this->component_count) + "] components and [" + std::to_string(this->vertex_count) + "] vertices:\n";
+	std::string buffer_data;
 	for (uint8_t *ptr = (uint8_t *)this->data; ptr < (uint8_t *)this->data + this->byte_size; ptr += data_type_size)
 	{
 		if (this->gl_data_type == GL_BYTE)
@@ -112,7 +112,7 @@ GLsizeiptr GLB_attribute_buffer::get_element_count()
 	return (this->vertex_count * this->component_count);
 }
 
-GLenum GLB_attribute_buffer::get_gl_data_type()
+GLenum GLB_attribute_buffer::get_data_type()
 {
 	return (this->gl_data_type);
 }

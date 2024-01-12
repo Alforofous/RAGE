@@ -37,7 +37,7 @@ void GLB_loader::load_scene_info(RAGE_scene *scene, size_t scene_index)
 {
 	nlohmann::json json_scene = this->json["scenes"][scene_index];
 	if (json_scene["nodes"].is_null())
-		throw std::runtime_error("No nodes present in scene at index: " + std::to_string(scene_index) + ".");
+		throw std::runtime_error("No nodes present in scene at index: " + std::to_string(scene_index) +  " at line: " + std::to_string(__LINE__) + " in file: " + std::string(__FILE__));
 	this->load_nodes(scene, json_scene);
 }
 
@@ -187,7 +187,6 @@ void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *obje
 	if (gl_data_type == GL_NONE)
 		return;
 	current_primitive->element_buffer_object = buffer_object::create_ebo_from_glb_buffer(GL_ELEMENT_ARRAY_BUFFER, this->binary_buffer, byte_offset, count, gl_data_type);
-	std::cout << "ebo after set: " << current_primitive->element_buffer_object->get_buffer_data(1);
 	current_primitive->indices_count = count;
 	if (current_primitive->element_buffer_object == NULL)
 		throw std::runtime_error("Indices error. Failed to allocate memory.");
@@ -224,8 +223,9 @@ RAGE_object *GLB_loader::load_node(nlohmann::json &node)
 
 	if (node["name"].is_null() == false)
 		object->name = node["name"];
-	if (node["mesh"].is_null())
-		int mesh_index = node["mesh"];
+	int mesh_index = -1;
+	if (node["mesh"].is_null() == false)
+		mesh_index = node["mesh"];
 
 	if (node["translation"].is_null() == false)
 		object->position = glm::vec3(node["translation"][0], node["translation"][1], node["translation"][2]);
@@ -244,7 +244,7 @@ void GLB_loader::load_nodes(RAGE_scene *scene, nlohmann::json &json_scene)
 		nlohmann::json &node = json["nodes"][i];
 		RAGE_object *object = load_node(node);
 		objects->push_back(object);
-		load_node_mesh(node, json, object);
+		this->load_node_mesh(node, json, object);
 	}
 	for (int i = 0; i < objects->size(); i++)
 	{

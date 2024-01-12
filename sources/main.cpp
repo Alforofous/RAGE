@@ -47,11 +47,12 @@ int main(void)
 
 	GLB_loader glb_loader;
 	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
-	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/CubeVertexColored3.glb").c_str());
+	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
 	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
-	//glb_loader.load((rage->executable_path + "/assets/models/ParentingTest.glb").c_str());	
+	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/Duck.glb").c_str());	
 	if (rage->scene == NULL)
 		return (1);
+	glfwSwapInterval(rage->window->vsync);
 
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{
@@ -69,7 +70,6 @@ int main(void)
 			rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
 
 		glfwPollEvents();
-		glfwSwapInterval(0);
 
 		std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double, std::milli> elapsed = end - start;

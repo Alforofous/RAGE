@@ -48,7 +48,7 @@ buffer_object *buffer_object::create_ebo_from_glb_buffer(GLenum gl_buffer_type, 
 	return (gl_buffer_object);
 }
 
-std::string buffer_object::get_buffer_data(int component_count)
+std::string buffer_object::get_data_string(int component_count)
 {
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(this->data_type);
 	if (data_type_size == 0)
@@ -85,7 +85,7 @@ std::string buffer_object::get_buffer_data(int component_count)
 	return (buffer_data);
 }
 
-std::string buffer_object::get_buffer_data(int component_count, GLenum data_type)
+std::string buffer_object::get_data_string(int component_count, GLenum data_type)
 {
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(data_type);
 	if (data_type_size == 0)

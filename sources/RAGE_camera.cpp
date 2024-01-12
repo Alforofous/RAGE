@@ -11,7 +11,7 @@ bool RAGE_camera::init(RAGE_window *window)
 	m_aspect_ratio = static_cast<float>(window->pixel_size.x) / window->pixel_size.y;
 	rotation = direction_to_euler(m_forward);
 	m_view_matrix = RAGE_camera::get_view_matrix();
-	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 100.0f);
+	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 10000.0f);
 	return (true);
 }
 
@@ -28,7 +28,7 @@ void RAGE_camera::handle_input(RAGE_user_input *user_input, float delta_time)
 void RAGE_camera::set_aspect_ratio(glm::ivec2 window_size)
 {
 	this->m_aspect_ratio = static_cast<float>(window_size.x) / window_size.y;
-	this->m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 100.0f);
+	this->m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 10000.0f);
 }
 
 glm::vec3 direction_to_euler(glm::vec3 direction)

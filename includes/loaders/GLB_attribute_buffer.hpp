@@ -14,7 +14,7 @@ public:
 	GLsizeiptr get_component_count();
 	GLsizeiptr get_vertex_count();
 	GLsizeiptr get_element_count();
-	GLenum get_gl_data_type();
+	GLenum get_data_type();
 	GLvoid *get_data();
 	GLsizeiptr get_byte_size();
 	GLboolean get_normalized();

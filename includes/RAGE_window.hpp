@@ -13,6 +13,7 @@ public:
 	glm::ivec2 pixel_position;
 	void resize_callback(GLFWwindow *window, int width, int height);
 	void reposition_callback(GLFWwindow *window, int x, int y);
+	bool vsync;
 private:
 	GLFWmonitor *primary_monitor;
 	const GLFWvidmode *mode;

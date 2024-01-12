@@ -2,14 +2,37 @@
 #include "RAGE_primitive_objects.hpp"
 #include "RAGE.hpp"
 
-static void exit_callback(RAGE *rage)
+static void exit_callback(RAGE *rage, menu_bar_item *item)
 {
-	glfwSetWindowShouldClose(rage->window->glfw_window, GLFW_TRUE);
+	if (ImGui::MenuItem(item->name.c_str()))
+	{
+		glfwSetWindowShouldClose(rage->window->glfw_window, GLFW_TRUE);
+	}
 }
 
-static void add_cube_callback(RAGE *rage)
+static void add_cube_callback(RAGE *rage, menu_bar_item *item)
 {
-	rage->scene->add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f));
+	if (ImGui::MenuItem(item->name.c_str()))
+	{
+		rage->scene->add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f));
+	}
+}
+
+static void show_performance_callback(RAGE *rage, menu_bar_item *item)
+{
+	if (ImGui::MenuItem(item->name.c_str()))
+	{
+		rage->gui->show_performance_window = !rage->gui->show_performance_window;
+	}
+}
+
+static void toggle_vsync_callback(RAGE *rage, menu_bar_item *item)
+{
+	if (ImGui::MenuItem(item->name.c_str(), NULL, &rage->window->vsync))
+	{
+		printf("VSync: %d\n", rage->window->vsync);
+		glfwSwapInterval(rage->window->vsync);
+	}
 }
 
 RAGE_menu_bar::RAGE_menu_bar()
@@ -42,20 +65,38 @@ RAGE_menu_bar::RAGE_menu_bar()
 					}
 				}
 			}
+		},
+		menu_bar_item{
+			"View",
+			NULL,
+			{
+				menu_bar_item{
+					"Performance",
+					NULL,
+					{
+						menu_bar_item{
+							"Show performance",
+							show_performance_callback,
+							{}
+						},
+						menu_bar_item{
+							"VSync",
+							toggle_vsync_callback,
+							{}
+						}
+					}
+				}
+			}
 		}
 	};
 }
 
-void RAGE_menu_bar::draw_menu_item(const menu_bar_item& item)
+void RAGE_menu_bar::draw_menu_item(const menu_bar_item &item)
 {
 	if (item.children.size() == 0)
 	{
-		if (ImGui::MenuItem(item.name.c_str()))
-		{
-			std::cout << "Menu item clicked: " << item.name << std::endl;
-			if (item.callback)
-				item.callback(this->rage);
-		}
+		if (item.callback)
+			item.callback(this->rage, (menu_bar_item *)&item);
 	}
 	else
 	{

@@ -42,31 +42,47 @@ ImGuiIO *RAGE_gui::get_imgui_io()
 
 void RAGE_gui::draw_performance_window(RAGE *rage)
 {
-	ImGui::Begin("Performance", NULL, ImGuiWindowFlags_NoResize);
-	double fps = 1000 / rage->delta_time;
+	static double time_passed; 
+	static double delta_time;
+	static double fps;
 
-	if (frames.size() > 100)
+	time_passed += rage->delta_time;
+	if (time_passed > 1000 / 30.0)
 	{
-		for (size_t i = 1; i < frames.size(); i++)
-			frames[i - 1] = frames[i];
-		frames[frames.size() - 1] = (float)fps;
+		fps = 1000 / rage->delta_time;
+		delta_time = rage->delta_time;
+		time_passed = 0.0;
+		if (frames.size() > 100)
+		{
+			for (size_t i = 1; i < frames.size(); i++)
+				frames[i - 1] = frames[i];
+			frames[frames.size() - 1] = (float)fps;
+		}
+		else
+		{
+			frames.push_back((float)fps);
+		}
 	}
-	else
-	{
-		frames.push_back((float)fps);
-	}
+
+	ImGui::Begin("Performance", NULL, ImGuiWindowFlags_NoResize);
 
 	std::stringstream stream;
-	stream << std::fixed << std::setprecision(5) << rage->delta_time;
+	stream << std::fixed << std::setprecision(5) << delta_time;
 
 	std::string delta_time_string = "Elapsed time: " + stream.str() + "ms";
 	ImGui::Text("%s", delta_time_string.c_str());
 
 	std::string fps_string = "FPS: " + std::to_string((int)fps);
 	ImGui::Text("%s", fps_string.c_str());
-	ImGui::PlotHistogram("", &frames[0], (int)frames.size(), 0, NULL, 0.0f, 360.0f, ImVec2(200, 40));
-	ImGui::Text("Window position: %d, %d", rage->window->pixel_position.x, rage->window->pixel_position.y);
-	ImGui::Text("Window size: %d, %d", rage->window->pixel_size.x, rage->window->pixel_size.y);
+	ImGui::PlotHistogram("", &frames[0], (int)frames.size(), 0, NULL, 0.0f, 2000.0f, ImVec2(200, 40));
+	std::string frames_string;
+	for (size_t i = 0; i < frames.size(); i++)
+	{
+		frames_string += std::to_string((int)frames[i]);
+		if (i != frames.size() - 1)
+			frames_string += ", ";
+	}
+	ImGui::SetClipboardText(frames_string.c_str());
 	ImGui::End();
 }
 
@@ -85,7 +101,7 @@ void RAGE_gui::reset_dockings()
 
 	ImGuiID dock_main_id = dockspace_id;
 	ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.20f, NULL, &dock_main_id);
-	ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.20f, NULL, &dock_main_id);
+	ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.30f, NULL, &dock_main_id);
 
 	ImGui::DockBuilderDockWindow("Scene View", dock_main_id);
 	ImGui::DockBuilderDockWindow("Inspector", dock_id_right);

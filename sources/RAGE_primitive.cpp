@@ -33,7 +33,7 @@ bool RAGE_primitive::interleave_vbos()
 			GLB_attribute_buffer *attribute_buffer = this->attribute_buffers[i];
 			for (size_t k = 0; k < attribute_buffer->get_component_count(); k++)
 			{
-				GLsizeiptr attribute_type_byte_size = GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type());
+				GLsizeiptr attribute_type_byte_size = GLB_utilities::gl_data_type_size(attribute_buffer->get_data_type());
 
 				size_t offset = j * attribute_buffer->get_component_count() + k;
 				uint8_t *start = (uint8_t *)attribute_buffer->get_data() + offset * attribute_type_byte_size;
@@ -60,7 +60,7 @@ bool RAGE_primitive::interleave_vbos()
 	for (size_t i = 0; i < this->attribute_buffers.size(); i++)
 	{
 		GLB_attribute_buffer *attribute_buffer = this->attribute_buffers[i];
-		stride += GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type()) * attribute_buffer->get_component_count();
+		stride += GLB_utilities::gl_data_type_size(attribute_buffer->get_data_type()) * attribute_buffer->get_component_count();
 	}
 
 	GLsizeiptr offset = 0;
@@ -68,12 +68,12 @@ bool RAGE_primitive::interleave_vbos()
 	{
 		GLB_attribute_buffer *attribute_buffer = this->attribute_buffers[i];
 
-		GLsizeiptr attribute_type_byte_size = GLB_utilities::gl_data_type_size(attribute_buffer->get_gl_data_type());
+		GLsizeiptr attribute_type_byte_size = GLB_utilities::gl_data_type_size(attribute_buffer->get_data_type());
 		GLuint layout = GLB_utilities::get_attribute_layout_from_attribute_string(attribute_buffer->get_name());
 		this->vertex_array_object->bind();
 		interleaved_vbo->bind();
 		this->element_buffer_object->bind();
-		this->vertex_array_object->link_attributes(interleaved_vbo, layout, attribute_buffer->get_component_count(), attribute_buffer->get_gl_data_type(), attribute_buffer->get_normalized(), stride, (void *)offset, attribute_buffer->get_name());
+		this->vertex_array_object->link_attributes(interleaved_vbo, layout, attribute_buffer->get_component_count(), attribute_buffer->get_data_type(), attribute_buffer->get_normalized(), stride, (void *)offset, attribute_buffer->get_name());
 		this->vertex_array_object->unbind();
 		interleaved_vbo->unbind();
 		this->element_buffer_object->unbind();
@@ -93,20 +93,6 @@ void RAGE_primitive::draw()
 	this->vertex_array_object->bind();
 	this->element_buffer_object->bind();
 
-	std::string debug_string;
-	debug_string += this->name + "\n";
-	debug_string += "Indices count: " + std::to_string(this->indices_count) + "\n";
-	debug_string += this->vertex_array_object->get_linked_attributes_data() + "\n";
-	debug_string += this->element_buffer_object->get_buffer_data(-1) + "\n";
-	for (size_t i = 0; i < this->attribute_buffers.size(); i++)
-	{
-		debug_string += this->attribute_buffers[i]->get_data_string() + "\n";
-	}
-	ImGui::Begin("Debug");
-	ImGui::SetWindowSize(ImVec2(500, 500));
-	ImGui::TextUnformatted(debug_string.c_str(), debug_string.c_str() + debug_string.size());
-	ImGui::SetClipboardText(debug_string.c_str());
-	ImGui::End();
 	glDrawElements(GL_TRIANGLES, this->indices_count, this->element_buffer_object->get_data_type(), (void *)0);
 	glGetError();
 	this->interleaved_vertex_buffer_object->unbind();
