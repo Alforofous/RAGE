@@ -8,12 +8,12 @@ vertex_array::vertex_array()
 	glGenVertexArrays(1, &id);
 }
 
-void vertex_array::link_attributes(buffer_object *vertex_buffer_object, GLuint layout, GLuint component_count, GLenum gl_data_type, GLsizei stride, void *offset, std::string name)
+void vertex_array::link_attributes(buffer_object *vertex_buffer_object, GLuint layout, GLuint component_count, GLenum gl_data_type, GLboolean normalized, GLsizei stride, void *offset, std::string name)
 {
 	linked_attributes[layout] = {vertex_buffer_object, component_count, gl_data_type, stride, offset, name};
 
 	vertex_buffer_object->bind();
-	glVertexAttribPointer(layout, component_count, gl_data_type, GL_FALSE, stride, offset);
+	glVertexAttribPointer(layout, component_count, gl_data_type, normalized, stride, offset);
 	glEnableVertexAttribArray(layout);
 	vertex_buffer_object->unbind();
 }

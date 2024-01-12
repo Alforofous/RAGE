@@ -3,12 +3,13 @@
 #include <cstddef>
 #include <iostream>
 
-GLB_attribute_buffer::GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_offset, GLsizeiptr byte_stride, GLsizeiptr vertex_count, std::string name, GLsizeiptr component_count, GLenum gl_data_type)
+GLB_attribute_buffer::GLB_attribute_buffer(GLvoid *glb_buffer, GLsizeiptr byte_offset, GLsizeiptr byte_stride, GLsizeiptr vertex_count, std::string name, GLsizeiptr component_count, GLenum gl_data_type, GLboolean normalized)
 {
 	this->name = name;
 	this->component_count = component_count;
 	this->gl_data_type = gl_data_type;
 	this->vertex_count = vertex_count;
+	this->normalized = normalized;
 	this->byte_size = vertex_count * component_count * GLB_utilities::gl_data_type_size(gl_data_type);
 	if (this->byte_size == 0)
 		throw std::runtime_error("GLB_attribute_buffer::GLB_attribute_buffer(): size == 0 for attribute: " + name);
@@ -93,37 +94,42 @@ std::string GLB_attribute_buffer::get_data_string()
 
 std::string GLB_attribute_buffer::get_name()
 {
-	return (name);
+	return (this->name);
 }
 
 GLsizeiptr GLB_attribute_buffer::get_component_count()
 {
-	return (component_count);
+	return (this->component_count);
 }
 
 GLsizeiptr GLB_attribute_buffer::get_vertex_count()
 {
-	return (vertex_count);
+	return (this->vertex_count);
 }
 
 GLsizeiptr GLB_attribute_buffer::get_element_count()
 {
-	return (vertex_count * component_count);
+	return (this->vertex_count * this->component_count);
 }
 
 GLenum GLB_attribute_buffer::get_gl_data_type()
 {
-	return (gl_data_type);
+	return (this->gl_data_type);
 }
 
 GLvoid *GLB_attribute_buffer::get_data()
 {
-	return (data);
+	return (this->data);
 }
 
 GLsizeiptr GLB_attribute_buffer::get_byte_size()
 {
-	return (byte_size);
+	return (this->byte_size);
+}
+
+GLboolean GLB_attribute_buffer::get_normalized()
+{
+	return (this->normalized);
 }
 
 GLB_attribute_buffer::~GLB_attribute_buffer()

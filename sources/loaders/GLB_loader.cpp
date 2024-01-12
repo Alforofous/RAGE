@@ -105,6 +105,10 @@ void GLB_loader::load_glb_attribute_buffers(nlohmann::json &primitive, RAGE_obje
 			continue;
 		size_t count = accessor["count"];
 
+		bool normalized = false;
+		if (accessor["normalized"].is_null() == false)
+			normalized = accessor["normalized"];
+
 		int byte_offset = 0;
 		if (accessor["byteOffset"].is_null() == false)
 			byte_offset += accessor["byteOffset"].get<int>();
@@ -120,7 +124,7 @@ void GLB_loader::load_glb_attribute_buffers(nlohmann::json &primitive, RAGE_obje
 			continue;
 
 		GLsizeiptr component_count = GLB_utilities::get_attribute_component_count(attribute_type);
-		GLB_attribute_buffer *attribute_buffer = new GLB_attribute_buffer(this->binary_buffer.data(), byte_offset, byte_stride, count, key, component_count, gl_data_type);
+		GLB_attribute_buffer *attribute_buffer = new GLB_attribute_buffer(this->binary_buffer.data(), byte_offset, byte_stride, count, key, component_count, gl_data_type, normalized);
 		if (attribute_buffer == NULL)
 			throw std::runtime_error("Failed to allocate memory for attribute buffer.");
 		current_primitive->attribute_buffers.push_back(attribute_buffer);

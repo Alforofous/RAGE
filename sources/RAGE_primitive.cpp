@@ -73,7 +73,7 @@ bool RAGE_primitive::interleave_vbos()
 		this->vertex_array_object->bind();
 		interleaved_vbo->bind();
 		this->element_buffer_object->bind();
-		this->vertex_array_object->link_attributes(interleaved_vbo, layout, attribute_buffer->get_component_count(), attribute_buffer->get_gl_data_type(), stride, (void *)offset, attribute_buffer->get_name());
+		this->vertex_array_object->link_attributes(interleaved_vbo, layout, attribute_buffer->get_component_count(), attribute_buffer->get_gl_data_type(), attribute_buffer->get_normalized(), stride, (void *)offset, attribute_buffer->get_name());
 		this->vertex_array_object->unbind();
 		interleaved_vbo->unbind();
 		this->element_buffer_object->unbind();
@@ -102,8 +102,11 @@ void RAGE_primitive::draw()
 	{
 		debug_string += this->attribute_buffers[i]->get_data_string() + "\n";
 	}
-	ImGui::Text("%s\n", debug_string.c_str());
+	ImGui::Begin("Debug");
+	ImGui::SetWindowSize(ImVec2(500, 500));
+	ImGui::TextUnformatted(debug_string.c_str(), debug_string.c_str() + debug_string.size());
 	ImGui::SetClipboardText(debug_string.c_str());
+	ImGui::End();
 	glDrawElements(GL_TRIANGLES, this->indices_count, this->element_buffer_object->get_data_type(), (void *)0);
 	glGetError();
 	this->interleaved_vertex_buffer_object->unbind();

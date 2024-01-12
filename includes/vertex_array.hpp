@@ -20,7 +20,7 @@ public:
 	vertex_array();
 	~vertex_array();
 
-	void link_attributes(buffer_object *vertex_buffer_object, GLuint layout, GLuint component_count, GLenum gl_data_type, GLsizei stride, void *offset, std::string name);
+	void link_attributes(buffer_object *vertex_buffer_object, GLuint layout, GLuint component_count, GLenum gl_data_type, GLboolean normalized, GLsizei stride, void *offset, std::string name);
 	void bind();
 	void unbind();
 	std::string get_linked_attribute_data(GLuint layout);
