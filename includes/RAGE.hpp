@@ -26,6 +26,7 @@ public:
 	RAGE_window *window;
 	RAGE_camera camera;
 	RAGE_shader *shader;
+	RAGE_shader *skybox_shader;
 	RAGE_gui *gui;
 	RAGE_user_input *user_input;
 	RAGE_scene *scene;
@@ -41,5 +42,4 @@ private:
 
 RAGE *get_rage();
 void set_callbacks(GLFWwindow *window, RAGE *rage);
-void set_shader_variable_values(void *content);
 std::string getExecutableDir();

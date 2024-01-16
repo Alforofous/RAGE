@@ -74,6 +74,7 @@ set(
 	RAGE_primitive_objects.cpp
 	RAGE_keyboard_input.cpp
 	RAGE_primitive.cpp
+	shader_uniform_callbacks.cpp
 	vertex_array.cpp
 	buffer_object.cpp
 )

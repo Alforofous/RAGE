@@ -38,8 +38,7 @@ void RAGE_object::draw()
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 	RAGE *rage = get_rage();
 
-	const glm::f32 *model_matrix = glm::value_ptr(this->get_model_matrix());
-	glUniformMatrix4fv(rage->shader->variable_location["u_model_matrix"], 1, GL_FALSE, glm::value_ptr(this->get_model_matrix()));
+	glUniformMatrix4fv(rage->shader->uniforms["u_model_matrix"].location, 1, GL_FALSE, glm::value_ptr(this->get_model_matrix()));
 
 	for (size_t i = 0; i < this->mesh->primitives.size(); i++)
 	{

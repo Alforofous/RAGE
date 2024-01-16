@@ -1,136 +1,179 @@
 #include "RAGE.hpp"
+#include "RAGE_shader.hpp"
 
-RAGE_shader::RAGE_shader(const std::string& filePathVertexShader, const std::string& filePathFragmentShader)
+RAGE_shader::RAGE_shader(const std::string& vertex_path, const std::string& fragment_path)
 {
-	std::string vertexShader = ReadFile(filePathVertexShader);
-	std::string fragmentShader = ReadFile(filePathFragmentShader);
-	CreateShader(vertexShader, fragmentShader);
-	glUseProgram(hProgram);
+	this->vertex_path = vertex_path;
+	this->fragment_path = fragment_path;
+	std::string vertex_string = read_file(vertex_path);
+	std::string fragment_string = read_file(fragment_path);
+	create(vertex_string, fragment_string);
 }
 
-RAGE_shader::~RAGE_shader()
+std::string RAGE_shader::read_file(const std::string& file_path)
 {
-	if (hProgram != 0)
+	std::ifstream file_stream(file_path, std::ios::in);
+
+	if (!file_stream.is_open())
 	{
-		glDeleteProgram(hProgram);
-	}
-}
-
-std::string RAGE_shader::ReadFile(const std::string& filePath)
-{
-	std::ifstream fs(filePath, std::ios::in);
-
-	if (!fs.is_open()) {
-		std::cerr << "Could not read file " << filePath << ". File does not exist." << std::endl;
-		return "";
+		std::cerr << "Could not read file " << file_path << ". File does not exist." << std::endl;
+		return ("");
 	}
 
 	std::stringstream buffer;
 	std::string line;
-	while (std::getline(fs, line))
+	while (std::getline(file_stream, line))
 	{
 		buffer << line << "\n";
 	}
 
-	fs.close();
-	return buffer.str();
+	file_stream.close();
+	return (buffer.str());
 }
 
-GLuint RAGE_shader::CompileShader(GLuint type, const std::string& source)
+GLuint RAGE_shader::compile(GLuint type, const std::string& source)
 {
-	GLuint hShader = glCreateShader(type);
+	GLuint shader = glCreateShader(type);
 
 	const char* src = source.c_str();
-	glShaderSource(hShader, 1, &src, nullptr);
+	glShaderSource(shader, 1, &src, nullptr);
 
-	glCompileShader(hShader);
+	glCompileShader(shader);
 
 	GLint result;
-	glGetShaderiv(hShader, GL_COMPILE_STATUS, &result);
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
 	if (result == GL_FALSE)
 	{
 		int length;
-		glGetShaderiv(hShader, GL_INFO_LOG_LENGTH, &length);
-		char* infoLog = (char*)malloc(length * sizeof(char));
-		glGetShaderInfoLog(hShader, length, &length, infoLog);
+		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+		char* info_log = (char*)malloc(length * sizeof(char));
+		glGetShaderInfoLog(shader, length, &length, info_log);
 		std::cout << "Failed to compile shader!"
 			<< (type == GL_VERTEX_SHADER ? "vertex" : "fragment")
 			<< std::endl;
-		std::cout << infoLog << std::endl;
-		glDeleteShader(hShader);
+		std::cout << info_log << std::endl;
+		glDeleteShader(shader);
 		return static_cast<GLuint>(0);
 	}
-	return hShader;
+	return (shader);
 }
 
-void RAGE_shader::CreateShader(const std::string& vertexShader, const std::string& fragmentShader)
+void RAGE_shader::create(const std::string& vertex_string, const std::string& fragment_string)
 {
-	GLuint vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
-	GLuint fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
-	if (vs == 0 || fs == 0)
+	GLuint vertex_shader = compile(GL_VERTEX_SHADER, vertex_string);
+	GLuint fragment_shader = compile(GL_FRAGMENT_SHADER, fragment_string);
+	if (vertex_shader == 0 || fragment_shader == 0)
 		return;
 
-	hProgram = glCreateProgram();
+	program = glCreateProgram();
 
-	glAttachShader(hProgram, vs);
-	glAttachShader(hProgram, fs);
+	glAttachShader(program, vertex_shader);
+	glAttachShader(program, fragment_shader);
 
-	glLinkProgram(hProgram);
+	glLinkProgram(program);
 
-	GLint isLinked = 0;
-	glGetProgramiv(hProgram, GL_LINK_STATUS, &isLinked);
-	if (isLinked == GL_FALSE)
+	GLint is_linked = 0;
+	glGetProgramiv(program, GL_LINK_STATUS, &is_linked);
+	if (is_linked == GL_FALSE)
 	{
-		GLint maxLength = 0;
-		glGetProgramiv(hProgram, GL_INFO_LOG_LENGTH, &maxLength);
-		std::vector<GLchar> infoLog(maxLength);
-		glGetProgramInfoLog(hProgram, maxLength, &maxLength, &infoLog[0]);
-		glDeleteProgram(hProgram);
-		glDeleteShader(vs);
-		glDeleteShader(fs);
+		GLint max_length = 0;
+		glGetProgramiv(program, GL_INFO_LOG_LENGTH, &max_length);
+		std::vector<GLchar> infoLog(max_length);
+		glGetProgramInfoLog(program, max_length, &max_length, &infoLog[0]);
+		glDeleteProgram(program);
+		glDeleteShader(vertex_shader);
+		glDeleteShader(fragment_shader);
 
 		std::cout << "Failed to link vertex and fragment shader!" << std::endl;
 		std::cout << &infoLog[0] << std::endl;
 		return;
 	}
-	glValidateProgram(hProgram);
+	glValidateProgram(program);
 
-	glDeleteShader(vs);
-	glDeleteShader(fs);
+	glDeleteShader(vertex_shader);
+	glDeleteShader(fragment_shader);
 }
 
-void RAGE_shader::init_variable_locations()
+GLint RAGE_shader::init_uniform_location(const char *variable_name)
 {
-	const char	*variable_names[] =
+	if (variable_name == NULL)
 	{
-		"u_perspective_matrix",
-		"u_view_matrix",
-		"u_model_matrix",
-	};
-	int variable_count = sizeof(variable_names) / sizeof(variable_names[0]);
-	for (int i = 0; i < variable_count; i++)
+		std::cout << "Warning: variable_name is NULL" << std::endl;
+		return (-1);
+	}
+	RAGE_uniform uniform;
+	uniform.location = glGetUniformLocation(this->program, variable_name);
+	if (uniform.location == -1)
+		std::cout << "Warning: Failed to locate uniform variable " << variable_name << std::endl;
+	this->uniforms[variable_name] = uniform;
+	return (uniform.location);
+}
+
+GLint RAGE_shader::init_uniform(const char *variable_name, GLenum type, std::function<void(void *content)> set_value_per_frame)
+{
+	if (variable_name == NULL)
 	{
-		variable_location[variable_names[i]] = glGetUniformLocation(hProgram, variable_names[i]);
-		if (variable_location[variable_names[i]] == -1)
-		{
-			std::cout << "Warning: Failed to locate uniform variable " << variable_names[i] << std::endl;
-		}
+		std::cout << "Warning: variable_name is NULL" << std::endl;
+		return (-1);
+	}
+	GLint location = init_uniform_location(variable_name);
+	if (location == -1)
+	{
+		std::cout << "Warning: Failed to locate uniform variable " << variable_name << std::endl;
+		return (-1);
+	}
+	RAGE_uniform uniform;
+	uniform.location = location;
+	uniform.type = type;
+	uniform.per_frame_callback = set_value_per_frame;
+	this->uniforms[variable_name] = uniform;
+	return (uniform.location);
+}
+
+void RAGE_shader::update_uniforms(void *content)
+{
+	RAGE *rage;
+
+	rage = (RAGE *)content;
+	glUseProgram(this->program);
+	for (auto& [key, uniform] : this->uniforms)
+	{
+		if (uniform.per_frame_callback != NULL)
+			uniform.per_frame_callback(&uniform.location);
 	}
 }
 
-void set_shader_variable_values(void *content)
+void RAGE_shader::init_RAGE_shaders(void *content)
 {
-	int width;
-	int height;
 	RAGE *rage;
-	RAGE_camera *camera;
-	std::map<std::string, GLint> locations;
 
 	rage = (RAGE *)content;
-	camera = &rage->camera;
-	locations = rage->shader->variable_location;
-	glfwGetWindowSize(rage->window->glfw_window, &width, &height);
-	glUniform2f(locations["u_resolution"], (float)width, (float)height);
-	glUniformMatrix4fv(locations["u_perspective_matrix"], 1, GL_FALSE, glm::value_ptr(camera->get_perspective_matrix()));
-	glUniformMatrix4fv(locations["u_view_matrix"], 1, GL_FALSE, glm::value_ptr(camera->get_view_matrix()));
+	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
+								   rage->executable_path + "/shaders/fragment_test.glsl");
+	rage->shader->init_uniform("u_view_matrix", GL_FLOAT_MAT4, update_view_matrix);
+	rage->shader->init_uniform("u_perspective_matrix", GL_FLOAT_MAT4, update_perspective_matrix);
+	rage->shader->init_uniform("u_model_matrix", GL_FLOAT_MAT4, NULL);
+
+	rage->skybox_shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_skybox.glsl",
+										  rage->executable_path + "/shaders/fragment_skybox.glsl");
+	rage->skybox_shader->init_uniform("u_view_matrix", GL_FLOAT_MAT4, update_view_matrix);
+	rage->skybox_shader->init_uniform("u_perspective_matrix", GL_FLOAT_MAT4, update_perspective_matrix);
+	rage->skybox_shader->init_uniform("u_skybox", GL_SAMPLER_CUBE, NULL);
+
+	GLint maxTextureUnits;
+	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
+	std::cout << "Max texture image units: " << maxTextureUnits << std::endl;
+
+	GLint maxArrayTextureLayers;
+	glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &maxArrayTextureLayers);
+	std::cout << "Max array texture layers: " << maxArrayTextureLayers << std::endl;
+}
+
+
+RAGE_shader::~RAGE_shader()
+{
+	if (program != 0)
+	{
+		glDeleteProgram(program);
+	}
 }

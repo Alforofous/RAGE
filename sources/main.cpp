@@ -38,9 +38,8 @@ int main(void)
 
 	set_callbacks(rage->window->glfw_window, rage);
 	rage->gui = new RAGE_gui(rage);
-	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
-								   rage->executable_path + "/shaders/fragment_test.glsl");
-	rage->shader->init_variable_locations();
+	RAGE_shader::init_RAGE_shaders(rage);
+
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -60,9 +59,10 @@ int main(void)
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glUseProgram(rage->shader->hProgram);
-		set_shader_variable_values(rage);
+		rage->shader->update_uniforms(rage);
+		rage->skybox_shader->update_uniforms(rage);
 
+		glUseProgram(rage->shader->program);
 		rage->gui->draw(rage);
 		glfwSwapBuffers(rage->window->glfw_window);
 
