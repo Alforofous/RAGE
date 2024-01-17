@@ -29,7 +29,6 @@ int main(void)
 
 	if (rage->window->init() == false)
 		return (1);
-	glm::ivec2 pixel_size = rage->window->pixel_size;
 	if (rage->camera.init(rage->window) == false)
 		return (1);
 
@@ -48,29 +47,25 @@ int main(void)
 	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/SingleChildCubeIcosphere.glb").c_str());
 	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/CubeVertexColored.glb").c_str());
 	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
-	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/Duck.glb").c_str());	
+	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/Duck.glb").c_str());
+
+	RAGE_object *object = new RAGE_object(new RAGE_mesh(), "Cube");
+	object->mesh->primitives.push_back(RAGE_primitive_objects::create_cube(1.0f, 1.0f, 1.0f));
+	rage->scene->add_object(object);
 	if (rage->scene == NULL)
 		return (1);
 	glfwSwapInterval(rage->window->vsync);
-
 	while (glfwWindowShouldClose(rage->window->glfw_window) == GLFW_FALSE)
 	{
 		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		rage->shader->update_uniforms(rage);
-		rage->skybox_shader->update_uniforms(rage);
-
-		glUseProgram(rage->shader->program);
+		rage->shader->update_uniform("u_view_matrix", rage);
 		rage->gui->draw(rage);
-		glfwSwapBuffers(rage->window->glfw_window);
-
 		if (rage->gui->scene_view.is_focused())
 			rage->camera.handle_input(rage->user_input, (float)rage->delta_time);
 
+		glfwSwapBuffers(rage->window->glfw_window);
 		glfwPollEvents();
-
 		std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double, std::milli> elapsed = end - start;
 		rage->delta_time = elapsed.count();
