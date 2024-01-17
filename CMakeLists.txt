@@ -74,6 +74,8 @@ set(
 	RAGE_primitive_objects.cpp
 	RAGE_keyboard_input.cpp
 	RAGE_primitive.cpp
+	RAGE_texture2D.cpp
+	RAGE_material.cpp
 	shader_uniform_callbacks.cpp
 	vertex_array.cpp
 	buffer_object.cpp
@@ -94,6 +96,8 @@ set(
 	RAGE_keyboard_input.hpp
 	RAGE_user_input.hpp
 	RAGE_primitive.hpp
+	RAGE_texture2D.hpp
+	RAGE_material.hpp
 	vertex_array.hpp
 	buffer_object.hpp
 )
@@ -127,6 +131,7 @@ list(APPEND PROJECT_INCLUDES
 	${INCLUDES_DIRECTORY}
 	${LIBRARY_INCLUDE_DIRECTORIES}
 	libraries/
+	libraries/stb
 )
 
 add_executable(
