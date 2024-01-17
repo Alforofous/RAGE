@@ -10,7 +10,7 @@
 class RAGE_primitive
 {
 public:
-	RAGE_primitive();
+	RAGE_primitive(const std::string &name = "New Primitive");
 	~RAGE_primitive();
 	bool interleave_vbos();
 	void draw();
