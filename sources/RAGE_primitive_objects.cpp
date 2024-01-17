@@ -48,16 +48,17 @@ RAGE_primitive *RAGE_primitive_objects::create_cube(float width, float height, f
 	if (indices == NULL)
 		return (NULL);
 
-	RAGE_primitive *primitive = new RAGE_primitive();
 	GLB_attribute_buffer *position_attribute_buffer = new (std::nothrow) GLB_attribute_buffer(vertex_positions, 0, 0, CUBE_VERTEX_COUNT, "POSITION", 3, GL_FLOAT, GL_FALSE);
 	if (position_attribute_buffer == NULL)
 		return (NULL);
 	GLB_attribute_buffer *color_attribute_buffer = new (std::nothrow) GLB_attribute_buffer(vertex_colors, 0, 0, CUBE_VERTEX_COUNT, "COLOR_0", 3, GL_FLOAT, GL_FALSE);
 	if (color_attribute_buffer == NULL)
 		return (NULL);
+	RAGE_primitive *primitive = new RAGE_primitive();
 	primitive->attribute_buffers.push_back(position_attribute_buffer);
 	primitive->attribute_buffers.push_back(color_attribute_buffer);
 	primitive->element_buffer_object = new (std::nothrow) buffer_object(GL_ELEMENT_ARRAY_BUFFER, GL_UNSIGNED_INT, indices, CUBE_TRIANGLE_COUNT * 3 * sizeof(GLuint));
+	primitive->indices_count = CUBE_TRIANGLE_COUNT * 3;
 	if (primitive->element_buffer_object == NULL)
 		return (NULL);
 	primitive->interleave_vbos();
