@@ -52,6 +52,7 @@ static void window_resize_callback(GLFWwindow *window, int width, int height)
 	RAGE *rage = get_rage_from_user_data(window);
 
 	rage->window->pixel_size = glm::ivec2(width, height);
+	rage->shader->update_uniform("u_perspective_matrix", rage);
 }
 
 static void window_reposition_callback(GLFWwindow *window, int x, int y)
@@ -59,6 +60,7 @@ static void window_reposition_callback(GLFWwindow *window, int x, int y)
 	RAGE *rage = get_rage_from_user_data(window);
 
 	rage->window->pixel_position = glm::ivec2(x, y);
+	rage->shader->update_uniform("u_perspective_matrix", rage);
 }
 
 void set_callbacks(GLFWwindow *window, RAGE *rage)

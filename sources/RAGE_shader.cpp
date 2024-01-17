@@ -1,7 +1,8 @@
 #include "RAGE.hpp"
 #include "RAGE_shader.hpp"
+#include "RAGE_texture2D.hpp"
 
-RAGE_shader::RAGE_shader(const std::string& vertex_path, const std::string& fragment_path)
+RAGE_shader::RAGE_shader(const char *vertex_path, const char *fragment_path)
 {
 	this->vertex_path = vertex_path;
 	this->fragment_path = fragment_path;
@@ -10,7 +11,7 @@ RAGE_shader::RAGE_shader(const std::string& vertex_path, const std::string& frag
 	create(vertex_string, fragment_string);
 }
 
-std::string RAGE_shader::read_file(const std::string& file_path)
+std::string RAGE_shader::read_file(const char *file_path)
 {
 	std::ifstream file_stream(file_path, std::ios::in);
 
@@ -109,7 +110,7 @@ GLint RAGE_shader::init_uniform_location(const char *variable_name)
 	return (uniform.location);
 }
 
-GLint RAGE_shader::init_uniform(const char *variable_name, GLenum type, std::function<void(void *content)> set_value_per_frame)
+GLint RAGE_shader::init_uniform(const char *variable_name, GLenum type, std::function<void(GLint location, void *content)> update)
 {
 	if (variable_name == NULL)
 	{
@@ -125,22 +126,27 @@ GLint RAGE_shader::init_uniform(const char *variable_name, GLenum type, std::fun
 	RAGE_uniform uniform;
 	uniform.location = location;
 	uniform.type = type;
-	uniform.per_frame_callback = set_value_per_frame;
+	uniform.update = update;
 	this->uniforms[variable_name] = uniform;
 	return (uniform.location);
 }
 
 void RAGE_shader::update_uniforms(void *content)
 {
-	RAGE *rage;
-
-	rage = (RAGE *)content;
 	glUseProgram(this->program);
 	for (auto& [key, uniform] : this->uniforms)
 	{
-		if (uniform.per_frame_callback != NULL)
-			uniform.per_frame_callback(&uniform.location);
+		if (uniform.update != NULL)
+			uniform.update(uniform.location, content);
 	}
+}
+
+void RAGE_shader::update_uniform(const char *variable_name, void *content)
+{
+	glUseProgram(this->program);
+	RAGE_uniform uniform = this->uniforms[variable_name];
+	if (uniform.update != NULL)
+		uniform.update(uniform.location, content);
 }
 
 void RAGE_shader::init_RAGE_shaders(void *content)
@@ -148,25 +154,17 @@ void RAGE_shader::init_RAGE_shaders(void *content)
 	RAGE *rage;
 
 	rage = (RAGE *)content;
-	rage->shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_test.glsl",
-								   rage->executable_path + "/shaders/fragment_test.glsl");
+	rage->shader = new RAGE_shader((rage->executable_path + "/shaders/vertex_test.glsl").c_str(),
+								   (rage->executable_path + "/shaders/fragment_test.glsl").c_str());
 	rage->shader->init_uniform("u_view_matrix", GL_FLOAT_MAT4, update_view_matrix);
 	rage->shader->init_uniform("u_perspective_matrix", GL_FLOAT_MAT4, update_perspective_matrix);
-	rage->shader->init_uniform("u_model_matrix", GL_FLOAT_MAT4, NULL);
+	rage->shader->init_uniform("u_model_matrix", GL_FLOAT_MAT4, update_model_matrix);
 
-	rage->skybox_shader = new RAGE_shader(rage->executable_path + "/shaders/vertex_skybox.glsl",
-										  rage->executable_path + "/shaders/fragment_skybox.glsl");
+	rage->skybox_shader = new RAGE_shader((rage->executable_path + "/shaders/vertex_skybox.glsl").c_str(),
+										  (rage->executable_path + "/shaders/fragment_skybox.glsl").c_str());
 	rage->skybox_shader->init_uniform("u_view_matrix", GL_FLOAT_MAT4, update_view_matrix);
 	rage->skybox_shader->init_uniform("u_perspective_matrix", GL_FLOAT_MAT4, update_perspective_matrix);
 	rage->skybox_shader->init_uniform("u_skybox", GL_SAMPLER_CUBE, NULL);
-
-	GLint maxTextureUnits;
-	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
-	std::cout << "Max texture image units: " << maxTextureUnits << std::endl;
-
-	GLint maxArrayTextureLayers;
-	glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &maxArrayTextureLayers);
-	std::cout << "Max array texture layers: " << maxArrayTextureLayers << std::endl;
 }
 
 

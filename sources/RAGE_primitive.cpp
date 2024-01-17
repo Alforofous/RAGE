@@ -3,8 +3,9 @@
 #include "loaders/GLB_attribute_buffer.hpp"
 #include <iostream>
 
-RAGE_primitive::RAGE_primitive()
+RAGE_primitive::RAGE_primitive(const std::string &name)
 {
+	this->name = name;
 	this->vertex_array_object = NULL;
 	this->interleaved_vertex_buffer_object = NULL;
 	this->element_buffer_object = NULL;
@@ -85,16 +86,12 @@ bool RAGE_primitive::interleave_vbos()
 	return (true);
 }
 
-#include "imgui/imgui.h"
-
 void RAGE_primitive::draw()
 {
 	this->interleaved_vertex_buffer_object->bind();
 	this->vertex_array_object->bind();
 	this->element_buffer_object->bind();
-
 	glDrawElements(GL_TRIANGLES, this->indices_count, this->element_buffer_object->get_data_type(), (void *)0);
-	glGetError();
 	this->interleaved_vertex_buffer_object->unbind();
 	this->element_buffer_object->unbind();
 	this->vertex_array_object->unbind();

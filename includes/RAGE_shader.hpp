@@ -23,30 +23,32 @@ struct RAGE_uniform
 {
 	GLint location = -1;
 	GLenum type = GL_NONE;
-	std::function<void(void *content)> per_frame_callback = NULL;
+	std::function<void(GLint location, void *content)> update = NULL;
 };
 
 class RAGE_shader
 {
 public:
-	RAGE_shader(const std::string &vertex_path, const std::string &fragment_path);
+	RAGE_shader(const char *vertex_path, const char *fragment_path);
 	~RAGE_shader();
 
-	GLint init_uniform(const char *variable_name, GLenum type, std::function<void(void *content)> set_value_per_frame);
+	GLint init_uniform(const char *variable_name, GLenum type, std::function<void(GLint location, void *content)> update);
 	void update_uniforms(void *content);
+	void update_uniform(const char *variable_name, void *content);
 	static void init_RAGE_shaders(void *content);
 
 	GLuint program;
 	std::unordered_map<std::string, RAGE_uniform> uniforms;
 private:
 	GLint init_uniform_location(const char *variable_name);
-	std::string read_file(const std::string &file_path);
+	std::string read_file(const char *file_path);
 	GLuint compile(GLuint type, const std::string &source);
 	void create(const std::string &vertex_string, const std::string &fragment_string);
 
-	std::string vertex_path;
-	std::string fragment_path;
+	const char *vertex_path;
+	const char *fragment_path;
 };
 
-void update_view_matrix(void *content);
-void update_perspective_matrix(void *content);
+void update_view_matrix(GLint location, void *content);
+void update_perspective_matrix(GLint location, void *content);
+void update_model_matrix(GLint location, void *content);
