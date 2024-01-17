@@ -1,12 +1,12 @@
 #include "RAGE_object.hpp"
-#include "RAGE_mesh.hpp"
 #include "RAGE.hpp"
 #include "glm/gtc/type_ptr.hpp"
-#include <queue>
 
 RAGE_object::RAGE_object(RAGE_mesh *mesh, const char *name)
 {
 	this->mesh = mesh;
+	if (this->mesh == NULL)
+		this->mesh = new RAGE_mesh();
 	this->name = name;
 	this->polygon_mode = polygon_mode::fill;
 }
@@ -38,7 +38,8 @@ void RAGE_object::draw()
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 	RAGE *rage = get_rage();
 
-	glUniformMatrix4fv(rage->shader->uniforms["u_model_matrix"].location, 1, GL_FALSE, glm::value_ptr(this->get_model_matrix()));
+	glUseProgram(rage->shader->program);
+	rage->shader->update_uniform("u_model_matrix", this);
 
 	for (size_t i = 0; i < this->mesh->primitives.size(); i++)
 	{

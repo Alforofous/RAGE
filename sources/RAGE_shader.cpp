@@ -158,6 +158,7 @@ void RAGE_shader::init_RAGE_shaders(void *content)
 								   (rage->executable_path + "/shaders/fragment_test.glsl").c_str());
 	rage->shader->init_uniform("u_view_matrix", GL_FLOAT_MAT4, update_view_matrix);
 	rage->shader->init_uniform("u_perspective_matrix", GL_FLOAT_MAT4, update_perspective_matrix);
+	rage->shader->update_uniforms(rage);
 	rage->shader->init_uniform("u_model_matrix", GL_FLOAT_MAT4, update_model_matrix);
 
 	rage->skybox_shader = new RAGE_shader((rage->executable_path + "/shaders/vertex_skybox.glsl").c_str(),

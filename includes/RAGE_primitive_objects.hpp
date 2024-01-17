@@ -8,5 +8,5 @@
 class RAGE_primitive_objects
 {
 public:
-	static RAGE_object *create_cube(float width = 1.0f, float height = 1.0f, float depth = 1.0f);
+	static RAGE_primitive *create_cube(float width = 1.0f, float height = 1.0f, float depth = 1.0f);
 };

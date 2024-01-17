@@ -1,8 +1,9 @@
 #include "RAGE_primitive_objects.hpp"
+#include "loaders/GLB_attribute_buffer.hpp"
 
 static GLfloat *get_cube_vertex_positions(float width, float height, float depth)
 {
-	GLfloat *vertex_positions = new GLfloat[CUBE_VERTEX_COUNT * 3]
+	GLfloat *vertex_positions = new (std::nothrow) GLfloat[CUBE_VERTEX_COUNT * 3]
 	{
 		-width / 2.0f, -height / 2.0f, -depth / 2.0f,
 		width / 2.0f, -height / 2.0f, -depth / 2.0f,
@@ -18,12 +19,24 @@ static GLfloat *get_cube_vertex_positions(float width, float height, float depth
 	return (vertex_positions);
 }
 
-RAGE_object *RAGE_primitive_objects::create_cube(float width, float height, float depth)
+static GLfloat *get_cube_vertex_colors()
+{
+	GLfloat *vertex_colors = new (std::nothrow) GLfloat[CUBE_VERTEX_COUNT * 3];
+	if (vertex_colors == NULL)
+		return (NULL);
+	std::fill_n(vertex_colors, CUBE_VERTEX_COUNT * 3, 1.0f);
+	return (vertex_colors);
+}
+
+RAGE_primitive *RAGE_primitive_objects::create_cube(float width, float height, float depth)
 {
 	GLfloat *vertex_positions = get_cube_vertex_positions(width, height, depth);
 	if (vertex_positions == NULL)
 		return (NULL);
-	GLuint *indices = new GLuint[CUBE_TRIANGLE_COUNT * 3]
+	GLfloat *vertex_colors = get_cube_vertex_colors();
+	if (vertex_colors == NULL)
+		return (NULL);
+	GLuint *indices = new (std::nothrow) GLuint[CUBE_TRIANGLE_COUNT * 3]
 	{
 		0, 1, 2,	0, 2, 3,
 		1, 5, 6,	1, 6, 2,
@@ -35,7 +48,18 @@ RAGE_object *RAGE_primitive_objects::create_cube(float width, float height, floa
 	if (indices == NULL)
 		return (NULL);
 
-	RAGE_mesh *mesh = new RAGE_mesh();
-	RAGE_object *object = new RAGE_object(mesh, "Cube");
-	return (object);
+	RAGE_primitive *primitive = new RAGE_primitive();
+	GLB_attribute_buffer *position_attribute_buffer = new (std::nothrow) GLB_attribute_buffer(vertex_positions, 0, 0, CUBE_VERTEX_COUNT, "POSITION", 3, GL_FLOAT, GL_FALSE);
+	if (position_attribute_buffer == NULL)
+		return (NULL);
+	GLB_attribute_buffer *color_attribute_buffer = new (std::nothrow) GLB_attribute_buffer(vertex_colors, 0, 0, CUBE_VERTEX_COUNT, "COLOR_0", 3, GL_FLOAT, GL_FALSE);
+	if (color_attribute_buffer == NULL)
+		return (NULL);
+	primitive->attribute_buffers.push_back(position_attribute_buffer);
+	primitive->attribute_buffers.push_back(color_attribute_buffer);
+	primitive->element_buffer_object = new (std::nothrow) buffer_object(GL_ELEMENT_ARRAY_BUFFER, GL_UNSIGNED_INT, indices, CUBE_TRIANGLE_COUNT * 3 * sizeof(GLuint));
+	if (primitive->element_buffer_object == NULL)
+		return (NULL);
+	primitive->interleave_vbos();
+	return (primitive);
 }

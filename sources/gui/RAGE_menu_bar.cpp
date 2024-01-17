@@ -14,7 +14,9 @@ static void add_cube_callback(RAGE *rage, menu_bar_item *item)
 {
 	if (ImGui::MenuItem(item->name.c_str()))
 	{
-		rage->scene->add_object(RAGE_primitive_objects::create_cube(10.0f, 10.0f, 10.0f));
+		RAGE_object *cube_object = new RAGE_object(new RAGE_mesh(), "Cube");
+		cube_object->mesh->primitives.push_back(RAGE_primitive_objects::create_cube(1.0f, 1.0f, 1.0f));
+		rage->scene->add_object(cube_object);
 	}
 }
 
