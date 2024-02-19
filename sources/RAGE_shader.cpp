@@ -8,7 +8,7 @@ RAGE_shader::RAGE_shader(const char *vertex_path, const char *fragment_path)
 	this->fragment_path = fragment_path;
 	std::string vertex_string = read_file(vertex_path);
 	std::string fragment_string = read_file(fragment_path);
-	create(vertex_string, fragment_string);
+	create(vertex_string.c_str(), fragment_string.c_str());
 }
 
 std::string RAGE_shader::read_file(const char *file_path)
@@ -32,13 +32,11 @@ std::string RAGE_shader::read_file(const char *file_path)
 	return (buffer.str());
 }
 
-GLuint RAGE_shader::compile(GLuint type, const std::string& source)
+GLuint RAGE_shader::compile(GLuint type, const char *source)
 {
 	GLuint shader = glCreateShader(type);
 
-	const char* src = source.c_str();
-	glShaderSource(shader, 1, &src, nullptr);
-
+	glShaderSource(shader, 1, &source, nullptr);
 	glCompileShader(shader);
 
 	GLint result;
@@ -59,7 +57,7 @@ GLuint RAGE_shader::compile(GLuint type, const std::string& source)
 	return (shader);
 }
 
-void RAGE_shader::create(const std::string& vertex_string, const std::string& fragment_string)
+void RAGE_shader::create(const char *vertex_string, const char *fragment_string)
 {
 	GLuint vertex_shader = compile(GL_VERTEX_SHADER, vertex_string);
 	GLuint fragment_shader = compile(GL_FRAGMENT_SHADER, fragment_string);

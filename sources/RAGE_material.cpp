@@ -1,18 +1,20 @@
 #include "RAGE_material.hpp"
+#include "RAGE.hpp"
 
 RAGE_material::RAGE_material()
 {
-	this->shader = NULL;
+	RAGE *rage = get_rage();
+
+	this->shader = rage->shader;
+	this->name = "Default material";
 }
 
-bool RAGE_material::load_shader(const char *vertex_shader_path, const char *fragment_shader_path)
+void RAGE_material::use_shader()
 {
-	this->shader = new RAGE_shader(vertex_shader_path, fragment_shader_path);
-	return (true);
+	glUseProgram(this->shader->program);
 }
 
-RAGE_material::~RAGE_material()
+GLint RAGE_material::get_shader_location()
 {
-	if (this->shader != NULL)
-		delete this->shader;
+	return (this->shader->program);
 }

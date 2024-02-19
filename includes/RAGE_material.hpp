@@ -7,9 +7,10 @@ class RAGE_material
 {
 public:
 	RAGE_material();
-	~RAGE_material();
 
-	bool load_shader(const char *vertex_shader_path, const char *fragment_shader_path);
+	void use_shader();
+	GLint get_shader_location();
+	std::string name;
 protected:
 	RAGE_shader *shader;
 private:

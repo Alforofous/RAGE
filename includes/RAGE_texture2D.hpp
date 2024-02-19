@@ -12,10 +12,10 @@ public:
 	RAGE_texture2D();
 	RAGE_texture2D(const char *path);
 	~RAGE_texture2D();
-	bool load(const char *path);
 
-	void bind();
-	void unbind();
+	bool load_gl_texture(const char *path);
+	bool load_texture_data(const char *path);
+	bool create_empty_texture(int width, int height, int channel_count = 3);
 
 	GLuint get_id();
 	int get_width();
@@ -23,6 +23,10 @@ public:
 	int get_channel_count();
 	uint8_t *get_data();
 private:
+
+	void bind();
+	void unbind();
+
 	GLuint id;
 	int width;
 	int height;

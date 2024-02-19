@@ -76,6 +76,7 @@ set(
 	RAGE_primitive.cpp
 	RAGE_texture2D.cpp
 	RAGE_material.cpp
+	RAGE_material_skybox.cpp
 	shader_uniform_callbacks.cpp
 	vertex_array.cpp
 	buffer_object.cpp
@@ -98,6 +99,7 @@ set(
 	RAGE_primitive.hpp
 	RAGE_texture2D.hpp
 	RAGE_material.hpp
+	RAGE_material_skybox.hpp
 	vertex_array.hpp
 	buffer_object.hpp
 )
