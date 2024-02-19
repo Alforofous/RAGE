@@ -28,7 +28,7 @@ void RAGE_object::draw_objects(RAGE_object **objects, size_t count)
 
 void RAGE_object::draw()
 {
-	if (this->mesh == NULL)
+	if (this->mesh == NULL || this->mesh->primitives.size() == 0 || this->mesh->material == NULL)
 		return;
 	if (this->polygon_mode == polygon_mode::fill)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -38,8 +38,9 @@ void RAGE_object::draw()
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 	RAGE *rage = get_rage();
 
-	glUseProgram(rage->shader->program);
 	rage->shader->update_uniform("u_model_matrix", this);
+	
+	this->mesh->material->use_shader();
 
 	for (size_t i = 0; i < this->mesh->primitives.size(); i++)
 	{

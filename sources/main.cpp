@@ -3,6 +3,7 @@
 #include "RAGE_primitive_objects.hpp"
 #include "physics/RAGE_ray_tracing.hpp"
 #include "loaders/GLB_loader.hpp"
+#include "RAGE_material_skybox.hpp"
 
 RAGE *get_rage()
 {
@@ -49,9 +50,17 @@ int main(void)
 	//rage->scene = glb_loader.load((rage->executable_path + "/assets/models/BoxVertexColors.glb").c_str());
 	rage->scene = glb_loader.load((rage->executable_path + "/assets/models/Duck.glb").c_str());
 
-	RAGE_object *object = new RAGE_object(new RAGE_mesh(), "Cube");
-	object->mesh->primitives.push_back(RAGE_primitive_objects::create_cube(1.0f, 1.0f, 1.0f));
+	RAGE_mesh *mesh = new RAGE_mesh(new RAGE_material());
+	RAGE_object *object = new RAGE_object(mesh, "Cube");
+	object->mesh->primitives.push_back(RAGE_primitive_objects::create_cube());
 	rage->scene->add_object(object);
+
+	RAGE_mesh *mesh2 = new RAGE_mesh(new RAGE_material_skybox());
+	RAGE_object *object2 = new RAGE_object(mesh2, "Cube2");
+	object2->position = glm::vec3(0, 1.2, 0);
+	object2->mesh->primitives.push_back(RAGE_primitive_objects::create_cube());
+	rage->scene->add_object(object2);
+
 	if (rage->scene == NULL)
 		return (1);
 	glfwSwapInterval(rage->window->vsync);
@@ -60,6 +69,7 @@ int main(void)
 		std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
 		rage->shader->update_uniform("u_view_matrix", rage);
+		rage->shader->update_uniform("u_perspective_matrix", rage);
 		rage->gui->draw(rage);
 		if (rage->gui->scene_view.is_focused())
 			rage->camera.handle_input(rage->user_input, (float)rage->delta_time);

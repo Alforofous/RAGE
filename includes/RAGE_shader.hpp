@@ -42,8 +42,8 @@ public:
 private:
 	GLint init_uniform_location(const char *variable_name);
 	std::string read_file(const char *file_path);
-	GLuint compile(GLuint type, const std::string &source);
-	void create(const std::string &vertex_string, const std::string &fragment_string);
+	GLuint compile(GLuint type, const char *source);
+	void create(const char *vertex_string, const char *fragment_string);
 
 	const char *vertex_path;
 	const char *fragment_path;
