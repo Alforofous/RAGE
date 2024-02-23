@@ -35,39 +35,66 @@ static void draw_drag_float3(RAGE *rage, std::string label, glm::vec3 &vector, f
 		glfwSetInputMode(rage->window->glfw_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
+static void display_attribute_buffer_data(GLB_attribute_buffer *attribute_buffer)
+{
+	if (attribute_buffer == NULL)
+		return ;
+	std::string attribute_buffer_uid = std::to_string((unsigned long long)attribute_buffer);
+	if (ImGui::TreeNode(attribute_buffer_uid.c_str(), "Attribute Buffer - %s", attribute_buffer->get_name().c_str()))
+	{
+		ImGui::Text("Data type: %s", GLB_utilities::gl_data_type_to_string(attribute_buffer->get_data_type()).c_str());
+		ImGui::Text("Component count: %zu", attribute_buffer->get_component_count());
+		ImGui::Text("Byte size: %zu", attribute_buffer->get_byte_size());
+		if (ImGui::TreeNode(attribute_buffer_uid.c_str(), "Data"))
+		{
+			std::string buffer_data = attribute_buffer->get_data_string();
+			ImGui::TextUnformatted(buffer_data.c_str(), buffer_data.c_str() + buffer_data.size());
+			ImGui::TreePop();
+		}
+		ImGui::TreePop();
+	}
+}
+
+static void display_primitive_data(RAGE_primitive *primitive, std::string node_uid)
+{
+	if (primitive == NULL)
+		return ;
+	if (ImGui::TreeNode(("PrimitiveNode" + node_uid).c_str(), primitive->name.c_str()))
+	{
+		for (size_t attribute_buffer_index = 0; attribute_buffer_index < primitive->attribute_buffers.size(); attribute_buffer_index++)
+		{
+			GLB_attribute_buffer *attribute_buffer = primitive->attribute_buffers[attribute_buffer_index];
+			display_attribute_buffer_data(attribute_buffer);
+		}
+		ImGui::TreePop();
+	}
+}
+
+static void display_material_data(RAGE_material *material, std::string node_uid)
+{
+	if (material == NULL)
+		return ;
+	if (ImGui::TreeNode(("MaterialNode" + node_uid).c_str(), "Material - %s", material->name.c_str()))
+	{
+		ImGui::TreePop();
+	}
+}
+
 static void display_mesh_data(RAGE_mesh *mesh)
 {
-	std::string mesh_uuid = std::to_string((unsigned long long)mesh);
-	if (ImGui::TreeNode(("Mesh##" + mesh_uuid).c_str()))
+	std::string node_uid = std::to_string((unsigned long long)mesh);
+	if (ImGui::TreeNode(("MeshNode" + node_uid).c_str(), "Mesh - %s", mesh->name.c_str()))
 	{
-		ImGui::Text("Primitive count: %zu", mesh->primitives.size());
-		for (size_t primitive_index = 0; primitive_index < mesh->primitives.size(); primitive_index++)
+		display_material_data(mesh->material, node_uid);
+		ImGui::Separator();
+		if (ImGui::TreeNode(("PrimitivesNode" + node_uid).c_str(), "Primitives[%zu]", mesh->primitives.size()))
 		{
-			RAGE_primitive *primitive = mesh->primitives[primitive_index];
-			std::string primitive_uuid = std::to_string((unsigned long long)primitive);
-			if (ImGui::TreeNode(("Primitive" + primitive_uuid).c_str(), "Primitive - %s [%zu]", primitive->name.c_str(), primitive_index)) 
+			for (size_t i = 0; i < mesh->primitives.size(); i++)
 			{
-				for (size_t attribute_buffer_index = 0; attribute_buffer_index < primitive->attribute_buffers.size(); attribute_buffer_index++)
-				{
-					GLB_attribute_buffer *attribute_buffer = primitive->attribute_buffers[attribute_buffer_index];
-					std::string attribute_buffer_uuid = std::to_string((unsigned long long)attribute_buffer);
-					if (ImGui::TreeNode(("Attribute Buffer" + attribute_buffer_uuid).c_str(), "Attribute Buffer - %s [%zu]", attribute_buffer->get_name().c_str(), attribute_buffer_index))
-					{
-						ImGui::Text("Data type: %s", GLB_utilities::gl_data_type_to_string(attribute_buffer->get_data_type()).c_str());
-						ImGui::Text("Component count: %zu", attribute_buffer->get_component_count());
-						ImGui::Text("Byte size: %zu", attribute_buffer->get_byte_size());
-						if (ImGui::TreeNode(("Data" + attribute_buffer_uuid).c_str(), "Data"))
-						{
-							std::string buffer_data = attribute_buffer->get_data_string();
-							ImGui::TextUnformatted(buffer_data.c_str(), buffer_data.c_str() + buffer_data.size());
-							ImGui::TreePop();
-						}
-						ImGui::TreePop();
-					}
-				}
-				ImGui::TreePop();
+				display_primitive_data(mesh->primitives[i], node_uid);
+				ImGui::Separator();
 			}
-			ImGui::Separator();
+			ImGui::TreePop();
 		}
 		ImGui::TreePop();
 	}
@@ -91,7 +118,7 @@ void RAGE_inspector::draw(RAGE *rage)
 	{
 		RAGE_object *selected_object = selected_objects->at(selected_object_index);
 		ImGui::Text("Selected object name: %s", selected_object->name.c_str());
-		ImGui::Text("UUID: %llu", (unsigned long long)selected_object);
+		ImGui::Text("uid: %llu", (unsigned long long)selected_object);
 
 		draw_drag_float3(rage, "Position##" + std::to_string(selected_object_index), selected_object->position, 0.1f);
 		glm::vec3 min_rotation = glm::vec3(-180.0f);
