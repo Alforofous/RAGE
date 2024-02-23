@@ -11,5 +11,5 @@ void main()
 {
 	mat4 view = mat4(mat3(u_view_matrix));
 	frag_position = a_position;
-	gl_Position = u_perspective_matrix * view * vec4(a_position, 1.0);
+	gl_Position = u_perspective_matrix * view * vec4(a_position * 1000.0, 1.0);
 }

@@ -8,8 +8,9 @@
 class RAGE_mesh
 {
 public:
-	RAGE_mesh(RAGE_material *material = NULL);
+	RAGE_mesh(RAGE_material *material = NULL, std::string name = "New Mesh");
 	~RAGE_mesh();
+	std::string name;
 	std::vector<RAGE_primitive *> primitives;
 	RAGE_material *material;
 private:

@@ -97,13 +97,10 @@ GLint RAGE_shader::init_uniform_location(const char *variable_name)
 {
 	if (variable_name == NULL)
 	{
-		std::cout << "Warning: variable_name is NULL" << std::endl;
 		return (-1);
 	}
 	RAGE_uniform uniform;
 	uniform.location = glGetUniformLocation(this->program, variable_name);
-	if (uniform.location == -1)
-		std::cout << "Warning: Failed to locate uniform variable " << variable_name << std::endl;
 	this->uniforms[variable_name] = uniform;
 	return (uniform.location);
 }
@@ -164,6 +161,7 @@ void RAGE_shader::init_RAGE_shaders(void *content)
 	rage->skybox_shader->init_uniform("u_view_matrix", GL_FLOAT_MAT4, update_view_matrix);
 	rage->skybox_shader->init_uniform("u_perspective_matrix", GL_FLOAT_MAT4, update_perspective_matrix);
 	rage->skybox_shader->init_uniform("u_skybox", GL_SAMPLER_CUBE, NULL);
+	rage->skybox_shader->update_uniforms(rage);
 }
 
 

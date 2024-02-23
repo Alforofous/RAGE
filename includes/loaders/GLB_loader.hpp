@@ -18,8 +18,8 @@ private:
 	RAGE_scene *load_scene_at_index(size_t scene_index);
 	void load_scene_info(RAGE_scene *scene, size_t scene_index);
 	void load_nodes(RAGE_scene *scene, nlohmann::json &json_scene);
-	RAGE_object *load_node(nlohmann::json &node);
-	void load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object);
+	RAGE_object *load_object(nlohmann::json &node);
+	void load_object_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object);
 	void load_primitive_ebo(nlohmann::json &primitive, RAGE_object *object, int primitive_index);
 	void load_primitive_vbo_and_vao(nlohmann::json &primitive, RAGE_object *object, int primitive_index);
 	void load_glb_attribute_buffers(nlohmann::json &primitive, RAGE_object *object, int primitive_index);

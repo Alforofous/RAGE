@@ -57,7 +57,6 @@ int main(void)
 
 	RAGE_mesh *mesh2 = new RAGE_mesh(new RAGE_material_skybox());
 	RAGE_object *object2 = new RAGE_object(mesh2, "Cube2");
-	object2->position = glm::vec3(0, 1.2, 0);
 	object2->mesh->primitives.push_back(RAGE_primitive_objects::create_cube());
 	rage->scene->add_object(object2);
 
