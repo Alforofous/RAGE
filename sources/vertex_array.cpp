@@ -19,18 +19,18 @@ void vertex_array::link_attributes(buffer_object *vertex_buffer_object, GLuint l
 }
 
 template <typename T>
-static std::string get_attribute_data_with_data_type(void *data, size_t size, GL_attribute attribute)
+static std::string get_attribute_data_with_data_type(void *data, GLsizeiptr size, GL_attribute attribute)
 {
 	std::string result;
-	uint8_t *start = (uint8_t *)data + (size_t)attribute.offset;
+	uint8_t *start = (uint8_t *)data + (GLsizeiptr)attribute.offset;
 	uint8_t *end = (uint8_t *)data + size;
 	int i = 0;
 	GLenum data_type = attribute.data_type;
 	GLsizeiptr data_type_size = GLB_utilities::gl_data_type_size(data_type);
 	for (uint8_t *typed_data = start; typed_data < end; typed_data += attribute.stride)
 	{
-		result += "offset: " + std::to_string((size_t)typed_data - (size_t)data) + " ";
-		for (size_t j = 0; j < attribute.component_count; j++)
+		result += "offset: " + std::to_string((GLsizeiptr)typed_data - (GLsizeiptr)data) + " ";
+		for (GLsizeiptr j = 0; j < attribute.component_count; j++)
 		{
 			result += std::to_string(*((T *)(typed_data + j * data_type_size))) + " ";
 		}
@@ -50,7 +50,7 @@ std::string vertex_array::get_linked_attribute_data(GLuint layout)
 	void *data = linked_attribute.vertex_buffer_object->get_data();
 	if (data == NULL)
 		return ("Data is NULL.");
-	GLuint byte_size = linked_attribute.vertex_buffer_object->get_byte_size();
+	GLsizeiptr byte_size = linked_attribute.vertex_buffer_object->get_byte_size();
 	if (linked_attribute.data_type == GL_BYTE)
 		result += get_attribute_data_with_data_type<GLbyte>(data, byte_size, linked_attribute);
 	else if (linked_attribute.data_type == GL_UNSIGNED_BYTE)

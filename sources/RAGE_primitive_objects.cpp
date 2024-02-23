@@ -21,12 +21,12 @@ static GLfloat *get_cube_vertex_positions(float width, float height, float depth
 
 static GLfloat *get_cube_vertex_colors()
 {
-	uint color_channel_count = 4;
+	GLuint color_channel_count = 4;
 	GLfloat *vertex_colors = new (std::nothrow) GLfloat[CUBE_VERTEX_COUNT * color_channel_count];
 	if (vertex_colors == NULL)
 		return (NULL);
 	std::fill_n(vertex_colors, CUBE_VERTEX_COUNT * color_channel_count, 0.7f);
-	for (uint i = 0; i < CUBE_VERTEX_COUNT; i++)
+	for (GLuint i = 0; i < CUBE_VERTEX_COUNT; i++)
 	{
 		vertex_colors[i * color_channel_count + 3] = 1.0f;
 	}

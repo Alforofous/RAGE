@@ -127,7 +127,7 @@ void *buffer_object::get_data()
 	return (this->data.data());
 }
 
-GLuint buffer_object::get_byte_size()
+GLsizeiptr buffer_object::get_byte_size()
 {
 	return (this->byte_size);
 }

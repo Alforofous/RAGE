@@ -12,7 +12,7 @@ public:
 	~buffer_object();
 
 	void *get_data();
-	GLuint get_byte_size();
+	GLsizeiptr get_byte_size();
 	size_t get_vertex_count();
 	GLenum get_data_type();
 	void bind();
@@ -27,7 +27,7 @@ private:
 	void init(GLenum buffer_type, GLenum data_type, void *data, GLsizeiptr byte_size);
 
 	GLuint id;
-	GLuint byte_size;
+	GLsizeiptr byte_size;
 	GLenum data_type;
 	GLenum buffer_type;
 	size_t vertex_count;
