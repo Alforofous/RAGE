@@ -192,7 +192,7 @@ void GLB_loader::load_primitive_ebo(nlohmann::json &primitive, RAGE_object *obje
 		throw std::runtime_error("Indices error. Failed to allocate memory.");
 }
 
-void GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object)
+void GLB_loader::load_object_mesh(nlohmann::json &node, nlohmann::json &json, RAGE_object *object)
 {
 	if (node["mesh"].is_null())
 		return;
@@ -210,9 +210,11 @@ void GLB_loader::load_node_mesh(nlohmann::json &node, nlohmann::json &json, RAGE
 		load_primitive_ebo(primitive, object, i);
 		load_glb_attribute_buffers(primitive, object, i);
 	}
+	if (object->mesh->material == NULL)
+		object->mesh->material = new RAGE_material();
 }
 
-RAGE_object *GLB_loader::load_node(nlohmann::json &node)
+RAGE_object *GLB_loader::load_object(nlohmann::json &node)
 {
 	RAGE_object *object = new RAGE_object();
 	if (object == NULL)
@@ -242,9 +244,9 @@ void GLB_loader::load_nodes(RAGE_scene *scene, nlohmann::json &json_scene)
 	for (int i = 0; i < json["nodes"].size(); i++)
 	{
 		nlohmann::json &node = json["nodes"][i];
-		RAGE_object *object = load_node(node);
+		RAGE_object *object = load_object(node);
 		objects->push_back(object);
-		this->load_node_mesh(node, json, object);
+		this->load_object_mesh(node, json, object);
 	}
 	for (int i = 0; i < objects->size(); i++)
 	{
