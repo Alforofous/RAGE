@@ -162,6 +162,14 @@ void RAGE_shader::init_RAGE_shaders(void *content)
 	rage->skybox_shader->init_uniform("u_perspective_matrix", GL_FLOAT_MAT4, update_perspective_matrix);
 	rage->skybox_shader->init_uniform("u_skybox", GL_SAMPLER_CUBE, NULL);
 	rage->skybox_shader->update_uniforms(rage);
+	rage->skybox_shader->init_uniform("u_far_clip_plane", GL_FLOAT, 
+	[](GLint location, void* content) {
+		GLfloat far_clip_plane = *static_cast<GLfloat*>(content);
+		glUniform1f(location, far_clip_plane);
+	});
+	const glm::vec2 clip_planes = rage->camera.get_clip_planes();
+	void *far_plane_clip = (void *)&clip_planes.y;
+	rage->skybox_shader->update_uniform("u_far_clip_plane", far_plane_clip);
 }
 
 

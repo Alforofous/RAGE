@@ -82,7 +82,6 @@ void RAGE_gui::draw_performance_window(RAGE *rage)
 		if (i != frames.size() - 1)
 			frames_string += ", ";
 	}
-	ImGui::SetClipboardText(frames_string.c_str());
 	ImGui::End();
 }
 

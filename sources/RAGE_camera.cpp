@@ -11,7 +11,8 @@ bool RAGE_camera::init(RAGE_window *window)
 	m_aspect_ratio = static_cast<float>(window->pixel_size.x) / window->pixel_size.y;
 	rotation = direction_to_euler(m_forward);
 	m_view_matrix = RAGE_camera::get_view_matrix();
-	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, 0.1f, 10000.0f);
+	this->clip_planes = glm::vec2(0.1f, 10000.0f);
+	m_perspective_matrix = glm::perspective(glm::radians(m_fov), m_aspect_ratio, this->clip_planes.x, this->clip_planes.y);
 	return (true);
 }
 
@@ -110,3 +111,4 @@ glm::mat4 RAGE_camera::get_view_matrix(bool update)
 glm::vec3 RAGE_camera::get_forward() { return (m_forward); }
 glm::vec3 RAGE_camera::get_up() { return (m_up); }
 glm::vec3 RAGE_camera::get_right() { return (m_right); }
+glm::vec2 RAGE_camera::get_clip_planes() { return (this->clip_planes); }

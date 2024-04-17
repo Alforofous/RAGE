@@ -9,8 +9,8 @@ public:
 	RAGE_material_skybox();
 	~RAGE_material_skybox();
 
-	bool load_texture(const char *path, int index);
+	void use_shader();
+
 private:
 	GLuint cube_sampler_id;
-	RAGE_texture2D textures[6];
 };

@@ -12,6 +12,7 @@ public:
 	glm::vec3 get_forward();
 	glm::vec3 get_up();
 	glm::vec3 get_right();
+	glm::vec2 get_clip_planes();
 	void handle_input(RAGE_user_input *user_input, float delta_time);
 	void set_aspect_ratio(glm::ivec2 window_size);
 	glm::mat4 m_perspective_matrix;
@@ -31,6 +32,7 @@ private:
 	float rotation_speed;
 	float m_aspect_ratio;
 	float m_fov;
+	glm::vec2 clip_planes;
 };
 
 glm::vec3 direction_to_euler(glm::vec3 direction);

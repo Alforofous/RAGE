@@ -70,12 +70,42 @@ static void display_primitive_data(RAGE_primitive *primitive, std::string node_u
 	}
 }
 
+static void display_textures_data(std::vector<RAGE_texture2D> &textures, std::string node_uid)
+{
+	if (textures.size() == 0)
+		return ;
+	if (ImGui::TreeNode(("TexturesNode" + node_uid).c_str(), "Textures[%zu]", textures.size()))
+	{
+		for (size_t i = 0; i < textures.size(); i++)
+		{
+			glm::ivec2 imageSize = glm::ivec2(256, 256);
+			float aspectRatio = textures[i].get_width() / (float)textures[i].get_height();
+			if (aspectRatio > 1.0f)
+				imageSize.y = (float)imageSize.x / aspectRatio;
+			else
+				imageSize.x = (float)imageSize.y * aspectRatio;
+			ImGui::Image((void *)(intptr_t)textures[i].get_id(), ImVec2(imageSize.x, imageSize.y), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 0.5));
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::BeginTooltip();
+				ImGui::Text("ID: %d", textures[i].get_id());
+				ImGui::Text("Size: %d x %d", textures[i].get_width(), textures[i].get_height());
+				ImGui::Text("Display size: %d x %d", imageSize.x, imageSize.y);
+				ImGui::EndTooltip();
+			}
+			ImGui::Separator();
+		}
+		ImGui::TreePop();
+	}
+}
+
 static void display_material_data(RAGE_material *material, std::string node_uid)
 {
 	if (material == NULL)
 		return ;
 	if (ImGui::TreeNode(("MaterialNode" + node_uid).c_str(), "Material - %s", material->name.c_str()))
 	{
+		display_textures_data(material->get_textures(), node_uid);
 		ImGui::TreePop();
 	}
 }

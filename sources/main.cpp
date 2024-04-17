@@ -69,6 +69,8 @@ int main(void)
 
 		rage->shader->update_uniform("u_view_matrix", rage);
 		rage->shader->update_uniform("u_perspective_matrix", rage);
+		rage->skybox_shader->update_uniform("u_view_matrix", rage);
+		rage->skybox_shader->update_uniform("u_perspective_matrix", rage);
 		rage->gui->draw(rage);
 		if (rage->gui->scene_view.is_focused())
 			rage->camera.handle_input(rage->user_input, (float)rage->delta_time);

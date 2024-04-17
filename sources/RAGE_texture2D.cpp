@@ -4,6 +4,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#include <algorithm>
 
 RAGE_texture2D::RAGE_texture2D()
 {
@@ -25,15 +26,10 @@ bool RAGE_texture2D::load_texture_data(const char *path)
 		stbi_image_free(this->data);
 	if (path == NULL)
 		path = "";
-	stbi_set_flip_vertically_on_load(true);
 	this->data = stbi_load(path, &this->width, &this->height, &this->channel_count, 0);
 	if (this->data == NULL)
 	{
-		this->width = 1;
-		this->height = 1;
-		this->data = (uint8_t *)malloc(sizeof(uint8_t) * 3);
-		std::memset(this->data, 0, sizeof(uint8_t) * 3);
-		this->channel_count = 3;
+		this->create_empty_texture(1, 1, 3);
 		return (false);
 	}
 	return (true);
@@ -46,9 +42,8 @@ bool RAGE_texture2D::create_empty_texture(int width, int height, int channel_cou
 	this->width = width;
 	this->height = height;
 	this->channel_count = channel_count;
-	this->data = (uint8_t *)malloc(sizeof(uint8_t) * width * height * channel_count);
-	std::memset(this->data, 0, sizeof(uint8_t) * width * height * channel_count);
-	return (true);
+	std::fill_n(this->data, width * height * channel_count, 0);
+	return true;
 }
 
 bool RAGE_texture2D::load_gl_texture(const char *path)
