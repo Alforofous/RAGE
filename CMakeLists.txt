@@ -1,153 +1,237 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.16...3.28)
+
+# Use Clang compiler instead of MinGW
+set(CMAKE_C_COMPILER "C:/Program Files/LLVM/bin/clang.exe")
+set(CMAKE_CXX_COMPILER "C:/Program Files/LLVM/bin/clang++.exe")
+
 set(CMAKE_CXX_STANDARD 17)
 project(RAGE CXX C)
+
+# Debug symbols configuration for GDB
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g3 -ggdb -O0")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g3 -ggdb -O0")
+set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--export-all-symbols")
+
+# Generate compile_commands.json for IDE support
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 message("CMAKE ${PROJECT_SOURCE_DIR}")
 
 set(SOURCES_DIRECTORY "sources")
-set(GUI_DIRECTORY "gui")
-set(PHYSICS_DIRECTORY "physics")
 set(INCLUDES_DIRECTORY "includes")
-set(SHADERS_DIRECTORY "shaders")
-set(LOADERS_DIRECTORY "loaders")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-set(
-	GUI_SOURCES
-	RAGE_gui.cpp
-	RAGE_menu_bar.cpp
-	RAGE_scene_view.cpp
-	RAGE_inspector.cpp
+set(PRECOMPILE_HEADERS
+    renderable_node3D.hpp
 )
-list(TRANSFORM GUI_SOURCES PREPEND ${SOURCES_DIRECTORY}/${GUI_DIRECTORY}/)
+list(TRANSFORM PRECOMPILE_HEADERS PREPEND ${INCLUDES_DIRECTORY}/)
 
-set(
-	LOADERS_SOURCES
-	GLB_loader.cpp
-	GLB_attribute_buffer.cpp
-	GLB_utilities.cpp
-)
-list(TRANSFORM LOADERS_SOURCES PREPEND ${SOURCES_DIRECTORY}/${LOADERS_DIRECTORY}/)
-
-set(
-	PHYSICS_SOURCES
-	RAGE_ray_tracing.cpp
-)
-list(TRANSFORM PHYSICS_SOURCES PREPEND ${SOURCES_DIRECTORY}/${PHYSICS_DIRECTORY}/)
-
-set(
-	GUI_INCLUDES
-	RAGE_gui.hpp
-	RAGE_menu_bar.hpp
-	RAGE_scene_view.hpp
-	RAGE_inspector.hpp
-)
-list(TRANSFORM GUI_INCLUDES PREPEND ${INCLUDES_DIRECTORY}/${GUI_DIRECTORY}/)
-
-set(
-	LOADERS_INCLUDES
-	GLB_loader.hpp
-	GLB_attribute_buffer.hpp
-	GLB_utilities.hpp
-)
-list(TRANSFORM LOADERS_INCLUDES PREPEND ${INCLUDES_DIRECTORY}/${LOADERS_DIRECTORY}/)
-
-set(
-	PHYSICS_INCLUDES
-	RAGE_ray_tracing.hpp
-)
-list(TRANSFORM PHYSICS_INCLUDES PREPEND ${INCLUDES_DIRECTORY}/${PHYSICS_DIRECTORY}/)
-
-set(
-	SOURCES
+set(SOURCES
 	main.cpp
-	utility_functions.cpp
-	set_callbacks.cpp
-	RAGE.cpp
-	RAGE_window.cpp
-	RAGE_shader.cpp
-	RAGE_camera.cpp
-	RAGE_object.cpp
-	RAGE_transform.cpp
-	RAGE_scene.cpp
-	RAGE_mesh.cpp
-	RAGE_primitive_objects.cpp
-	RAGE_keyboard_input.cpp
-	RAGE_primitive.cpp
-	RAGE_texture2D.cpp
-	RAGE_material.cpp
-	RAGE_material_skybox.cpp
-	shader_uniform_callbacks.cpp
-	vertex_array.cpp
-	buffer_object.cpp
+	app.cpp
+	window.cpp
+	renderer.cpp
+	vulkan_utils.cpp
+	vulkan_render_target.cpp
+	node3D.cpp
+    matrix4.cpp
+    vector2.cpp
+    vector3.cpp
+    vector4.cpp
+    int_vector3.cpp
+    voxel3D.cpp
+    camera.cpp
+    scene.cpp
+    renderable_node3D.cpp
+    utils/file_reader.cpp
+    utils/shader_compiler.cpp
+    materials/ray_tracing_material.cpp
+    materials/voxel_ray_tracing_material.cpp
+    materials/material.cpp
+    pipelines/vulkan_pipeline.cpp
+    pipelines/vulkan_ray_tracing_pipeline.cpp
 )
+
+# Add SPIRV-Reflect as subdirectory
+set(SPIRV_REFLECT_STATIC_LIB ON CACHE BOOL "Build SPIRV-Reflect static library" FORCE)
+set(SPIRV_REFLECT_EXECUTABLE OFF CACHE BOOL "Don't build SPIRV-Reflect executable" FORCE)
+set(SPIRV_REFLECT_BUILD_TESTS OFF CACHE BOOL "Don't build SPIRV-Reflect tests" FORCE)
+add_subdirectory(libraries/spirv-reflect)
+
+# Add Google Test as subdirectory
+set(BUILD_GMOCK ON CACHE BOOL "Build Google Mock" FORCE)
+set(INSTALL_GTEST OFF CACHE BOOL "Don't install Google Test" FORCE)
+add_subdirectory(libraries/googletest)
 list(TRANSFORM SOURCES PREPEND ${SOURCES_DIRECTORY}/)
 
-set(
-	INCLUDES
-	RAGE.hpp
-	RAGE_window.hpp
-	RAGE_shader.hpp
-	RAGE_camera.hpp
-	RAGE_object.hpp
-	RAGE_transform.hpp
-	RAGE_scene.hpp
-	RAGE_mesh.hpp
-	RAGE_primitive_objects.hpp
-	RAGE_keyboard_input.hpp
-	RAGE_user_input.hpp
-	RAGE_primitive.hpp
-	RAGE_texture2D.hpp
-	RAGE_material.hpp
-	RAGE_material_skybox.hpp
-	vertex_array.hpp
-	buffer_object.hpp
+
+set(SHADERS
+    shaders/voxel_ray_tracing_material.rgen
+    shaders/voxel_ray_tracing_material.rchit
+    shaders/voxel_ray_tracing_material.rmiss
 )
-list(TRANSFORM INCLUDES PREPEND ${INCLUDES_DIRECTORY}/)
 
-set(
-	SHADERS
-	fragment_test.glsl
-	vertex_test.glsl
-)
-list(TRANSFORM SHADERS PREPEND ${SHADERS_DIRECTORY}/)
-
-source_group(${SHADERS_DIRECTORY} FILES ${SHADERS})
-source_group(${SOURCES_DIRECTORY} FILES ${SOURCES})
-source_group(${SOURCES_DIRECTORY}/${GUI_DIRECTORY} FILES ${GUI_SOURCES})
-source_group(${SOURCES_DIRECTORY}/${LOADERS_DIRECTORY} FILES ${LOADERS_SOURCES})
-source_group(${SOURCES_DIRECTORY}/${PHYSICS_DIRECTORY} FILES ${PHYSICS_SOURCES})
-source_group(${INCLUDES_DIRECTORY} FILES ${INCLUDES})
-source_group(${INCLUDES_DIRECTORY}/${GUI_DIRECTORY} FILES ${GUI_INCLUDES})
-source_group(${INCLUDES_DIRECTORY}/${LOADERS_DIRECTORY} FILES ${LOADERS_INCLUDES})
-source_group(${INCLUDES_DIRECTORY}/${PHYSICS_DIRECTORY} FILES ${PHYSICS_INCLUDES})
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/..)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/..)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/..)
+# Set RAGE as startup project
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT RAGE)
 
 add_subdirectory(libraries/)
+add_subdirectory(tests/)
 
 list(APPEND PROJECT_INCLUDES
 	${INCLUDES_DIRECTORY}
 	${LIBRARY_INCLUDE_DIRECTORIES}
 	libraries/
 	libraries/stb
+	libraries/glfw/include
+	libraries/imgui
+	libraries/glm
+	libraries/spirv-reflect
+	libraries/
+	$ENV{VULKAN_SDK}/Include
 )
+
+# Add Vulkan SDK include directories if available
+if(DEFINED ENV{VULKAN_SDK})
+    # Add the main Vulkan include directory
+    list(APPEND PROJECT_INCLUDES "$ENV{VULKAN_SDK}/Include")
+    message(STATUS "Added Vulkan include directory: $ENV{VULKAN_SDK}/Include")
+    
+    # Check if vulkan.h actually exists
+    if(EXISTS "$ENV{VULKAN_SDK}/Include/vulkan/vulkan.h")
+        message(STATUS "Found vulkan.h at: $ENV{VULKAN_SDK}/Include/vulkan/vulkan.h")
+        
+        # Check if vulkan_core.h exists (the main header that vulkan.h includes)
+        if(EXISTS "$ENV{VULKAN_SDK}/Include/vulkan/vulkan_core.h")
+            message(STATUS "Found vulkan_core.h at: $ENV{VULKAN_SDK}/Include/vulkan/vulkan_core.h")
+        else()
+            message(WARNING "vulkan_core.h not found - this may cause compilation issues")
+        endif()
+    else()
+        message(WARNING "vulkan.h not found in expected location: $ENV{VULKAN_SDK}/Include/vulkan/vulkan.h")
+        
+        # List contents of the vulkan directory to help debug
+        if(EXISTS "$ENV{VULKAN_SDK}/Include/vulkan")
+            file(GLOB VULKAN_VULKAN_CONTENTS "$ENV{VULKAN_SDK}/Include/vulkan/*")
+            message(STATUS "Contents of $ENV{VULKAN_SDK}/Include/vulkan: ${VULKAN_VULKAN_CONTENTS}")
+        endif()
+    endif()
+else()
+    message(WARNING "VULKAN_SDK environment variable not set")
+    
+    # Try to find Vulkan SDK in common locations
+    set(VULKAN_POSSIBLE_PATHS
+        "C:/VulkanSDK"
+        "C:/Program Files/VulkanSDK"
+        "C:/Program Files (x86)/VulkanSDK"
+    )
+    
+    foreach(VULKAN_PATH ${VULKAN_POSSIBLE_PATHS})
+        if(EXISTS "${VULKAN_PATH}")
+            # Look for versioned subdirectories
+            file(GLOB VULKAN_VERSIONS LIST_DIRECTORIES true "${VULKAN_PATH}/*")
+            foreach(VERSION_PATH ${VULKAN_VERSIONS})
+                if(IS_DIRECTORY ${VERSION_PATH})
+                    if(EXISTS "${VERSION_PATH}/Include/vulkan/vulkan.h")
+                        message(STATUS "Found Vulkan SDK at: ${VERSION_PATH}")
+                        list(APPEND PROJECT_INCLUDES "${VERSION_PATH}/Include")
+                        break()
+                    endif()
+                endif()
+            endforeach()
+        endif()
+    endforeach()
+endif()
 
 add_executable(
 	RAGE
 	${SOURCES}
-	${GUI_SOURCES}
-	${LOADERS_SOURCES}
-	${PHYSICS_SOURCES}
-	${INCLUDES}
-	${GUI_INCLUDES}
-	${LOADERS_INCLUDES}
-	${PHYSICS_INCLUDES}
 	${SHADERS}
 )
 
-target_include_directories(RAGE PRIVATE ${PROJECT_INCLUDES})
-target_link_libraries(RAGE project_libraries)
+target_include_directories(RAGE PUBLIC ${PROJECT_INCLUDES})
+target_precompile_headers(RAGE PUBLIC ${PRECOMPILE_HEADERS})
+
+# Add Vulkan library directory if available
+if(DEFINED ENV{VULKAN_SDK})
+    target_link_directories(RAGE PRIVATE "$ENV{VULKAN_SDK}/Lib")
+    message(STATUS "Added Vulkan library directory: $ENV{VULKAN_SDK}/Lib")
+    target_link_libraries(RAGE vulkan-1 shaderc_shared)
+else()
+    # Try to find Vulkan library in common locations
+    set(VULKAN_LIB_POSSIBLE_PATHS
+        "C:/VulkanSDK/*/Lib"
+        "C:/Program Files/VulkanSDK/*/Lib"
+        "C:/Program Files (x86)/VulkanSDK/*/Lib"
+    )
+    
+    foreach(VULKAN_LIB_PATH ${VULKAN_LIB_POSSIBLE_PATHS})
+        file(GLOB VULKAN_LIB_DIRS ${VULKAN_LIB_PATH})
+        foreach(LIB_DIR ${VULKAN_LIB_DIRS})
+            if(EXISTS "${LIB_DIR}/vulkan-1.lib")
+                message(STATUS "Found Vulkan library at: ${LIB_DIR}")
+                target_link_directories(RAGE PRIVATE "${LIB_DIR}")
+                target_link_libraries(RAGE vulkan-1 shaderc_shared)
+                break()
+            endif()
+        endforeach()
+    endforeach()
+endif()
+
+target_link_libraries(RAGE project_libraries spirv-reflect-static)
+
+# Compile and copy shaders
+find_program(GLSLC glslc HINTS $ENV{VULKAN_SDK}/Bin)
+if(NOT GLSLC)
+    message(FATAL_ERROR "glslc shader compiler not found!")
+endif()
+
+# Function to compile a shader
+function(compile_shader SHADER_PATH)
+    get_filename_component(SHADER_NAME ${SHADER_PATH} NAME)
+    get_filename_component(SHADER_EXT ${SHADER_PATH} EXT)
+    
+    add_custom_command(
+        OUTPUT ${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders/
+        COMMAND ${GLSLC} 
+            --target-env=vulkan1.2
+            -O
+            -I${CMAKE_SOURCE_DIR}/shaders
+            ${CMAKE_SOURCE_DIR}/shaders/${SHADER_NAME}
+            -o ${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv
+        DEPENDS ${CMAKE_SOURCE_DIR}/shaders/${SHADER_NAME}
+        COMMENT "Compiling shader ${SHADER_NAME}"
+    )
+    list(APPEND SPV_SHADERS ${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv)
+    set(SPV_SHADERS ${SPV_SHADERS} PARENT_SCOPE)
+endfunction()
+
+# Set shader output directory
+set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/shaders")
+
+# Create custom commands for shader compilation
+set(SHADER_SOURCES
+    shaders/voxel_ray_tracing_material.rgen
+    shaders/voxel_ray_tracing_material.rchit
+    shaders/voxel_ray_tracing_material.rmiss
+)
+
+# Add shader output directory as a compile definition
+add_compile_definitions(SHADER_OUTPUT_DIR="${SHADER_OUTPUT_DIR}")
+
+foreach(SHADER ${SHADER_SOURCES})
+    compile_shader(${SHADER})
+endforeach()
+
+# Create a custom target that depends on all shader outputs
+add_custom_target(shaders ALL
+    DEPENDS ${SPV_SHADERS}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/shaders
+        ${CMAKE_BINARY_DIR}/shaders
+)
+
+# Make sure shaders are built before the main target
+add_dependencies(${PROJECT_NAME} shaders)

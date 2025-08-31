@@ -3,7 +3,8 @@ build/
 libraries/glfw
 libraries/glm
 libraries/imgui
-libraries/glad
+libraries/googletest
+libraries/spirv-reflect
 
 RAGE
 RAGE.exe
@@ -12,3 +13,4 @@ RAGE.pdb
 .DS_Store
 desktop.ini
 .vscode
+.cache

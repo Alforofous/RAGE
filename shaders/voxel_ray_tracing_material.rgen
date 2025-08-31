@@ -1,0 +1,42 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+// Set 0 (PER_FRAME): Camera, lighting, time data
+layout(binding = 0, set = 0) uniform CameraProperties {
+    mat4 viewInverse;
+    mat4 projInverse;
+} camera;
+
+// Set 1 (PER_MATERIAL): Textures and material data
+layout(binding = 4, set = 1, rgba8) uniform image2D image;
+
+// Set 3 (STATIC): Acceleration structure
+layout(binding = 0, set = 3) uniform accelerationStructureEXT topLevelAS;
+
+layout(location = 0) rayPayloadEXT vec4 payload;
+
+void main() {
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+    const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = inUV * 2.0 - 1.0;
+
+    // For testing, just shoot rays straight ahead with slight direction based on pixel position
+    vec3 origin = vec3(d.x * 2.0, d.y * 2.0, 0.0);  // Spread rays out based on pixel position
+    vec3 direction = normalize(vec3(d.x * 0.1, d.y * 0.1, -1.0));  // All rays point slightly forward based on pixel
+
+    payload = vec4(0);
+    
+    traceRayEXT(topLevelAS,           // acceleration structure
+                gl_RayFlagsOpaqueEXT,  // ray flags
+                0xFF,                  // cullMask
+                0,                     // sbtRecordOffset
+                0,                     // sbtRecordStride
+                0,                     // missIndex
+                origin.xyz,            // ray origin
+                0.001,                 // ray min
+                direction.xyz,         // ray direction
+                10000.0,              // ray max
+                0);                    // payload location
+
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), payload);
+}

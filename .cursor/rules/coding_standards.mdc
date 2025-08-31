@@ -1,0 +1,52 @@
+---
+description: Core coding standards for RAGE engine
+globs: ["**/*.cpp", "**/*.hpp"]
+alwaysApply: true
+---
+
+When writing or modifying code:
+
+### Class Member Access
+- ALWAYS use `this->` for class member access
+- Example:
+```cpp
+class MyClass {
+    int value;
+    void method() {
+        this->value = 42;  // ✓ Correct
+        value = 42;        // ✗ Incorrect
+    }
+};
+```
+
+### Resource Management
+- Use `dispose()` for cleanup methods, not `cleanup()`
+- Follow RAII principles with smart pointers
+- Example:
+```cpp
+class Resource {
+public:
+    void dispose();  // ✓ Correct
+    void cleanup();  // ✗ Incorrect
+};
+```
+
+### Naming Conventions
+- Classes: CamelCase (e.g., VulkanRenderTarget)
+- Functions: snake_case (e.g., create_resources)
+- Variables: snake_case (e.g., image_view)
+- Constants: UPPER_CASE (e.g., MAX_FRAMES_IN_FLIGHT)
+
+### File Organization
+- Headers (.hpp) go in `includes/` directory
+- Source files (.cpp) go in `sources/` directory
+- Match subdirectory structure between includes/ and sources/
+- Example:
+```
+includes/
+  ├── materials/
+  │   └── ray_tracing_material.hpp
+sources/
+  ├── materials/
+  │   └── ray_tracing_material.cpp
+```

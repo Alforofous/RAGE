@@ -1,29 +1,22 @@
-cmake_minimum_required(VERSION 3.7)
-set (CMAKE_CXX_STANDARD 17)
+cmake_minimum_required(VERSION 3.16...3.28)
+set(CMAKE_CXX_STANDARD 11)
 project(RAGE CXX C)
 
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+# Configure GLFW options before adding subdirectory
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "Build the GLFW example programs" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "Build the GLFW test programs" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "Build the GLFW documentation" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "Generate installation target" FORCE)
 
+# Add GLFW as a subdirectory
 add_subdirectory(glfw)
-add_subdirectory(glad)
-add_subdirectory(glm)
+
+# Add ImGui as a subdirectory
 add_subdirectory(imgui)
 
-set(GLM_DIRECTORY glm)
-set(GLAD_DIRECTORY glad)
-set(GLFW_DIRECTORY glfw)
-set(IMGUI_DIRECTORY imgui)
+# Add GLM as a subdirectory
+add_subdirectory(glm)
 
-list(APPEND LIBRARY_INCLUDE_DIRECTORIES
-	${GLAD_DIRECTORY}
-	${GLFW_DIRECTORY}/include
-	${IMGUI_DIRECTORY}
-	${GLM_DIRECTORY}
-)
-
-set(NAME project_libraries)
-add_library(${NAME} INTERFACE)
-target_include_directories(${NAME} INTERFACE ${LIBRARY_INCLUDE_DIRECTORIES})
-target_link_libraries(${NAME} INTERFACE imgui glfw glm glad)
+# Create a project_libraries target that includes all our libraries
+add_library(project_libraries INTERFACE)
+target_link_libraries(project_libraries INTERFACE glfw imgui glm)
