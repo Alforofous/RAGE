@@ -11,6 +11,25 @@
 #include "pipelines/vulkan_pipeline.hpp"
 #include "vulkan_render_target.hpp"
 #include "materials/material.hpp"
+#include "matrix4.hpp"
+#include "vector3.hpp"
+
+// Uniform buffer data structures
+struct CameraData {
+    Matrix4 viewInverse;
+    Matrix4 projInverse;
+    Vector3 cameraPos;
+    float padding;  // Align to 16 bytes
+};
+
+struct CubeData {
+    Vector3 position;
+    float padding1;
+    Vector3 size;
+    float padding2;
+    Vector3 color;
+    float padding3;
+};
 
 enum class PipelineType : uint8_t {
     RayTracing,
@@ -40,6 +59,10 @@ public:
     void updateDescriptorSet(uint32_t setIndex, uint32_t binding, const StorageBuffer &buffer);
     void bindDescriptorSets(VkCommandBuffer cmdBuffer, const VulkanPipeline *pipeline);
     void bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
+    void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
+    void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
+    void createUniformBuffer(VkDeviceSize size, VkBuffer &buffer, VkDeviceMemory &memory);
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     // Push constant management
     template<typename T>
@@ -86,7 +109,6 @@ private:
     // Utility functions
     AllocatedBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
     void copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDeviceSize size);
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
     void submitCommandBuffer();
 
     // Core resources

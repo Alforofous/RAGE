@@ -26,15 +26,15 @@ App::App() {
     std::cout << "Creating scene..." << std::endl;
     this->scene = std::make_unique<Scene>();
     auto voxel = std::make_unique<Voxel3D>();
-    voxel->setPosition(IntVector3(0, 0, -5));  // 5 units in front of camera
-    voxel->setSize(IntVector3(1));             // 1x1x1 cube
-    voxel->setColor(IntVector3(255, 0, 0));    // Red color
+    voxel->setPosition(IntVector3(0, 0, -5));  // Put voxel 5 units in front of camera
+    voxel->setSize(IntVector3(2));             // Make it bigger (2x2x2) so it's easier to see
+    voxel->setColor(IntVector3(0, 0, 255));    // Blue color
     this->scene->addChild(voxel.get());
     this->voxel = std::move(voxel);            // Keep voxel alive
 
     this->camera = std::make_unique<PerspectiveCamera>();
-    this->camera->setPosition(Vector3(0.0f, 0.0f, 0.0f));  // At origin
-    this->camera->setRotation(Vector3(0.0f));              // Looking forward
+    this->camera->setPosition(Vector3(0.0f, 0.0f, 0.0f));   // Camera at origin
+    this->camera->setRotation(Vector3(0.0f, 0.0f, 0.0f));   // Looking straight forward
     this->renderer = std::make_unique<Renderer>(&this->context, this->scene.get(), this->camera.get());
 }
 
@@ -66,12 +66,12 @@ App::~App() {
         vkDestroyDevice(this->context.device, nullptr);
         this->context.device = VK_NULL_HANDLE;
     }
-    
+
     if (this->context.surface != VK_NULL_HANDLE) {
         vkDestroySurfaceKHR(this->context.instance, this->context.surface, nullptr);
         this->context.surface = VK_NULL_HANDLE;
     }
-    
+
     if (this->context.instance != VK_NULL_HANDLE) {
         vkDestroyInstance(this->context.instance, nullptr);
         this->context.instance = VK_NULL_HANDLE;
@@ -81,7 +81,7 @@ App::~App() {
     this->scene.reset();
     this->camera.reset();
     this->voxel.reset();
-    
+
     // Window must be destroyed last as it contains the GLFW window
     this->window.reset();
 }

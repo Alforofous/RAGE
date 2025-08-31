@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 #include "renderable_node3D.hpp"
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
+#include "voxel3D.hpp"
 #include <stdexcept>
 #include <array>
 #include <vector>
@@ -585,8 +586,16 @@ void Renderer::usePipeline(PipelineType type) {
 void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline) {
     // Check if we already have a descriptor set for this pipeline
     static VkDescriptorSet cachedDescriptorSet = VK_NULL_HANDLE;
+    static VkBuffer cameraBuffer = VK_NULL_HANDLE;
+    static VkDeviceMemory cameraMemory = VK_NULL_HANDLE;
+    static VkBuffer cubeBuffer = VK_NULL_HANDLE;
+    static VkDeviceMemory cubeMemory = VK_NULL_HANDLE;
 
     if (cachedDescriptorSet != VK_NULL_HANDLE) {
+        // Update uniform buffers with current frame data
+        this->updateCameraBuffer(cameraBuffer, cameraMemory);
+        this->updateCubeBuffer(cubeBuffer, cubeMemory);
+
         // Reuse existing descriptor set
         vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                                 pipeline->getLayout(), 0, 1, &cachedDescriptorSet, 0, nullptr);
@@ -596,15 +605,19 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
 
     // Create descriptor pool if needed
     if (descriptorSets.pool == VK_NULL_HANDLE) {
-        VkDescriptorPoolSize poolSize{};
-        poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        poolSize.descriptorCount = 10;  // Allow for multiple descriptor sets
+        VkDescriptorPoolSize poolSizes[2];
+        // Storage image for ray tracing output
+        poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        poolSizes[0].descriptorCount = 10;
+        // Uniform buffers for camera and cube data
+        poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[1].descriptorCount = 20;  // Camera + cube buffers
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.poolSizeCount = 2;
+        poolInfo.pPoolSizes = poolSizes;
         poolInfo.maxSets = 10;
 
         if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &descriptorSets.pool) != VK_SUCCESS) {
@@ -640,22 +653,69 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
         throw std::runtime_error("Failed to allocate descriptor set");
     }
 
-    // Update descriptor set with storage image
+    // Create uniform buffers
+    this->createUniformBuffer(sizeof(CameraData), cameraBuffer, cameraMemory);
+    this->createUniformBuffer(sizeof(CubeData), cubeBuffer, cubeMemory);
+
+    // Update buffers with initial data
+    this->updateCameraBuffer(cameraBuffer, cameraMemory);
+    this->updateCubeBuffer(cubeBuffer, cubeMemory);
+
+    // Prepare descriptor writes
+    VkWriteDescriptorSet descriptorWrites[3];
+
+    // Camera uniform buffer (binding 0)
+    VkDescriptorBufferInfo cameraBufferInfo{};
+    cameraBufferInfo.buffer = cameraBuffer;
+    cameraBufferInfo.offset = 0;
+    cameraBufferInfo.range = sizeof(CameraData);
+
+    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[0].pNext = nullptr;
+    descriptorWrites[0].dstSet = descriptorSet;
+    descriptorWrites[0].dstBinding = 0;
+    descriptorWrites[0].dstArrayElement = 0;
+    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrites[0].descriptorCount = 1;
+    descriptorWrites[0].pBufferInfo = &cameraBufferInfo;
+    descriptorWrites[0].pImageInfo = nullptr;
+    descriptorWrites[0].pTexelBufferView = nullptr;
+
+    // Cube uniform buffer (binding 1)
+    VkDescriptorBufferInfo cubeBufferInfo{};
+    cubeBufferInfo.buffer = cubeBuffer;
+    cubeBufferInfo.offset = 0;
+    cubeBufferInfo.range = sizeof(CubeData);
+
+    descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[1].pNext = nullptr;
+    descriptorWrites[1].dstSet = descriptorSet;
+    descriptorWrites[1].dstBinding = 1;
+    descriptorWrites[1].dstArrayElement = 0;
+    descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrites[1].descriptorCount = 1;
+    descriptorWrites[1].pBufferInfo = &cubeBufferInfo;
+    descriptorWrites[1].pImageInfo = nullptr;
+    descriptorWrites[1].pTexelBufferView = nullptr;
+
+    // Storage image (binding 4)
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     imageInfo.imageView = renderTarget->getImageView();
-    imageInfo.sampler = VK_NULL_HANDLE;  // Not needed for storage images
+    imageInfo.sampler = VK_NULL_HANDLE;
 
-    VkWriteDescriptorSet descriptorWrite{};
-    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = descriptorSet;
-    descriptorWrite.dstBinding = 4;  // Binding 4 as specified in shader
-    descriptorWrite.dstArrayElement = 0;
-    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    descriptorWrite.descriptorCount = 1;
-    descriptorWrite.pImageInfo = &imageInfo;
+    descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[2].pNext = nullptr;
+    descriptorWrites[2].dstSet = descriptorSet;
+    descriptorWrites[2].dstBinding = 4;
+    descriptorWrites[2].dstArrayElement = 0;
+    descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    descriptorWrites[2].descriptorCount = 1;
+    descriptorWrites[2].pBufferInfo = nullptr;
+    descriptorWrites[2].pImageInfo = &imageInfo;
+    descriptorWrites[2].pTexelBufferView = nullptr;
 
-    vkUpdateDescriptorSets(context->device, 1, &descriptorWrite, 0, nullptr);
+    vkUpdateDescriptorSets(context->device, 3, descriptorWrites, 0, nullptr);
 
     // Cache the descriptor set for reuse
     cachedDescriptorSet = descriptorSet;
@@ -667,4 +727,76 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
 
 void Renderer::drawBindedMaterial() {
     renderFrame();
+}
+
+void Renderer::createUniformBuffer(VkDeviceSize size, VkBuffer &buffer, VkDeviceMemory &memory) {
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(this->context->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create uniform buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(this->context->device, buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits,
+                                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    if (vkAllocateMemory(this->context->device, &allocInfo, nullptr, &memory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate uniform buffer memory");
+    }
+
+    vkBindBufferMemory(this->context->device, buffer, memory, 0);
+}
+
+void Renderer::updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory) {
+    CameraData cameraData{};
+
+    // Get camera matrices
+    Matrix4 view = this->camera->getView();
+    Matrix4 proj = this->camera->getProjection();
+
+    // For now, just use the matrices as-is (we'll implement inverse later)
+    // TODO: Implement proper matrix inverse
+    cameraData.viewInverse = view;
+    cameraData.projInverse = proj;
+    cameraData.cameraPos = this->camera->getPosition();
+
+    void *data;
+    vkMapMemory(this->context->device, memory, 0, sizeof(CameraData), 0, &data);
+    memcpy(data, &cameraData, sizeof(CameraData));
+    vkUnmapMemory(this->context->device, memory);
+}
+
+void Renderer::updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory) {
+    CubeData cubeData{};
+
+    // Get voxel data from scene (assuming first renderable node is our voxel)
+    if (!this->scene->getChildren().empty()) {
+        auto *voxel = dynamic_cast<Voxel3D *>(this->scene->getChildren()[0]);
+        if (voxel) {
+            // Get voxel properties and convert IntVector3 to Vector3
+            IntVector3 intPos = voxel->getPosition();
+            IntVector3 intSize = voxel->getSize();
+            IntVector3 intColor = voxel->getColor();
+
+            cubeData.position = Vector3(static_cast<float>(intPos.getX()), static_cast<float>(intPos.getY()), static_cast<float>(intPos.getZ()));
+            cubeData.size = Vector3(static_cast<float>(intSize.getX()), static_cast<float>(intSize.getY()), static_cast<float>(intSize.getZ()));
+            cubeData.color = Vector3(static_cast<float>(intColor.getX()) / 255.0f,
+                                     static_cast<float>(intColor.getY()) / 255.0f,
+                                     static_cast<float>(intColor.getZ()) / 255.0f);
+        }
+    }
+
+    void *data;
+    vkMapMemory(this->context->device, memory, 0, sizeof(CubeData), 0, &data);
+    memcpy(data, &cubeData, sizeof(CubeData));
+    vkUnmapMemory(this->context->device, memory);
 }

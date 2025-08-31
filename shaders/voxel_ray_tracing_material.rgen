@@ -1,15 +1,99 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
-// Set 0 (PER_MATERIAL): Output image only for testing
+// Set 0: Camera and cube data
+layout(binding = 0, set = 0) uniform CameraData {
+    mat4 viewInverse;
+    mat4 projInverse;
+    vec3 cameraPos;
+} camera;
+
+layout(binding = 1, set = 0) uniform CubeData {
+    vec3 position;    // Cube center position
+    vec3 size;        // Cube size (half-extents)
+    vec3 color;       // Cube color
+} cube;
+
+// Output image
 layout(binding = 4, set = 0, rgba8) uniform image2D image;
+
+// Ray-AABB intersection function
+bool rayAABBIntersect(vec3 rayOrigin, vec3 rayDir, vec3 boxMin, vec3 boxMax, out float tNear, out float tFar) {
+    vec3 invDir = 1.0 / rayDir;
+    vec3 t1 = (boxMin - rayOrigin) * invDir;
+    vec3 t2 = (boxMax - rayOrigin) * invDir;
+    
+    vec3 tMin = min(t1, t2);
+    vec3 tMax = max(t1, t2);
+    
+    tNear = max(max(tMin.x, tMin.y), tMin.z);
+    tFar = min(min(tMax.x, tMax.y), tMax.z);
+    
+    return tNear <= tFar && tFar > 0.0;
+}
+
+// Calculate normal from hit point on AABB
+vec3 calculateAABBNormal(vec3 hitPoint, vec3 boxMin, vec3 boxMax) {
+    vec3 center = (boxMin + boxMax) * 0.5;
+    vec3 size = (boxMax - boxMin) * 0.5;
+    vec3 pc = hitPoint - center;
+    
+    // Find the axis with the largest relative distance
+    vec3 normal = vec3(0.0);
+    vec3 d = abs(pc / size);
+    
+    if (d.x >= d.y && d.x >= d.z) {
+        normal.x = sign(pc.x);
+    } else if (d.y >= d.z) {
+        normal.y = sign(pc.y);
+    } else {
+        normal.z = sign(pc.z);
+    }
+    
+    return normal;
+}
 
 void main() {
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-    const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
+    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = inUV * 2.0 - 1.0;  // Convert to [-1, 1] range
     
-    // Create a simple test pattern - bright red/green gradient to make it very visible
-    vec4 color = vec4(inUV.x, inUV.y, 0.0, 1.0);
+    // Simple ray generation - shoot rays from camera toward screen
+    // This is a simplified approach that doesn't require matrix inversion
+    vec3 rayOrigin = camera.cameraPos;
+    
+    // Create a simple perspective projection
+    float fov = 45.0; // degrees
+    float aspect = float(gl_LaunchSizeEXT.x) / float(gl_LaunchSizeEXT.y);
+    
+    // Calculate ray direction in camera space
+    vec3 rayDir = normalize(vec3(
+        d.x * tan(radians(fov * 0.5)) * aspect,
+        d.y * tan(radians(fov * 0.5)),
+        -1.0  // Looking down negative Z
+    ));
+    
+    // Define cube bounds
+    vec3 boxMin = cube.position - cube.size;
+    vec3 boxMax = cube.position + cube.size;
+    
+    float tNear, tFar;
+    vec4 color = vec4(0.0, 0.0, 0.0, 1.0);  // Background color (black)
+    
+    // Test ray-cube intersection
+    if (rayAABBIntersect(rayOrigin, rayDir, boxMin, boxMax, tNear, tFar)) {
+        // We hit the cube!
+        vec3 hitPoint = rayOrigin + rayDir * tNear;
+        vec3 normal = calculateAABBNormal(hitPoint, boxMin, boxMax);
+        
+        // Simple shading based on normal
+        vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));  // Light from top-right-front
+        float NdotL = max(dot(normal, lightDir), 0.2);    // Ambient + diffuse
+        
+        // Apply cube color with shading
+        color.rgb = cube.color * NdotL;
+        color.a = 1.0;
+    }
     
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), color);
 }
