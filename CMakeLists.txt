@@ -42,6 +42,8 @@ set(SOURCES
     int_vector3.cpp
     voxel3D.cpp
     camera.cpp
+    camera_controls.cpp
+    input_handler.cpp
     scene.cpp
     renderable_node3D.cpp
     utils/file_reader.cpp

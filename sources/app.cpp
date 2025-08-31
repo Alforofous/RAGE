@@ -35,6 +35,13 @@ App::App() {
     this->camera = std::make_unique<PerspectiveCamera>();
     this->camera->setPosition(Vector3(0.0f, 0.0f, 0.0f));   // Camera at origin
     this->camera->setRotation(Vector3(0.0f, 0.0f, 0.0f));   // Looking straight forward
+
+    // Create camera controls
+    this->cameraControls = std::make_unique<CameraControls>(this->camera.get());
+
+    // Create input handler
+    this->inputHandler = std::make_unique<InputHandler>(this->window->getWindow(), this->cameraControls.get());
+
     this->renderer = std::make_unique<Renderer>(&this->context, this->scene.get(), this->camera.get());
 }
 
@@ -88,9 +95,26 @@ App::~App() {
 
 void App::run() {
     std::cout << "Starting main loop..." << std::endl;
+    std::cout << "Controls: WASD to move, E/Q for up/down, ESC to exit" << std::endl;
+
     this->window->show(); // Make sure window is visible
+
+    // Timing for smooth movement
+    double lastTime = glfwGetTime();
+
     while (!this->window->shouldClose()) {
+        // Calculate delta time
+        double currentTime = glfwGetTime();
+        float deltaTime = static_cast<float>(currentTime - lastTime);
+        lastTime = currentTime;
+
+        // Poll events
         Window::pollEvents();
+
+        // Update input and camera
+        this->inputHandler->update(deltaTime);
+
+        // Render frame
         this->renderer->renderFrame();
     }
     std::cout << "Main loop ended" << std::endl;
