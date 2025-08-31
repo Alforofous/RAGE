@@ -9,7 +9,6 @@
 #include "camera.hpp"
 #include "vulkan_utils.hpp"
 #include "pipelines/vulkan_pipeline.hpp"
-#include "pipelines/vulkan_ray_tracing_pipeline.hpp"
 #include "vulkan_render_target.hpp"
 #include "materials/material.hpp"
 
@@ -40,6 +39,7 @@ public:
     void allocateDescriptorSets(const VulkanPipeline *pipeline);
     void updateDescriptorSet(uint32_t setIndex, uint32_t binding, const StorageBuffer &buffer);
     void bindDescriptorSets(VkCommandBuffer cmdBuffer, const VulkanPipeline *pipeline);
+    void bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
 
     // Push constant management
     template<typename T>

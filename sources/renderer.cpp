@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 #include "renderable_node3D.hpp"
+#include "pipelines/vulkan_ray_tracing_pipeline.hpp"
 #include <stdexcept>
 #include <array>
 #include <vector>
@@ -287,9 +288,16 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
                 // Bind the material-specific pipeline
                 pipeline->bind(commandBuffer);
 
-                // Render the node with its material
-                // Note: The actual ray tracing dispatch would be handled here
-                // For now, we just ensure the pipeline is bound
+                // Create and bind descriptor set for the storage image (Set 1, Binding 4)
+                this->bindStorageImageDescriptorSet(commandBuffer, pipeline);
+
+                // Dispatch ray tracing for this material
+                auto *rayTracingPipeline = dynamic_cast<VulkanRayTracingPipeline *>(pipeline);
+                if (rayTracingPipeline != nullptr) {
+                    rayTracingPipeline->dispatch(commandBuffer,
+                                                 this->context->swapchainExtent.width,
+                                                 this->context->swapchainExtent.height);
+                }
 
                 // Add memory barrier to ensure operations are complete
                 VkMemoryBarrier memoryBarrier{};
@@ -572,6 +580,89 @@ void Renderer::usePipeline(PipelineType type) {
         throw std::runtime_error("Raster pipeline not implemented yet");
         break;
     }
+}
+
+void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline) {
+    // Check if we already have a descriptor set for this pipeline
+    static VkDescriptorSet cachedDescriptorSet = VK_NULL_HANDLE;
+
+    if (cachedDescriptorSet != VK_NULL_HANDLE) {
+        // Reuse existing descriptor set
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                                pipeline->getLayout(), 0, 1, &cachedDescriptorSet, 0, nullptr);
+
+        return;
+    }
+
+    // Create descriptor pool if needed
+    if (descriptorSets.pool == VK_NULL_HANDLE) {
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        poolSize.descriptorCount = 10;  // Allow for multiple descriptor sets
+
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = 10;
+
+        if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &descriptorSets.pool) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create descriptor pool");
+        }
+    }
+
+    // Get descriptor set layout for set 1 (where the image is bound)
+    // The shader uses set=1, so we need to find the layout for set 1
+    VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
+
+    // Find the correct descriptor set layout for set 1
+    for (uint32_t i = 0; i < pipeline->getDescriptorSetLayoutCount(); i++) {
+        // For now, assume the first layout corresponds to set 1
+        // TODO: Improve this to properly map set numbers to layout indices
+        setLayout = pipeline->getDescriptorSetLayout(i);
+        break;
+    }
+
+    if (setLayout == VK_NULL_HANDLE) {
+        throw std::runtime_error("No descriptor set layout found for storage image");
+    }
+
+    // Allocate descriptor set
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = descriptorSets.pool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &setLayout;
+
+    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    if (vkAllocateDescriptorSets(context->device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate descriptor set");
+    }
+
+    // Update descriptor set with storage image
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageInfo.imageView = renderTarget->getImageView();
+    imageInfo.sampler = VK_NULL_HANDLE;  // Not needed for storage images
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descriptorSet;
+    descriptorWrite.dstBinding = 4;  // Binding 4 as specified in shader
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(context->device, 1, &descriptorWrite, 0, nullptr);
+
+    // Cache the descriptor set for reuse
+    cachedDescriptorSet = descriptorSet;
+
+    // Bind descriptor set for ray tracing to index 0 (which corresponds to shader's set 1)
+    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                            pipeline->getLayout(), 0, 1, &descriptorSet, 0, nullptr);
 }
 
 void Renderer::drawBindedMaterial() {
