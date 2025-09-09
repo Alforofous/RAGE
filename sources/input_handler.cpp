@@ -26,10 +26,10 @@ void InputHandler::update(float deltaTime) {
     }
 
     // EQ movement (vertical)
-    if (this->isKeyPressed(GLFW_KEY_E)) {
+    if (this->isKeyPressed(GLFW_KEY_Q)) {
         this->cameraControls->moveUp(moveDistance);
     }
-    if (this->isKeyPressed(GLFW_KEY_Q)) {
+    if (this->isKeyPressed(GLFW_KEY_E)) {
         this->cameraControls->moveDown(moveDistance);
     }
 }
@@ -50,8 +50,8 @@ void InputHandler::keyCallback(GLFWwindow *window, int key, int scancode, int ac
         case GLFW_KEY_S: std::cout << "S pressed - Move Backward" << std::endl; break;
         case GLFW_KEY_A: std::cout << "A pressed - Move Left" << std::endl; break;
         case GLFW_KEY_D: std::cout << "D pressed - Move Right" << std::endl; break;
-        case GLFW_KEY_E: std::cout << "E pressed - Move Up" << std::endl; break;
-        case GLFW_KEY_Q: std::cout << "Q pressed - Move Down" << std::endl; break;
+        case GLFW_KEY_Q: std::cout << "Q pressed - Move Up" << std::endl; break;
+        case GLFW_KEY_E: std::cout << "E pressed - Move Down" << std::endl; break;
         }
     }
 }

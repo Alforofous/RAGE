@@ -49,8 +49,8 @@ public:
 private:
     static std::vector<GLSLShader> createShaders() {
         return {
-            GLSLShader(vertexShaderSource, shaderc_vertex_shader),
-            GLSLShader(fragmentShaderSource, shaderc_fragment_shader)
+            GLSLShader(vertexShaderSource, ShaderKind::VERTEX),
+            GLSLShader(fragmentShaderSource, ShaderKind::FRAGMENT)
         };
     }
 };

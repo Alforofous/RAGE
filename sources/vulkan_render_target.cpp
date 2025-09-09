@@ -4,7 +4,7 @@
 #include <stdexcept>
 
 VulkanRenderTarget::VulkanRenderTarget(
-    const VulkanContext* context,
+    const VulkanContext *context,
     uint32_t width,
     uint32_t height
 )
@@ -13,8 +13,7 @@ VulkanRenderTarget::VulkanRenderTarget(
     memory(VK_NULL_HANDLE),
     imageView(VK_NULL_HANDLE),
     format(VK_FORMAT_R8G8B8A8_UNORM),
-    extent{width, height}
-{
+    extent{width, height} {
     this->createResources();
 }
 
@@ -52,7 +51,7 @@ void VulkanRenderTarget::createImage() {
     imageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    
+
     if (vkCreateImage(this->context->device, &imageInfo, nullptr, &this->image) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create render target image");
     }
@@ -63,7 +62,8 @@ void VulkanRenderTarget::createImage() {
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = this->findMemoryType(
+    allocInfo.memoryTypeIndex = findMemoryType(
+        this->context->physicalDevice,
         memRequirements.memoryTypeBits,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
@@ -154,18 +154,4 @@ void VulkanRenderTarget::transitionLayout(
         0, nullptr,
         1, &barrier
     );
-}
-
-uint32_t VulkanRenderTarget::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(this->context->physicalDevice, &memProperties);
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if (((typeFilter & (1 << i)) != 0) &&
-            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("Failed to find suitable memory type");
 }

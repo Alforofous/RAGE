@@ -27,12 +27,15 @@ protected:
     VkPipeline pipeline = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
     std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > bindingsBySetNumber;
-    std::vector<std::vector<uint32_t> > compiledShaders;  // Storage for compiled SPIR-V bytecode
+    std::vector<std::vector<uint32_t> > compiledShaders;
+    std::vector<VkShaderModule> shaderModules;
+    std::vector<ShaderKind> shaderKinds;
     void destroyShaderModule(VkShaderModule module);
-    VkShaderModule createShaderModule(const std::string &shaderPath);
 
     void dispose();
-    VkShaderModule createShaderModuleFromSPIRV(size_t shaderIndex);  // Create VkShaderModule from compiled SPIR-V
+    VkShaderModule createShaderModuleFromSPIRV(size_t shaderIndex);
+    VkShaderModule getShaderModule(size_t shaderIndex) const;
+    std::vector<VkPipelineShaderStageCreateInfo> getShaderStages() const;
 
 private:
     std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);

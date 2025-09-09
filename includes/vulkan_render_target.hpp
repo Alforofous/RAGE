@@ -4,7 +4,7 @@
 
 class VulkanRenderTarget {
 public:
-    VulkanRenderTarget(const VulkanContext* context, uint32_t width, uint32_t height);
+    VulkanRenderTarget(const VulkanContext *context, uint32_t width, uint32_t height);
     ~VulkanRenderTarget();
 
     void resize(uint32_t width, uint32_t height);
@@ -15,17 +15,17 @@ public:
     VkFormat getFormat() const { return format; }
     VkExtent2D getExtent() const { return extent; }
 
-    void transitionLayout(VkCommandBuffer cmdBuffer, 
-                         VkImageLayout oldLayout,
-                         VkImageLayout newLayout,
-                         VkPipelineStageFlags srcStageMask,
-                         VkPipelineStageFlags dstStageMask,
-                         VkAccessFlags srcAccessMask,
-                         VkAccessFlags dstAccessMask);
+    void transitionLayout(VkCommandBuffer cmdBuffer,
+                          VkImageLayout oldLayout,
+                          VkImageLayout newLayout,
+                          VkPipelineStageFlags srcStageMask,
+                          VkPipelineStageFlags dstStageMask,
+                          VkAccessFlags srcAccessMask,
+                          VkAccessFlags dstAccessMask);
 
 private:
-    const VulkanContext* context;
-    
+    const VulkanContext *context;
+
     VkImage image;
     VkDeviceMemory memory;
     VkImageView imageView;
@@ -35,5 +35,4 @@ private:
     void createResources();
     void createImage();
     void createImageView();
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 };

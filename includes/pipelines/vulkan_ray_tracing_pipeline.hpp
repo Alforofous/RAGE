@@ -20,12 +20,8 @@ private:
     void createShaderBindingTables();
     void createSBTBuffer(uint32_t size, uint32_t alignment, const void *handleData, uint32_t handleSize,
                          VkBuffer &buffer, VkDeviceMemory &memory, VkStridedDeviceAddressRegionKHR &sbt);
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     const VulkanContext *context;
-    VkShaderModule rayGenShader = VK_NULL_HANDLE;
-    VkShaderModule missShader = VK_NULL_HANDLE;
-    VkShaderModule closestHitShader = VK_NULL_HANDLE;
 
     // Shader Binding Tables
     VkStridedDeviceAddressRegionKHR raygenSBT{};

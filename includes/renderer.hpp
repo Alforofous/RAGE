@@ -62,7 +62,6 @@ public:
     void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void createUniformBuffer(VkDeviceSize size, VkBuffer &buffer, VkDeviceMemory &memory);
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     // Push constant management
     template<typename T>

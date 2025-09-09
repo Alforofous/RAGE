@@ -1,4 +1,5 @@
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
+#include "vulkan_utils.hpp"
 #include <stdexcept>
 
 VulkanRayTracingPipeline::VulkanRayTracingPipeline(
@@ -8,16 +9,11 @@ VulkanRayTracingPipeline::VulkanRayTracingPipeline(
     const GLSLShader &closestHitShader
 )
     : VulkanPipeline(context->device, std::vector<GLSLShader>{ rayGenShader, missShader, closestHitShader }),
-    context(context),
-    rayGenShader(this->createShaderModuleFromSPIRV(0)),  // Use compiled SPIR-V from base class
-    missShader(this->createShaderModuleFromSPIRV(1)),    // Use compiled SPIR-V from base class
-    closestHitShader(this->createShaderModuleFromSPIRV(2)) {
-    // Use compiled SPIR-V from base class
+    context(context) {
     this->createRayTracingPipeline();
 }
 
 VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
-    // Clean up SBT buffers
     if (this->raygenSBTBuffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(this->device, this->raygenSBTBuffer, nullptr);
         vkFreeMemory(this->device, this->raygenSBTMemory, nullptr);
@@ -30,35 +26,10 @@ VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
         vkDestroyBuffer(this->device, this->hitSBTBuffer, nullptr);
         vkFreeMemory(this->device, this->hitSBTMemory, nullptr);
     }
-
-    this->destroyShaderModule(this->rayGenShader);
-    this->destroyShaderModule(this->missShader);
-    this->destroyShaderModule(this->closestHitShader);
 }
 
 void VulkanRayTracingPipeline::createRayTracingPipeline() {
-    std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
-
-    VkPipelineShaderStageCreateInfo rayGenStageInfo{};
-    rayGenStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    rayGenStageInfo.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-    rayGenStageInfo.module = this->rayGenShader;
-    rayGenStageInfo.pName = "main";
-    shaderStages.push_back(rayGenStageInfo);
-
-    VkPipelineShaderStageCreateInfo missStageInfo{};
-    missStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    missStageInfo.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
-    missStageInfo.module = this->missShader;
-    missStageInfo.pName = "main";
-    shaderStages.push_back(missStageInfo);
-
-    VkPipelineShaderStageCreateInfo hitStageInfo{};
-    hitStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    hitStageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-    hitStageInfo.module = this->closestHitShader;
-    hitStageInfo.pName = "main";
-    shaderStages.push_back(hitStageInfo);
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages = this->getShaderStages();
 
     VkRayTracingPipelineCreateInfoKHR pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
@@ -107,7 +78,6 @@ void VulkanRayTracingPipeline::bind(VkCommandBuffer cmdBuffer) {
 }
 
 void VulkanRayTracingPipeline::dispatch(VkCommandBuffer cmdBuffer, uint32_t width, uint32_t height) {
-    // Create shader binding tables if not already created
     if (this->raygenSBT.deviceAddress == 0) {
         this->createShaderBindingTables();
     }
@@ -196,8 +166,8 @@ void VulkanRayTracingPipeline::createSBTBuffer(uint32_t size, uint32_t alignment
     vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
 
     // Find memory type
-    uint32_t memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits,
-                                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    uint32_t memoryTypeIndex = findMemoryType(this->context->physicalDevice, memRequirements.memoryTypeBits,
+                                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
     // Allocate memory
     VkMemoryAllocateInfo allocInfo{};
@@ -245,17 +215,4 @@ void VulkanRayTracingPipeline::createSBTBuffer(uint32_t size, uint32_t alignment
     sbt.deviceAddress = deviceAddress;
     sbt.stride = alignedSize;  // For raygen, stride must equal size
     sbt.size = alignedSize;
-}
-
-uint32_t VulkanRayTracingPipeline::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(this->context->physicalDevice, &memProperties);
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("Failed to find suitable memory type");
 }

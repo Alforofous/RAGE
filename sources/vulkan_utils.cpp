@@ -6,29 +6,32 @@
 #include <iostream>
 
 namespace {
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
-        for (const auto& availableFormat : availableFormats) {
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats) {
+        for (const auto &availableFormat : availableFormats) {
             if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
                 availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                 return availableFormat;
             }
         }
+
         return availableFormats[0];
     }
 
-    VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
-        for (const auto& availablePresentMode : availablePresentModes) {
+    VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes) {
+        for (const auto &availablePresentMode : availablePresentModes) {
             if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
                 return availablePresentMode;
             }
         }
+
         return VK_PRESENT_MODE_FIFO_KHR;
     }
 
-    VkExtent2D chooseSwapExtent(GLFWwindow* window, const VkSurfaceCapabilitiesKHR& capabilities) {
+    VkExtent2D chooseSwapExtent(GLFWwindow *window, const VkSurfaceCapabilitiesKHR &capabilities) {
         if (capabilities.currentExtent.width != UINT32_MAX) {
             return capabilities.currentExtent;
-        } else {
+        }
+        else {
             int width, height;
             glfwGetFramebufferSize(window, &width, &height);
 
@@ -38,15 +41,15 @@ namespace {
             };
 
             actualExtent.width = std::max(capabilities.minImageExtent.width,
-                std::min(capabilities.maxImageExtent.width, actualExtent.width));
+                                          std::min(capabilities.maxImageExtent.width, actualExtent.width));
             actualExtent.height = std::max(capabilities.minImageExtent.height,
-                std::min(capabilities.maxImageExtent.height, actualExtent.height));
+                                           std::min(capabilities.maxImageExtent.height, actualExtent.height));
 
             return actualExtent;
         }
     }
 
-    void createSwapchain(GLFWwindow* window, VulkanContext& context) {
+    void createSwapchain(GLFWwindow *window, VulkanContext &context) {
         VkSurfaceCapabilitiesKHR capabilities;
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physicalDevice, context.surface, &capabilities);
 
@@ -79,12 +82,13 @@ namespace {
         createInfo.imageArrayLayers = 1;
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-        uint32_t queueFamilyIndices[] = {context.graphicsQueueFamily, context.presentQueueFamily};
+        uint32_t queueFamilyIndices[] = { context.graphicsQueueFamily, context.presentQueueFamily };
         if (context.graphicsQueueFamily != context.presentQueueFamily) {
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             createInfo.queueFamilyIndexCount = 2;
             createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        } else {
+        }
+        else {
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
 
@@ -143,7 +147,7 @@ namespace {
         for (uint32_t i = 0; i < glfwExtensionCount; i++) {
             std::cout << "  " << glfwExtensions[i] << std::endl;
         }
-        
+
         std::cout << "Adding VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME..." << std::endl;
         extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 
@@ -158,7 +162,7 @@ namespace {
 
         std::cout << "Creating Vulkan instance info..." << std::endl;
         // Add validation layers in debug builds
-        std::vector<const char*> validationLayers = {
+        std::vector<const char *> validationLayers = {
             "VK_LAYER_KHRONOS_validation"
         };
 
@@ -169,17 +173,17 @@ namespace {
         vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
         std::cout << "Available Vulkan layers:" << std::endl;
-        for (const auto& layer : availableLayers) {
-            std::cout << "  " << layer.layerName << " (spec version " 
-                     << VK_VERSION_MAJOR(layer.specVersion) << "."
-                     << VK_VERSION_MINOR(layer.specVersion) << "."
-                     << VK_VERSION_PATCH(layer.specVersion) << ")" << std::endl;
+        for (const auto &layer : availableLayers) {
+            std::cout << "  " << layer.layerName << " (spec version "
+                      << VK_VERSION_MAJOR(layer.specVersion) << "."
+                      << VK_VERSION_MINOR(layer.specVersion) << "."
+                      << VK_VERSION_PATCH(layer.specVersion) << ")" << std::endl;
         }
 
         bool validationLayersAvailable = false;
-        for (const char* layerName : validationLayers) {
+        for (const char *layerName : validationLayers) {
             bool layerFound = false;
-            for (const auto& layerProperties : availableLayers) {
+            for (const auto &layerProperties : availableLayers) {
                 if (strcmp(layerName, layerProperties.layerName) == 0) {
                     layerFound = true;
                     break;
@@ -198,17 +202,18 @@ namespace {
         createInfo.pApplicationInfo = &appInfo;
         createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         createInfo.ppEnabledExtensionNames = extensions.data();
-        
+
         if (validationLayersAvailable) {
             std::cout << "Enabling validation layers" << std::endl;
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
-            
+
             // Add debug extension if validation layers are available
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
             createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
             createInfo.ppEnabledExtensionNames = extensions.data();
-        } else {
+        }
+        else {
             std::cout << "Validation layers not available" << std::endl;
             createInfo.enabledLayerCount = 0;
         }
@@ -227,6 +232,7 @@ namespace {
         }
 
         std::cout << "Vulkan instance created successfully" << std::endl;
+
         return instance;
     }
 
@@ -239,11 +245,10 @@ namespace {
             throw std::runtime_error("Failed to find GPUs with Vulkan support");
         }
 
-        
         std::vector<VkPhysicalDevice> devices(deviceCount);
         vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-        for (const auto& device : devices) {
+        for (const auto &device : devices) {
             uint32_t queueFamilyCount = 0;
             vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
             std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
@@ -378,7 +383,7 @@ VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
 
     try {
         context.instance = createVulkanGLFWInstance();
-        
+
         VkResult result = glfwCreateWindowSurface(context.instance, window, nullptr, &context.surface);
         if (result != VK_SUCCESS) {
             throw std::runtime_error("Failed to create window surface: " + std::to_string(result));
@@ -389,10 +394,10 @@ VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
                                                     context.presentQueueFamily);
 
         context.device = createLogicalDevice(context.physicalDevice,
-                                           context.graphicsQueueFamily,
-                                           context.presentQueueFamily,
-                                           context.graphicsQueue,
-                                           context.presentQueue);
+                                             context.graphicsQueueFamily,
+                                             context.presentQueueFamily,
+                                             context.graphicsQueue,
+                                             context.presentQueue);
 
         // Initialize ray tracing properties
         VkPhysicalDeviceProperties2 deviceProperties2{};
@@ -467,7 +472,8 @@ VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
         createSwapchain(window, context);
 
         return context;
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception &e) {
         // Clean up in case of error
         if (context.swapchain != VK_NULL_HANDLE) {
             vkDestroySwapchainKHR(context.device, context.swapchain, nullptr);
@@ -488,4 +494,17 @@ VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
         }
         throw; // Re-throw the exception after cleanup
     }
+}
+
+uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("Failed to find suitable memory type");
 }

@@ -468,7 +468,7 @@ Renderer::AllocatedBuffer Renderer::createBuffer(VkDeviceSize size, VkBufferUsag
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+    allocInfo.memoryTypeIndex = findMemoryType(this->context->physicalDevice, memRequirements.memoryTypeBits, properties);
     allocInfo.pNext = ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) ? &allocFlagsInfo : nullptr;
 
     if (vkAllocateMemory(context->device, &allocInfo, nullptr, &buffer.memory) != VK_SUCCESS) {
@@ -496,20 +496,6 @@ void Renderer::copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDev
     vkMapMemory(context->device, memory, 0, size, 0, &mapped);
     memcpy(mapped, data, size);
     vkUnmapMemory(context->device, memory);
-}
-
-uint32_t Renderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(context->physicalDevice, &memProperties);
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) != 0 &&
-            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("Failed to find suitable memory type");
 }
 
 std::string Renderer::generateShaderHash(const Material *material) const {
@@ -572,14 +558,14 @@ VulkanPipeline *Renderer::getPipelineForMaterial(const Material *material) {
 
 void Renderer::usePipeline(PipelineType type) {
     switch (type) {
-    case PipelineType::RayTracing:
-        // Note: This method is now deprecated in favor of getPipelineForMaterial
-        throw std::runtime_error("Use getPipelineForMaterial instead of usePipeline");
-        break;
+        case PipelineType::RayTracing:
+            // Note: This method is now deprecated in favor of getPipelineForMaterial
+            throw std::runtime_error("Use getPipelineForMaterial instead of usePipeline");
+            break;
 
-    case PipelineType::Raster:
-        throw std::runtime_error("Raster pipeline not implemented yet");
-        break;
+        case PipelineType::Raster:
+            throw std::runtime_error("Raster pipeline not implemented yet");
+            break;
     }
 }
 
@@ -746,8 +732,8 @@ void Renderer::createUniformBuffer(VkDeviceSize size, VkBuffer &buffer, VkDevice
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits,
-                                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    allocInfo.memoryTypeIndex = findMemoryType(this->context->physicalDevice, memRequirements.memoryTypeBits,
+                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
     if (vkAllocateMemory(this->context->device, &allocInfo, nullptr, &memory) != VK_SUCCESS) {
         throw std::runtime_error("Failed to allocate uniform buffer memory");

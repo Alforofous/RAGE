@@ -1,11 +1,11 @@
 #pragma once
-#include <shaderc/shaderc.h>
+#include "utils/shader_compiler.hpp"
 #include <string>
 
 struct GLSLShader {
     std::string source;
-    shaderc_shader_kind kind;
+    ShaderKind kind;
 
-    GLSLShader(std::string src, shaderc_shader_kind kind)
+    GLSLShader(std::string src, ShaderKind kind)
         : source(std::move(src)), kind(kind) {}
 };
