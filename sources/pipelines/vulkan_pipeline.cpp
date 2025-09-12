@@ -1,33 +1,20 @@
 #include "pipelines/vulkan_pipeline.hpp"
 #include "utils/shader_compiler.hpp"
-#include <spirv_reflect.h>
 #include <stdexcept>
 #include <map>
 
-namespace {
-    VkShaderStageFlagBits shaderKindToVkShaderStageFlagBits(ShaderKind kind) {
-        switch (kind) {
-            case ShaderKind::VERTEX:
-                return VK_SHADER_STAGE_VERTEX_BIT;
-            case ShaderKind::FRAGMENT:
-                return VK_SHADER_STAGE_FRAGMENT_BIT;
-            case ShaderKind::COMPUTE:
-                return VK_SHADER_STAGE_COMPUTE_BIT;
-            case ShaderKind::RAYGEN:
-                return VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-            case ShaderKind::MISS:
-                return VK_SHADER_STAGE_MISS_BIT_KHR;
-            case ShaderKind::CLOSEST_HIT:
-                return VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-            case ShaderKind::ANY_HIT:
-                return VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-            default:
-                throw std::runtime_error("Invalid shader kind");
-        }
-    }
+VulkanPipeline::VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &glslShaders) : device(device) {
+    this->compileShaders(glslShaders);
+    this->createShaderModules();
+    this->createDescriptorLayouts();
+    this->createPipelineLayout();
 }
 
-VulkanPipeline::VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &glslShaders) : device(device) {
+VulkanPipeline::~VulkanPipeline() {
+    this->dispose();
+}
+
+void VulkanPipeline::compileShaders(const std::vector<GLSLShader> &glslShaders) {
     for (const auto &shader : glslShaders) {
         auto spirv = ShaderCompiler::compileGLSL(shader.source, shader.kind);
 
@@ -37,24 +24,22 @@ VulkanPipeline::VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &g
 
         this->compiledShaders.push_back(std::move(spirv));
         this->shaderKinds.push_back(shader.kind);
-
-        const auto &storedSpirv = this->compiledShaders.back();
-        this->reflectShaderBytecode(storedSpirv.data(), storedSpirv.size() * sizeof(uint32_t));
     }
 
-    // Create shader modules from compiled SPIR-V
+    // Reflect all shaders after compilation
+    this->reflectShaders();
+}
+
+void VulkanPipeline::createShaderModules() {
     this->shaderModules.reserve(this->compiledShaders.size());
     for (size_t i = 0; i < this->compiledShaders.size(); ++i) {
         VkShaderModule module = this->createShaderModuleFromSPIRV(i);
         this->shaderModules.push_back(module);
     }
-
-    this->descriptorSetLayouts = this->createDescriptorSetLayouts(this->bindingsBySetNumber);
-    this->createPipelineLayout();
 }
 
-VulkanPipeline::~VulkanPipeline() {
-    this->dispose();
+void VulkanPipeline::createDescriptorLayouts() {
+    this->descriptorSetLayouts = this->createDescriptorSetLayouts(this->bindingsBySetNumber);
 }
 
 void VulkanPipeline::createPipelineLayout() {
@@ -63,13 +48,9 @@ void VulkanPipeline::createPipelineLayout() {
     pipelineLayoutInfo.setLayoutCount = this->descriptorSetLayouts.size();
     pipelineLayoutInfo.pSetLayouts = this->descriptorSetLayouts.data();
 
-    VkPushConstantRange pushConstant{};
-    pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
-    pushConstant.offset = 0;
-    pushConstant.size = MAX_PUSH_CONSTANT_SIZE;
-
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+    // Use actual push constants from reflection
+    pipelineLayoutInfo.pushConstantRangeCount = this->pushConstantRanges.size();
+    pipelineLayoutInfo.pPushConstantRanges = this->pushConstantRanges.empty() ? nullptr : this->pushConstantRanges.data();
 
     if (vkCreatePipelineLayout(this->device, &pipelineLayoutInfo, nullptr, &this->pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout");
@@ -142,7 +123,12 @@ VkShaderModule VulkanPipeline::createShaderModuleFromSPIRV(size_t shaderIndex) {
     return shaderModule;
 }
 
-VkPushConstantRange VulkanPipeline::getPushConstantRange() {
+VkPushConstantRange VulkanPipeline::getPushConstantRange() const {
+    if (!this->pushConstantRanges.empty()) {
+        return this->pushConstantRanges[0];  // Return first range if available
+    }
+
+    // Fallback to default range if no push constants found
     VkPushConstantRange range{};
     range.stageFlags = VK_SHADER_STAGE_ALL;
     range.offset = 0;
@@ -163,43 +149,27 @@ bool VulkanPipeline::isValidPushConstantSize(uint32_t size) {
     return size <= MAX_PUSH_CONSTANT_SIZE;
 }
 
-void VulkanPipeline::reflectShaderBytecode(const void *spirvCode, size_t spirvSize) {
-    SpvReflectShaderModule module;
-    SpvReflectResult result = spvReflectCreateShaderModule(spirvSize, spirvCode, &module);
+void VulkanPipeline::reflectShaders() {
+    std::vector<ShaderReflector::ReflectionResult> results;
 
-    if (result != SPV_REFLECT_RESULT_SUCCESS) {
-        throw std::runtime_error("Failed to create SPIRV-Reflect module");
+    // Reflect each compiled shader
+    for (size_t i = 0; i < this->compiledShaders.size(); ++i) {
+        const auto &spirv = this->compiledShaders[i];
+        ShaderKind shaderKind = this->shaderKinds[i];
+
+        auto result = ShaderReflector::reflectShaderBytecode(
+            spirv.data(),
+            spirv.size() * sizeof(uint32_t),
+            shaderKind
+        );
+
+        results.push_back(result);
     }
 
-    uint32_t bindingCount = 0;
-    result = spvReflectEnumerateDescriptorBindings(&module, &bindingCount, nullptr);
-
-    if (result != SPV_REFLECT_RESULT_SUCCESS) {
-        spvReflectDestroyShaderModule(&module);
-        throw std::runtime_error("Failed to enumerate descriptor bindings");
-    }
-
-    if (bindingCount > 0) {
-        std::vector<SpvReflectDescriptorBinding *> bindings(bindingCount);
-        result = spvReflectEnumerateDescriptorBindings(&module, &bindingCount, bindings.data());
-
-        if (result == SPV_REFLECT_RESULT_SUCCESS) {
-            for (const auto *binding : bindings) {
-                auto descriptorType = static_cast<VkDescriptorType>(binding->descriptor_type);
-
-                VkDescriptorSetLayoutBinding layoutBinding{};
-                layoutBinding.binding = binding->binding;
-                layoutBinding.descriptorType = descriptorType;
-                layoutBinding.descriptorCount = binding->count;
-                layoutBinding.stageFlags = VK_SHADER_STAGE_ALL;
-                layoutBinding.pImmutableSamplers = nullptr;
-
-                this->bindingsBySetNumber[binding->set].push_back(layoutBinding);
-            }
-        }
-    }
-
-    spvReflectDestroyShaderModule(&module);
+    // Combine all reflection results
+    auto combined = ShaderReflector::combineReflectionResults(results);
+    this->bindingsBySetNumber = combined.bindingsBySetNumber;
+    this->pushConstantRanges = combined.pushConstantRanges;
 }
 
 void VulkanPipeline::dispose() {
@@ -242,7 +212,7 @@ std::vector<VkPipelineShaderStageCreateInfo> VulkanPipeline::getShaderStages() c
     for (size_t i = 0; i < this->shaderModules.size(); ++i) {
         VkPipelineShaderStageCreateInfo stageInfo{};
         stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stageInfo.stage = shaderKindToVkShaderStageFlagBits(this->shaderKinds[i]);
+        stageInfo.stage = ShaderReflector::shaderKindToVkShaderStageFlagBits(this->shaderKinds[i]);
         stageInfo.module = this->shaderModules[i];
         stageInfo.pName = "main";
         shaderStages.push_back(stageInfo);

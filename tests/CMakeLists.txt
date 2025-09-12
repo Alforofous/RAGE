@@ -33,6 +33,7 @@ target_include_directories(rage_tests PRIVATE
 # Add test sources that need to be compiled
 target_sources(rage_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/sources/pipelines/vulkan_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/sources/pipelines/shader_reflector.cpp
     ${CMAKE_SOURCE_DIR}/sources/utils/file_reader.cpp
     ${CMAKE_SOURCE_DIR}/sources/utils/shader_compiler.cpp
 )

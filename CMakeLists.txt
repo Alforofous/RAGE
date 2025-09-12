@@ -53,6 +53,7 @@ set(SOURCES
     materials/material.cpp
     pipelines/vulkan_pipeline.cpp
     pipelines/vulkan_ray_tracing_pipeline.cpp
+    pipelines/shader_reflector.cpp
 )
 
 # Add SPIRV-Reflect as subdirectory

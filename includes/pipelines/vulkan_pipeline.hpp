@@ -3,6 +3,7 @@
 #include <map>
 #include <vector>
 #include "glsl_shader.hpp"
+#include "pipelines/shader_reflector.hpp"
 
 class VulkanPipeline {
 public:
@@ -16,7 +17,7 @@ public:
     void pushConstants(VkCommandBuffer cmdBuffer, VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size, const void *data);
 
     uint32_t getDescriptorSetLayoutCount() const { return this->descriptorSetLayouts.size(); }
-    static VkPushConstantRange getPushConstantRange();
+    VkPushConstantRange getPushConstantRange() const;
     VkPipelineLayout getLayout() const { return this->pipelineLayout; }
     VkPipeline getPipeline() const { return this->pipeline; }
     VkDescriptorSetLayout getDescriptorSetLayout(uint32_t setIndex) const;
@@ -27,6 +28,7 @@ protected:
     VkPipeline pipeline = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
     std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > bindingsBySetNumber;
+    std::vector<VkPushConstantRange> pushConstantRanges;
     std::vector<std::vector<uint32_t> > compiledShaders;
     std::vector<VkShaderModule> shaderModules;
     std::vector<ShaderKind> shaderKinds;
@@ -38,8 +40,14 @@ protected:
     std::vector<VkPipelineShaderStageCreateInfo> getShaderStages() const;
 
 private:
-    std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);
+    // Initialization phases
+    void compileShaders(const std::vector<GLSLShader> &glslShaders);
+    void createShaderModules();
+    void createDescriptorLayouts();
     void createPipelineLayout();
-    void reflectShaderBytecode(const void *spirvCode, size_t spirvSize);
+
+    // Helper methods
+    std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);
+    void reflectShaders();
     static bool isValidPushConstantSize(uint32_t size);
 };
