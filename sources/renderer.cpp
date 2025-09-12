@@ -40,6 +40,18 @@ Renderer::~Renderer() {
     // Wait for all operations to complete before destroying resources
     vkDeviceWaitIdle(context->device);
 
+    // Clean up static resources from bindStorageImageDescriptorSet
+    cleanupStaticResources();
+
+    // Clean up descriptor pool first (before destroying buffers it references)
+    if (descriptorSets.pool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(context->device, descriptorSets.pool, nullptr);
+        descriptorSets.pool = VK_NULL_HANDLE;
+    }
+
+    // Clean up pipeline cache (this will dispose all cached pipelines)
+    pipelineCache.clear();
+
     // Clean up synchronization objects
     for (auto *semaphore : imageAvailableSemaphores) {
         if (semaphore != VK_NULL_HANDLE) {
@@ -76,8 +88,6 @@ Renderer::~Renderer() {
         vkFreeMemory(context->device, cameraBuffer.memory, nullptr);
         cameraBuffer.memory = VK_NULL_HANDLE;
     }
-
-    // Pipeline cleanup is handled by the pipeline objects themselves
 
     // Clean up command pool last (this also frees all allocated command buffers)
     if (commandPool != VK_NULL_HANDLE) {
@@ -571,20 +581,14 @@ void Renderer::usePipeline(PipelineType type) {
 
 void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline) {
     // Check if we already have a descriptor set for this pipeline
-    static VkDescriptorSet cachedDescriptorSet = VK_NULL_HANDLE;
-    static VkBuffer cameraBuffer = VK_NULL_HANDLE;
-    static VkDeviceMemory cameraMemory = VK_NULL_HANDLE;
-    static VkBuffer cubeBuffer = VK_NULL_HANDLE;
-    static VkDeviceMemory cubeMemory = VK_NULL_HANDLE;
-
-    if (cachedDescriptorSet != VK_NULL_HANDLE) {
+    if (this->cachedDescriptorSet != VK_NULL_HANDLE) {
         // Update uniform buffers with current frame data
-        this->updateCameraBuffer(cameraBuffer, cameraMemory);
-        this->updateCubeBuffer(cubeBuffer, cubeMemory);
+        this->updateCameraBuffer(this->cachedCameraBuffer, this->cachedCameraMemory);
+        this->updateCubeBuffer(this->cachedCubeBuffer, this->cachedCubeMemory);
 
         // Reuse existing descriptor set
         vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                                pipeline->getLayout(), 0, 1, &cachedDescriptorSet, 0, nullptr);
+                                pipeline->getLayout(), 0, 1, &this->cachedDescriptorSet, 0, nullptr);
 
         return;
     }
@@ -640,19 +644,19 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
     }
 
     // Create uniform buffers
-    this->createUniformBuffer(sizeof(CameraData), cameraBuffer, cameraMemory);
-    this->createUniformBuffer(sizeof(CubeData), cubeBuffer, cubeMemory);
+    this->createUniformBuffer(sizeof(CameraData), this->cachedCameraBuffer, this->cachedCameraMemory);
+    this->createUniformBuffer(sizeof(CubeData), this->cachedCubeBuffer, this->cachedCubeMemory);
 
     // Update buffers with initial data
-    this->updateCameraBuffer(cameraBuffer, cameraMemory);
-    this->updateCubeBuffer(cubeBuffer, cubeMemory);
+    this->updateCameraBuffer(this->cachedCameraBuffer, this->cachedCameraMemory);
+    this->updateCubeBuffer(this->cachedCubeBuffer, this->cachedCubeMemory);
 
     // Prepare descriptor writes
     VkWriteDescriptorSet descriptorWrites[3];
 
     // Camera uniform buffer (binding 0)
     VkDescriptorBufferInfo cameraBufferInfo{};
-    cameraBufferInfo.buffer = cameraBuffer;
+    cameraBufferInfo.buffer = this->cachedCameraBuffer;
     cameraBufferInfo.offset = 0;
     cameraBufferInfo.range = sizeof(CameraData);
 
@@ -669,7 +673,7 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
 
     // Cube uniform buffer (binding 1)
     VkDescriptorBufferInfo cubeBufferInfo{};
-    cubeBufferInfo.buffer = cubeBuffer;
+    cubeBufferInfo.buffer = this->cachedCubeBuffer;
     cubeBufferInfo.offset = 0;
     cubeBufferInfo.range = sizeof(CubeData);
 
@@ -704,7 +708,7 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
     vkUpdateDescriptorSets(context->device, 3, descriptorWrites, 0, nullptr);
 
     // Cache the descriptor set for reuse
-    cachedDescriptorSet = descriptorSet;
+    this->cachedDescriptorSet = descriptorSet;
 
     // Bind descriptor set for ray tracing to index 0 (which corresponds to shader's set 1)
     vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
@@ -785,4 +789,31 @@ void Renderer::updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory) {
     vkMapMemory(this->context->device, memory, 0, sizeof(CubeData), 0, &data);
     memcpy(data, &cubeData, sizeof(CubeData));
     vkUnmapMemory(this->context->device, memory);
+}
+
+void Renderer::cleanupStaticResources() {
+    // Clean up cached descriptor set resources
+    if (this->cachedDescriptorSet != VK_NULL_HANDLE) {
+        this->cachedDescriptorSet = VK_NULL_HANDLE;
+    }
+
+    if (this->cachedCameraBuffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(this->context->device, this->cachedCameraBuffer, nullptr);
+        this->cachedCameraBuffer = VK_NULL_HANDLE;
+    }
+
+    if (this->cachedCameraMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(this->context->device, this->cachedCameraMemory, nullptr);
+        this->cachedCameraMemory = VK_NULL_HANDLE;
+    }
+
+    if (this->cachedCubeBuffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(this->context->device, this->cachedCubeBuffer, nullptr);
+        this->cachedCubeBuffer = VK_NULL_HANDLE;
+    }
+
+    if (this->cachedCubeMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(this->context->device, this->cachedCubeMemory, nullptr);
+        this->cachedCubeMemory = VK_NULL_HANDLE;
+    }
 }

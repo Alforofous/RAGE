@@ -105,7 +105,7 @@ void VulkanRayTracingPipeline::createShaderBindingTables() {
     deviceProperties.pNext = &rtProperties;
     vkGetPhysicalDeviceProperties2(this->context->physicalDevice, &deviceProperties);
 
-    const uint32_t handleSize = rtProperties.shaderGroupHandleSize;
+    const size_t handleSize = rtProperties.shaderGroupHandleSize;
     const uint32_t handleAlignment = rtProperties.shaderGroupHandleAlignment;
     const uint32_t baseAlignment = rtProperties.shaderGroupBaseAlignment;
 

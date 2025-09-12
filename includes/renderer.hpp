@@ -109,6 +109,7 @@ private:
     AllocatedBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
     void copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDeviceSize size);
     void submitCommandBuffer();
+    void cleanupStaticResources();
 
     // Core resources
     const VulkanContext *context;
@@ -136,4 +137,11 @@ private:
     // Pipeline caching
     std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;  // Cache pipelines by shader hash
     std::string generateShaderHash(const Material *material) const;         // Generate hash from material shaders
+
+    // Cached descriptor set resources (to avoid recreating them every frame)
+    VkDescriptorSet cachedDescriptorSet = VK_NULL_HANDLE;
+    VkBuffer cachedCameraBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory cachedCameraMemory = VK_NULL_HANDLE;
+    VkBuffer cachedCubeBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory cachedCubeMemory = VK_NULL_HANDLE;
 };
