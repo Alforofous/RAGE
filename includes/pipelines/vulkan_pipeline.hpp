@@ -3,7 +3,6 @@
 #include <map>
 #include <vector>
 #include "glsl_shader.hpp"
-#include "pipelines/shader_reflector.hpp"
 
 class VulkanPipeline {
 public:
@@ -23,31 +22,30 @@ public:
     VkDescriptorSetLayout getDescriptorSetLayout(uint32_t setIndex) const;
 
 protected:
+    struct ShaderInfo {
+        VkShaderModule module = VK_NULL_HANDLE;
+        VkShaderStageFlagBits stage;
+    };
+
     VkDevice device;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     VkPipeline pipeline = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
     std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > bindingsBySetNumber;
     std::vector<VkPushConstantRange> pushConstantRanges;
-    std::vector<std::vector<uint32_t> > compiledShaders;
-    std::vector<VkShaderModule> shaderModules;
-    std::vector<ShaderKind> shaderKinds;
+    std::vector<ShaderInfo> shaders;
     void destroyShaderModule(VkShaderModule module);
 
     void dispose();
-    VkShaderModule createShaderModuleFromSPIRV(size_t shaderIndex);
-    VkShaderModule getShaderModule(size_t shaderIndex) const;
     std::vector<VkPipelineShaderStageCreateInfo> getShaderStages() const;
 
 private:
-    // Initialization phases
     void compileShaders(const std::vector<GLSLShader> &glslShaders);
-    void createShaderModules();
+    void createShaderModules(const std::vector<std::vector<uint32_t> > &compiledShaders, const std::vector<ShaderKind> &shaderKinds);
     void createDescriptorLayouts();
     void createPipelineLayout();
 
-    // Helper methods
     std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);
-    void reflectShaders();
+    void reflectShaders(const std::vector<std::vector<uint32_t> > &compiledShaders, const std::vector<ShaderKind> &shaderKinds);
     static bool isValidPushConstantSize(uint32_t size);
 };
