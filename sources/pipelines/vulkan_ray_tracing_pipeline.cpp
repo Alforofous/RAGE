@@ -8,7 +8,7 @@ VulkanRayTracingPipeline::VulkanRayTracingPipeline(
     const GLSLShader &missShader,
     const GLSLShader &closestHitShader
 )
-    : VulkanPipeline(context->device, std::vector<GLSLShader>{ rayGenShader, missShader, closestHitShader }),
+    : VulkanPipelineBase<VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR>(context->device, std::vector<GLSLShader>{ rayGenShader, missShader, closestHitShader }),
     context(context) {
     this->createRayTracingPipeline();
 }
@@ -71,10 +71,6 @@ void VulkanRayTracingPipeline::createRayTracingPipeline() {
     if (this->context->vkCreateRayTracingPipelinesKHR(this->device, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &this->pipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create ray tracing pipeline");
     }
-}
-
-void VulkanRayTracingPipeline::bind(VkCommandBuffer cmdBuffer) {
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, this->pipeline);
 }
 
 void VulkanRayTracingPipeline::dispatch(VkCommandBuffer cmdBuffer, uint32_t width, uint32_t height) {
@@ -194,7 +190,7 @@ void VulkanRayTracingPipeline::createSBTBuffer(uint32_t size, uint32_t alignment
     }
 
     // Copy shader handle data
-    void *mappedMemory;
+    void *mappedMemory = nullptr;
     if (vkMapMemory(this->device, memory, 0, alignedSize, 0, &mappedMemory) != VK_SUCCESS) {
         vkFreeMemory(this->device, memory, nullptr);
         vkDestroyBuffer(this->device, buffer, nullptr);

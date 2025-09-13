@@ -2,11 +2,11 @@
 #include "utils/shader_compiler.hpp"
 #include <stdexcept>
 #include <map>
+#include <algorithm>
 #include "pipelines/shader_reflector.hpp"
 
 VulkanPipeline::VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &glslShaders) : device(device) {
     this->compileShaders(glslShaders);
-    this->createDescriptorLayouts();
     this->createPipelineLayout();
 }
 
@@ -29,7 +29,25 @@ void VulkanPipeline::compileShaders(const std::vector<GLSLShader> &glslShaders) 
         shaderKinds.push_back(shader.kind);
     }
 
-    this->reflectShaders(compiledShaders, shaderKinds);
+    std::vector<ShaderReflector::ReflectionResult> results;
+    for (size_t i = 0; i < compiledShaders.size(); ++i) {
+        const auto &spirv = compiledShaders[i];
+        ShaderKind shaderKind = shaderKinds[i];
+
+        auto result = ShaderReflector::reflectShaderBytecode(
+            spirv.data(),
+            spirv.size() * sizeof(uint32_t),
+            shaderKind
+        );
+
+        results.push_back(result);
+    }
+
+    auto combined = ShaderReflector::combineReflectionResults(results);
+
+    this->descriptorSetLayouts = this->createDescriptorSetLayouts(combined.bindingsBySetNumber);
+    this->pushConstantRanges = combined.pushConstantRanges;
+
     this->createShaderModules(compiledShaders, shaderKinds);
 }
 
@@ -59,10 +77,6 @@ void VulkanPipeline::createShaderModules(const std::vector<std::vector<uint32_t>
     }
 }
 
-void VulkanPipeline::createDescriptorLayouts() {
-    this->descriptorSetLayouts = this->createDescriptorSetLayouts(this->bindingsBySetNumber);
-}
-
 void VulkanPipeline::createPipelineLayout() {
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -79,6 +93,10 @@ void VulkanPipeline::createPipelineLayout() {
 
 std::vector<VkDescriptorSetLayout> VulkanPipeline::createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber) {
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+
+    if (this->device == VK_NULL_HANDLE) {
+        throw std::runtime_error("Cannot create descriptor set layouts with null device");
+    }
 
     for (const auto &setBindings : bindingsBySetNumber) {
         uint32_t setNumber = setBindings.first;
@@ -101,16 +119,9 @@ std::vector<VkDescriptorSetLayout> VulkanPipeline::createDescriptorSetLayouts(co
     return descriptorSetLayouts;
 }
 
-void VulkanPipeline::bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) {
-    if (setIndex >= this->descriptorSetLayouts.size()) {
-        throw std::runtime_error("Invalid descriptor set index");
-    }
-    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipelineLayout, setIndex, 1, &set, 0, nullptr);
-}
-
 void VulkanPipeline::pushConstants(VkCommandBuffer cmdBuffer, VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size, const void *data) {
-    if (!isValidPushConstantSize(size)) {
-        throw std::runtime_error("Push constant size exceeds maximum");
+    if (!isValidPushConstantData(stageFlags, offset, size)) {
+        throw std::runtime_error("Push constant data doesn't fit within shader-defined ranges");
     }
     vkCmdPushConstants(cmdBuffer, this->pipelineLayout, stageFlags, offset, size, data);
 }
@@ -127,9 +138,9 @@ VkPushConstantRange VulkanPipeline::getPushConstantRange() const {
     }
 
     VkPushConstantRange range{};
-    range.stageFlags = VK_SHADER_STAGE_ALL;
+    range.stageFlags = 0;
     range.offset = 0;
-    range.size = MAX_PUSH_CONSTANT_SIZE;
+    range.size = 0;
 
     return range;
 }
@@ -142,29 +153,13 @@ VkDescriptorSetLayout VulkanPipeline::getDescriptorSetLayout(uint32_t setIndex) 
     return this->descriptorSetLayouts[setIndex];
 }
 
-bool VulkanPipeline::isValidPushConstantSize(uint32_t size) {
-    return size <= MAX_PUSH_CONSTANT_SIZE;
-}
-
-void VulkanPipeline::reflectShaders(const std::vector<std::vector<uint32_t> > &compiledShaders, const std::vector<ShaderKind> &shaderKinds) {
-    std::vector<ShaderReflector::ReflectionResult> results;
-
-    for (size_t i = 0; i < compiledShaders.size(); ++i) {
-        const auto &spirv = compiledShaders[i];
-        ShaderKind shaderKind = shaderKinds[i];
-
-        auto result = ShaderReflector::reflectShaderBytecode(
-            spirv.data(),
-            spirv.size() * sizeof(uint32_t),
-            shaderKind
-        );
-
-        results.push_back(result);
-    }
-
-    auto combined = ShaderReflector::combineReflectionResults(results);
-    this->bindingsBySetNumber = combined.bindingsBySetNumber;
-    this->pushConstantRanges = combined.pushConstantRanges;
+bool VulkanPipeline::isValidPushConstantData(VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size) const {
+    return std::any_of(this->pushConstantRanges.begin(), this->pushConstantRanges.end(),
+                       [stageFlags, offset, size](const auto &range) {
+        return (range.stageFlags & stageFlags) != 0 &&
+               offset >= range.offset &&
+               (offset + size) <= (range.offset + range.size);
+    });
 }
 
 void VulkanPipeline::dispose() {
@@ -206,3 +201,26 @@ std::vector<VkPipelineShaderStageCreateInfo> VulkanPipeline::getShaderStages() c
 
     return shaderStages;
 }
+
+// Template class implementations
+template<VkPipelineBindPoint BindPoint>
+VulkanPipelineBase<BindPoint>::VulkanPipelineBase(VkDevice device, const std::vector<GLSLShader> &glslShaders)
+    : VulkanPipeline(device, glslShaders) {
+}
+
+template<VkPipelineBindPoint BindPoint>
+void VulkanPipelineBase<BindPoint>::bind(VkCommandBuffer cmdBuffer) {
+    vkCmdBindPipeline(cmdBuffer, BindPoint, this->pipeline);
+}
+
+template<VkPipelineBindPoint BindPoint>
+void VulkanPipelineBase<BindPoint>::bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) {
+    if (setIndex >= this->descriptorSetLayouts.size()) {
+        throw std::runtime_error("Invalid descriptor set index");
+    }
+    vkCmdBindDescriptorSets(cmdBuffer, BindPoint, this->pipelineLayout, setIndex, 1, &set, 0, nullptr);
+}
+
+// Explicit template instantiations
+template class VulkanPipelineBase<VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR>;
+template class VulkanPipelineBase<VK_PIPELINE_BIND_POINT_GRAPHICS>;

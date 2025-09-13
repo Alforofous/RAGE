@@ -2,7 +2,7 @@
 #include "vulkan_pipeline.hpp"
 #include "vulkan_utils.hpp"
 
-class VulkanRayTracingPipeline : public VulkanPipeline {
+class VulkanRayTracingPipeline : public VulkanPipelineBase<VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR> {
 public:
     VulkanRayTracingPipeline(
         const VulkanContext *context,
@@ -11,8 +11,6 @@ public:
         const GLSLShader &closestHitShader
     );
     virtual ~VulkanRayTracingPipeline();
-
-    void bind(VkCommandBuffer cmdBuffer) override;
     void dispatch(VkCommandBuffer cmdBuffer, uint32_t width, uint32_t height);
 
 private:

@@ -37,14 +37,10 @@ void main() {
 }
 )";
 
-// Test pipeline that inherits from VulkanPipeline
-class TestGLSLPipeline : public VulkanPipeline {
+// Test pipeline that inherits from VulkanPipelineBase
+class TestGLSLPipeline : public VulkanPipelineBase<VK_PIPELINE_BIND_POINT_GRAPHICS>  {
 public:
-    TestGLSLPipeline() : VulkanPipeline(VK_NULL_HANDLE, createShaders()) {}
-
-    void bind(VkCommandBuffer cmdBuffer) override {
-        // Mock implementation - does nothing since we're testing with null device
-    }
+    TestGLSLPipeline() : VulkanPipelineBase(VK_NULL_HANDLE, createShaders()) {}
 
 private:
     static std::vector<GLSLShader> createShaders() {
@@ -72,7 +68,9 @@ TEST(VulkanPipelineTest, GLSLCompilationAndReflection) {
 
         // We expect Vulkan creation to fail since we're using VK_NULL_HANDLE
         // But shader compilation and reflection should have succeeded first
-        if (error.find("Failed to create") != std::string::npos) {
+        if (error.find("Failed to create") != std::string::npos ||
+            error.find("Invalid device") != std::string::npos ||
+            error.find("null device") != std::string::npos) {
             SUCCEED() << "Expected Vulkan failure after successful shader processing: " << error;
         }
         else {

@@ -6,13 +6,11 @@
 
 class VulkanPipeline {
 public:
-    static constexpr uint32_t MAX_PUSH_CONSTANT_SIZE = 256;
     VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &glslShaders);
     virtual ~VulkanPipeline();
 
     virtual void bind(VkCommandBuffer cmdBuffer) = 0;
-
-    void bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set);
+    virtual void bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) = 0;
     void pushConstants(VkCommandBuffer cmdBuffer, VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size, const void *data);
 
     uint32_t getDescriptorSetLayoutCount() const { return this->descriptorSetLayouts.size(); }
@@ -31,7 +29,6 @@ protected:
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     VkPipeline pipeline = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
-    std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > bindingsBySetNumber;
     std::vector<VkPushConstantRange> pushConstantRanges;
     std::vector<ShaderInfo> shaders;
     void destroyShaderModule(VkShaderModule module);
@@ -42,10 +39,17 @@ protected:
 private:
     void compileShaders(const std::vector<GLSLShader> &glslShaders);
     void createShaderModules(const std::vector<std::vector<uint32_t> > &compiledShaders, const std::vector<ShaderKind> &shaderKinds);
-    void createDescriptorLayouts();
     void createPipelineLayout();
 
     std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);
-    void reflectShaders(const std::vector<std::vector<uint32_t> > &compiledShaders, const std::vector<ShaderKind> &shaderKinds);
-    static bool isValidPushConstantSize(uint32_t size);
+    bool isValidPushConstantData(VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size) const;
+};
+
+template<VkPipelineBindPoint BindPoint>
+class VulkanPipelineBase : public VulkanPipeline {
+public:
+    VulkanPipelineBase(VkDevice device, const std::vector<GLSLShader> &glslShaders);
+
+    void bind(VkCommandBuffer cmdBuffer) override;
+    void bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) override;
 };
