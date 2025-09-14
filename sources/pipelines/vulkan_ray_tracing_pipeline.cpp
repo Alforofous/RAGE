@@ -10,7 +10,7 @@ VulkanRayTracingPipeline::VulkanRayTracingPipeline(
 )
     : VulkanPipelineBase<VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR>(context->device, std::vector<GLSLShader>{ rayGenShader, missShader, closestHitShader }),
     context(context) {
-    this->createRayTracingPipeline();
+    this->createPipeline();
 }
 
 VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
@@ -26,6 +26,10 @@ VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
         vkDestroyBuffer(this->device, this->hitSBTBuffer, nullptr);
         vkFreeMemory(this->device, this->hitSBTMemory, nullptr);
     }
+}
+
+void VulkanRayTracingPipeline::createPipeline() {
+    this->createRayTracingPipeline();
 }
 
 void VulkanRayTracingPipeline::createRayTracingPipeline() {

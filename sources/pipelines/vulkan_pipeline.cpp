@@ -126,25 +126,6 @@ void VulkanPipeline::pushConstants(VkCommandBuffer cmdBuffer, VkShaderStageFlags
     vkCmdPushConstants(cmdBuffer, this->pipelineLayout, stageFlags, offset, size, data);
 }
 
-void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
-    if (module != VK_NULL_HANDLE) {
-        vkDestroyShaderModule(this->device, module, nullptr);
-    }
-}
-
-VkPushConstantRange VulkanPipeline::getPushConstantRange() const {
-    if (!this->pushConstantRanges.empty()) {
-        return this->pushConstantRanges[0];
-    }
-
-    VkPushConstantRange range{};
-    range.stageFlags = 0;
-    range.offset = 0;
-    range.size = 0;
-
-    return range;
-}
-
 VkDescriptorSetLayout VulkanPipeline::getDescriptorSetLayout(uint32_t setIndex) const {
     if (setIndex >= this->descriptorSetLayouts.size()) {
         throw std::runtime_error("Invalid descriptor set layout index");
@@ -202,7 +183,12 @@ std::vector<VkPipelineShaderStageCreateInfo> VulkanPipeline::getShaderStages() c
     return shaderStages;
 }
 
-// Template class implementations
+void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
+    if (module != VK_NULL_HANDLE) {
+        vkDestroyShaderModule(this->device, module, nullptr);
+    }
+}
+
 template<VkPipelineBindPoint BindPoint>
 VulkanPipelineBase<BindPoint>::VulkanPipelineBase(VkDevice device, const std::vector<GLSLShader> &glslShaders)
     : VulkanPipeline(device, glslShaders) {
@@ -221,6 +207,5 @@ void VulkanPipelineBase<BindPoint>::bindDescriptorSet(VkCommandBuffer cmdBuffer,
     vkCmdBindDescriptorSets(cmdBuffer, BindPoint, this->pipelineLayout, setIndex, 1, &set, 0, nullptr);
 }
 
-// Explicit template instantiations
 template class VulkanPipelineBase<VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR>;
 template class VulkanPipelineBase<VK_PIPELINE_BIND_POINT_GRAPHICS>;

@@ -69,11 +69,6 @@ add_subdirectory(libraries/googletest)
 list(TRANSFORM SOURCES PREPEND ${SOURCES_DIRECTORY}/)
 
 
-set(SHADERS
-    shaders/voxel_ray_tracing_material.rgen
-    shaders/voxel_ray_tracing_material.rchit
-    shaders/voxel_ray_tracing_material.rmiss
-)
 
 # Set RAGE as startup project
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT RAGE)
@@ -183,58 +178,14 @@ endif()
 
 target_link_libraries(RAGE project_libraries spirv-reflect-static)
 
-# Compile and copy shaders
-find_program(GLSLC glslc HINTS $ENV{VULKAN_SDK}/Bin)
-if(NOT GLSLC)
-    message(FATAL_ERROR "glslc shader compiler not found!")
-endif()
-
-# Function to compile a shader
-function(compile_shader SHADER_PATH)
-    get_filename_component(SHADER_NAME ${SHADER_PATH} NAME)
-    get_filename_component(SHADER_EXT ${SHADER_PATH} EXT)
-    
-    add_custom_command(
-        OUTPUT ${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders/
-        COMMAND ${GLSLC} 
-            --target-env=vulkan1.2
-            -O
-            -I${CMAKE_SOURCE_DIR}/shaders
-            ${CMAKE_SOURCE_DIR}/shaders/${SHADER_NAME}
-            -o ${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv
-        DEPENDS ${CMAKE_SOURCE_DIR}/shaders/${SHADER_NAME}
-        COMMENT "Compiling shader ${SHADER_NAME}"
-    )
-    list(APPEND SPV_SHADERS ${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv)
-    set(SPV_SHADERS ${SPV_SHADERS} PARENT_SCOPE)
-endfunction()
-
-# Set shader output directory
-set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/shaders")
-
-# Create custom commands for shader compilation
-set(SHADER_SOURCES
-    shaders/voxel_ray_tracing_material.rgen
-    shaders/voxel_ray_tracing_material.rchit
-    shaders/voxel_ray_tracing_material.rmiss
-)
-
-# Add shader output directory as a compile definition
-add_compile_definitions(SHADER_OUTPUT_DIR="${SHADER_OUTPUT_DIR}")
-
-foreach(SHADER ${SHADER_SOURCES})
-    compile_shader(${SHADER})
-endforeach()
-
-# Create a custom target that depends on all shader outputs
-add_custom_target(shaders ALL
-    DEPENDS ${SPV_SHADERS}
+# Copy shader source files to build directory (for runtime loading)
+add_custom_target(copy_shaders ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/shaders
         ${CMAKE_BINARY_DIR}/shaders
+    COMMENT "Copying shader source files to build directory"
 )
 
-# Make sure shaders are built before the main target
-add_dependencies(${PROJECT_NAME} shaders)
+# Make sure shaders are copied before the main target
+add_dependencies(${PROJECT_NAME} copy_shaders)

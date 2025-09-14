@@ -40,7 +40,12 @@ void main() {
 // Test pipeline that inherits from VulkanPipelineBase
 class TestGLSLPipeline : public VulkanPipelineBase<VK_PIPELINE_BIND_POINT_GRAPHICS>  {
 public:
-    TestGLSLPipeline() : VulkanPipelineBase(VK_NULL_HANDLE, createShaders()) {}
+    TestGLSLPipeline() : VulkanPipelineBase(VK_NULL_HANDLE, createShaders()) {
+        this->createPipeline();
+    }
+
+protected:
+    void createPipeline() override {}
 
 private:
     static std::vector<GLSLShader> createShaders() {

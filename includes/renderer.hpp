@@ -2,7 +2,6 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <memory>
-#include <stdexcept>
 #include <map>
 #include <string>
 #include "scene.hpp"
@@ -62,16 +61,6 @@ public:
     void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void createUniformBuffer(VkDeviceSize size, VkBuffer &buffer, VkDeviceMemory &memory);
-
-    // Push constant management
-    template<typename T>
-    void pushConstants(VkCommandBuffer cmdBuffer, const VulkanPipeline *pipeline, const T &data) {
-        const auto &range = VulkanPipeline::getPushConstantRange();
-        if (sizeof(T) > range.size) {
-            throw std::runtime_error("Push constant data too large");
-        }
-        vkCmdPushConstants(cmdBuffer, pipeline->getLayout(), range.stageFlags, range.offset, sizeof(T), &data);
-    }
 
     Renderer(const VulkanContext *context, Scene *scene, Camera *camera);
 

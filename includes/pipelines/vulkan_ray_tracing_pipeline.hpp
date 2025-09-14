@@ -13,6 +13,9 @@ public:
     virtual ~VulkanRayTracingPipeline();
     void dispatch(VkCommandBuffer cmdBuffer, uint32_t width, uint32_t height);
 
+protected:
+    void createPipeline() override;
+
 private:
     void createRayTracingPipeline();
     void createShaderBindingTables();
@@ -21,13 +24,11 @@ private:
 
     const VulkanContext *context;
 
-    // Shader Binding Tables
     VkStridedDeviceAddressRegionKHR raygenSBT{};
     VkStridedDeviceAddressRegionKHR missSBT{};
     VkStridedDeviceAddressRegionKHR hitSBT{};
     VkStridedDeviceAddressRegionKHR callableSBT{};
 
-    // SBT Buffers
     VkBuffer raygenSBTBuffer = VK_NULL_HANDLE;
     VkDeviceMemory raygenSBTMemory = VK_NULL_HANDLE;
     VkBuffer missSBTBuffer = VK_NULL_HANDLE;
