@@ -5,7 +5,8 @@
 #include <algorithm>
 #include "pipelines/shader_reflector.hpp"
 
-VulkanPipeline::VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &glslShaders) : device(device) {
+VulkanPipeline::VulkanPipeline(VkDevice device, VkPhysicalDevice physicalDevice, const std::vector<GLSLShader> &glslShaders)
+    : device(device), physicalDevice(physicalDevice) {
     this->compileShaders(glslShaders);
     this->createPipelineLayout();
 }
@@ -189,7 +190,7 @@ void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
     }
 }
 
-VkBuffer VulkanPipeline::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, uint32_t memoryTypeIndex, VkDeviceMemory &bufferMemory) {
+VkBuffer VulkanPipeline::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory) {
     VkBuffer buffer = VK_NULL_HANDLE;
 
     VkBufferCreateInfo bufferInfo{};
@@ -204,6 +205,9 @@ VkBuffer VulkanPipeline::createBuffer(VkDeviceSize size, VkBufferUsageFlags usag
 
     VkMemoryRequirements memRequirements;
     vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
+
+    // Find suitable memory type
+    uint32_t memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits, properties);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -254,10 +258,23 @@ VkDeviceAddress VulkanPipeline::getBufferDeviceAddress(VkBuffer buffer) {
     return vkGetBufferDeviceAddress(this->device, &addressInfo);
 }
 
-void VulkanPipeline::copyToSBTBuffer(VkBuffer buffer, VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t alignedSize, uint32_t alignment) {
-    void *mappedMemory = this->mapMemory(memory, alignedSize);
+void VulkanPipeline::copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize) {
+    void *mappedMemory = this->mapMemory(memory, bufferSize);
 
     memcpy(mappedMemory, data, dataSize);
 
     this->unmapMemory(memory);
+}
+
+uint32_t VulkanPipeline::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(this->physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("Failed to find suitable memory type");
 }

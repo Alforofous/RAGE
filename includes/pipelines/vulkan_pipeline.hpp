@@ -6,7 +6,7 @@
 
 class VulkanPipeline {
 public:
-    VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &glslShaders);
+    VulkanPipeline(VkDevice device, VkPhysicalDevice physicalDevice, const std::vector<GLSLShader> &glslShaders);
     virtual ~VulkanPipeline();
 
     // === Core Pipeline Operations ===
@@ -46,16 +46,17 @@ protected:
     std::vector<VkPipelineShaderStageCreateInfo> getShaderStages() const;
 
     // === Helper Methods for Derived Classes ===
-    VkBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, uint32_t memoryTypeIndex, VkDeviceMemory &bufferMemory);
+    VkBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory);
     void destroyBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void *mapMemory(VkDeviceMemory memory, VkDeviceSize size);
     void unmapMemory(VkDeviceMemory memory);
     VkDeviceAddress getBufferDeviceAddress(VkBuffer buffer);
-    void copyToSBTBuffer(VkBuffer buffer, VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t alignedSize, uint32_t alignment);
+    void copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize);
 
     // === Pipeline Creation (Protected for createPipeline() override) ===
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkDevice device;
+    VkPhysicalDevice physicalDevice;
 
 private:
     // === Core Resources (Private - Use Accessors) ===
@@ -74,6 +75,7 @@ private:
     void destroyShaderModule(VkShaderModule module);
     std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);
     bool isValidPushConstantData(VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size) const;
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     // === Friend Access for Protected Members ===
     template<VkPipelineBindPoint> friend class VulkanPipelineBase;
@@ -82,8 +84,8 @@ private:
 template<VkPipelineBindPoint BindPoint>
 class VulkanPipelineBase : public VulkanPipeline {
 public:
-    VulkanPipelineBase(VkDevice device, const std::vector<GLSLShader> &glslShaders)
-        : VulkanPipeline(device, glslShaders) {}
+    VulkanPipelineBase(VkDevice device, VkPhysicalDevice physicalDevice, const std::vector<GLSLShader> &glslShaders)
+        : VulkanPipeline(device, physicalDevice, glslShaders) {}
 
     void bind(VkCommandBuffer cmdBuffer) override {
         vkCmdBindPipeline(cmdBuffer, BindPoint, this->getPipeline());
