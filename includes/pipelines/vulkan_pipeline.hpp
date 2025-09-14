@@ -54,10 +54,11 @@ protected:
     VkDeviceAddress getBufferDeviceAddress(VkBuffer buffer);
     void copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize);
 
+    VkPipeline pipeline = VK_NULL_HANDLE;
+
 private:
     // === Private Members ===
     VkPhysicalDevice physicalDevice;
-    VkPipeline pipeline = VK_NULL_HANDLE;
     VkDevice device;
 
     // === Core Resources (Private - Use Accessors) ===

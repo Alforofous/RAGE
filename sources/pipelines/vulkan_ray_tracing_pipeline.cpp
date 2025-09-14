@@ -11,17 +11,18 @@ VulkanRayTracingPipeline::VulkanRayTracingPipeline(
     : VulkanPipelineBase<VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR>(context->device, context->physicalDevice, std::vector<GLSLShader>{ rayGenShader, missShader, closestHitShader }),
     context(context) {
     this->createPipeline();
+    this->createShaderBindingTables();
 }
 
 VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
-    if (this->raygenSBTBuffer != VK_NULL_HANDLE) {
-        this->destroyBuffer(this->raygenSBTBuffer, this->raygenSBTMemory);
+    if (this->raygenSBT.buffer != VK_NULL_HANDLE) {
+        this->destroyBuffer(this->raygenSBT.buffer, this->raygenSBT.memory);
     }
-    if (this->missSBTBuffer != VK_NULL_HANDLE) {
-        this->destroyBuffer(this->missSBTBuffer, this->missSBTMemory);
+    if (this->missSBT.buffer != VK_NULL_HANDLE) {
+        this->destroyBuffer(this->missSBT.buffer, this->missSBT.memory);
     }
-    if (this->hitSBTBuffer != VK_NULL_HANDLE) {
-        this->destroyBuffer(this->hitSBTBuffer, this->hitSBTMemory);
+    if (this->hitSBT.buffer != VK_NULL_HANDLE) {
+        this->destroyBuffer(this->hitSBT.buffer, this->hitSBT.memory);
     }
 }
 
@@ -38,7 +39,7 @@ void VulkanRayTracingPipeline::createPipeline() {
     VkRayTracingShaderGroupCreateInfoKHR raygenGroup{};
     raygenGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
     raygenGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    raygenGroup.generalShader = 0;
+    raygenGroup.generalShader = RAYGEN_GROUP_INDEX;
     raygenGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
     raygenGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
     raygenGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
@@ -47,7 +48,7 @@ void VulkanRayTracingPipeline::createPipeline() {
     VkRayTracingShaderGroupCreateInfoKHR missGroup{};
     missGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
     missGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    missGroup.generalShader = 1;
+    missGroup.generalShader = MISS_GROUP_INDEX;
     missGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
     missGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
     missGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
@@ -57,7 +58,7 @@ void VulkanRayTracingPipeline::createPipeline() {
     hitGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
     hitGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
     hitGroup.generalShader = VK_SHADER_UNUSED_KHR;
-    hitGroup.closestHitShader = 2;
+    hitGroup.closestHitShader = HIT_GROUP_INDEX;
     hitGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
     hitGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
     shaderGroups.push_back(hitGroup);
@@ -65,23 +66,17 @@ void VulkanRayTracingPipeline::createPipeline() {
     pipelineInfo.groupCount = static_cast<uint32_t>(shaderGroups.size());
     pipelineInfo.pGroups = shaderGroups.data();
 
-    VkPipeline pipeline = this->getPipeline();
-    if (this->context->vkCreateRayTracingPipelinesKHR(this->getDevice(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
+    if (this->context->vkCreateRayTracingPipelinesKHR(this->getDevice(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &this->pipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create ray tracing pipeline");
     }
 }
 
 void VulkanRayTracingPipeline::dispatch(VkCommandBuffer cmdBuffer, uint32_t width, uint32_t height) {
-    if (this->raygenSBT.deviceAddress == 0) {
-        this->createShaderBindingTables();
-    }
-
-    // Dispatch ray tracing with proper SBTs
     this->context->vkCmdTraceRaysKHR(
         cmdBuffer,
-        &this->raygenSBT,
-        &this->missSBT,
-        &this->hitSBT,
+        &this->raygenSBT.region,
+        &this->missSBT.region,
+        &this->hitSBT.region,
         &this->callableSBT,
         width,
         height,
@@ -104,51 +99,42 @@ void VulkanRayTracingPipeline::createShaderBindingTables() {
 
     const uint32_t alignedHandleSize = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
 
-    const uint32_t groupCount = 3;
-    const uint32_t sbtSize = groupCount * handleSize;
+    const uint32_t sbtSize = SHADER_GROUP_COUNT * handleSize;
 
     std::vector<uint8_t> shaderHandleStorage(sbtSize);
     VkResult result = this->context->vkGetRayTracingShaderGroupHandlesKHR(
-        this->getDevice(), this->getPipeline(), 0, groupCount, sbtSize, shaderHandleStorage.data());
+        this->getDevice(), this->getPipeline(), 0, SHADER_GROUP_COUNT, sbtSize, shaderHandleStorage.data());
 
     if (result != VK_SUCCESS) {
         throw std::runtime_error("Failed to get ray tracing shader group handles");
     }
 
-    // Create raygen SBT buffer using specialized device address helper
-    this->raygenSBTBuffer = this->createDeviceAddressBuffer(alignedHandleSize,
-                                                            VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                                            this->raygenSBTMemory);
-    this->copyToBuffer(this->raygenSBTMemory,
-                       &shaderHandleStorage[0 * handleSize], handleSize, alignedHandleSize);
-    this->raygenSBT.deviceAddress = this->getBufferDeviceAddress(this->raygenSBTBuffer);
-    this->raygenSBT.stride = alignedHandleSize;
-    this->raygenSBT.size = alignedHandleSize;
+    // Create SBT entries using helper method
+    this->createSBTEntry(RAYGEN_GROUP_INDEX, shaderHandleStorage, handleSize, alignedHandleSize,
+                         this->raygenSBT.buffer, this->raygenSBT.memory, this->raygenSBT.region);
 
-    // Create miss SBT buffer using specialized device address helper
-    this->missSBTBuffer = this->createDeviceAddressBuffer(alignedHandleSize,
-                                                          VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                                          this->missSBTMemory);
-    this->copyToBuffer(this->missSBTMemory,
-                       &shaderHandleStorage[1 * handleSize], handleSize, alignedHandleSize);
-    this->missSBT.deviceAddress = this->getBufferDeviceAddress(this->missSBTBuffer);
-    this->missSBT.stride = alignedHandleSize;
-    this->missSBT.size = alignedHandleSize;
+    this->createSBTEntry(MISS_GROUP_INDEX, shaderHandleStorage, handleSize, alignedHandleSize,
+                         this->missSBT.buffer, this->missSBT.memory, this->missSBT.region);
 
-    // Create hit SBT buffer using specialized device address helper
-    this->hitSBTBuffer = this->createDeviceAddressBuffer(alignedHandleSize,
-                                                         VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                                         this->hitSBTMemory);
-    this->copyToBuffer(this->hitSBTMemory,
-                       &shaderHandleStorage[2 * handleSize], handleSize, alignedHandleSize);
-    this->hitSBT.deviceAddress = this->getBufferDeviceAddress(this->hitSBTBuffer);
-    this->hitSBT.stride = alignedHandleSize;
-    this->hitSBT.size = alignedHandleSize;
+    this->createSBTEntry(HIT_GROUP_INDEX, shaderHandleStorage, handleSize, alignedHandleSize,
+                         this->hitSBT.buffer, this->hitSBT.memory, this->hitSBT.region);
 
     this->callableSBT.deviceAddress = 0;
     this->callableSBT.stride = 0;
     this->callableSBT.size = 0;
+}
+
+void VulkanRayTracingPipeline::createSBTEntry(size_t groupIndex, const std::vector<uint8_t> &handleStorage,
+                                              size_t handleSize, size_t alignedHandleSize,
+                                              VkBuffer &buffer, VkDeviceMemory &memory, VkStridedDeviceAddressRegionKHR &sbt) {
+    buffer = this->createDeviceAddressBuffer(alignedHandleSize,
+                                             VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                             memory);
+
+    this->copyToBuffer(memory, &handleStorage[groupIndex * handleSize], handleSize, alignedHandleSize);
+
+    sbt.deviceAddress = this->getBufferDeviceAddress(buffer);
+    sbt.stride = alignedHandleSize;
+    sbt.size = alignedHandleSize;
 }

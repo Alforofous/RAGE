@@ -17,22 +17,28 @@ protected:
     void createPipeline() override;
 
 private:
-    void createRayTracingPipeline();
+    // === Shader Group Constants ===
+    static constexpr uint32_t RAYGEN_GROUP_INDEX = 0;
+    static constexpr uint32_t MISS_GROUP_INDEX = 1;
+    static constexpr uint32_t HIT_GROUP_INDEX = 2;
+    static constexpr uint32_t SHADER_GROUP_COUNT = 3;
+
     void createShaderBindingTables();
-    void createSBTBuffer(uint32_t size, uint32_t alignment, const void *handleData, uint32_t handleSize,
-                         VkBuffer &buffer, VkDeviceMemory &memory, VkStridedDeviceAddressRegionKHR &sbt);
+    void createSBTEntry(size_t groupIndex, const std::vector<uint8_t> &handleStorage,
+                        size_t handleSize, size_t alignedHandleSize,
+                        VkBuffer &buffer, VkDeviceMemory &memory, VkStridedDeviceAddressRegionKHR &sbt);
 
     const VulkanContext *context;
 
-    VkStridedDeviceAddressRegionKHR raygenSBT{};
-    VkStridedDeviceAddressRegionKHR missSBT{};
-    VkStridedDeviceAddressRegionKHR hitSBT{};
-    VkStridedDeviceAddressRegionKHR callableSBT{};
+    // === SBT Resources ===
+    struct SBTEntry {
+        VkStridedDeviceAddressRegionKHR region{};
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+    };
 
-    VkBuffer raygenSBTBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory raygenSBTMemory = VK_NULL_HANDLE;
-    VkBuffer missSBTBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory missSBTMemory = VK_NULL_HANDLE;
-    VkBuffer hitSBTBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory hitSBTMemory = VK_NULL_HANDLE;
+    SBTEntry raygenSBT;
+    SBTEntry missSBT;
+    SBTEntry hitSBT;
+    VkStridedDeviceAddressRegionKHR callableSBT{};
 };
