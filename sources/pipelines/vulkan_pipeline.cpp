@@ -189,23 +189,75 @@ void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
     }
 }
 
-template<VkPipelineBindPoint BindPoint>
-VulkanPipelineBase<BindPoint>::VulkanPipelineBase(VkDevice device, const std::vector<GLSLShader> &glslShaders)
-    : VulkanPipeline(device, glslShaders) {
-}
+VkBuffer VulkanPipeline::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, uint32_t memoryTypeIndex, VkDeviceMemory &bufferMemory) {
+    VkBuffer buffer = VK_NULL_HANDLE;
 
-template<VkPipelineBindPoint BindPoint>
-void VulkanPipelineBase<BindPoint>::bind(VkCommandBuffer cmdBuffer) {
-    vkCmdBindPipeline(cmdBuffer, BindPoint, this->pipeline);
-}
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-template<VkPipelineBindPoint BindPoint>
-void VulkanPipelineBase<BindPoint>::bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) {
-    if (setIndex >= this->descriptorSetLayouts.size()) {
-        throw std::runtime_error("Invalid descriptor set index");
+    if (vkCreateBuffer(this->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create buffer");
     }
-    vkCmdBindDescriptorSets(cmdBuffer, BindPoint, this->pipelineLayout, setIndex, 1, &set, 0, nullptr);
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    if (vkAllocateMemory(this->device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        vkDestroyBuffer(this->device, buffer, nullptr);
+        throw std::runtime_error("Failed to allocate buffer memory");
+    }
+
+    if (vkBindBufferMemory(this->device, buffer, bufferMemory, 0) != VK_SUCCESS) {
+        vkFreeMemory(this->device, bufferMemory, nullptr);
+        vkDestroyBuffer(this->device, buffer, nullptr);
+        throw std::runtime_error("Failed to bind buffer memory");
+    }
+
+    return buffer;
 }
 
-template class VulkanPipelineBase<VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR>;
-template class VulkanPipelineBase<VK_PIPELINE_BIND_POINT_GRAPHICS>;
+void VulkanPipeline::destroyBuffer(VkBuffer buffer, VkDeviceMemory memory) {
+    if (buffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(this->device, buffer, nullptr);
+    }
+    if (memory != VK_NULL_HANDLE) {
+        vkFreeMemory(this->device, memory, nullptr);
+    }
+}
+
+void *VulkanPipeline::mapMemory(VkDeviceMemory memory, VkDeviceSize size) {
+    void *mappedMemory = nullptr;
+    if (vkMapMemory(this->device, memory, 0, size, 0, &mappedMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to map buffer memory");
+    }
+
+    return mappedMemory;
+}
+
+void VulkanPipeline::unmapMemory(VkDeviceMemory memory) {
+    vkUnmapMemory(this->device, memory);
+}
+
+VkDeviceAddress VulkanPipeline::getBufferDeviceAddress(VkBuffer buffer) {
+    VkBufferDeviceAddressInfo addressInfo{};
+    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    addressInfo.buffer = buffer;
+
+    return vkGetBufferDeviceAddress(this->device, &addressInfo);
+}
+
+void VulkanPipeline::copyToSBTBuffer(VkBuffer buffer, VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t alignedSize, uint32_t alignment) {
+    void *mappedMemory = this->mapMemory(memory, alignedSize);
+
+    memcpy(mappedMemory, data, dataSize);
+
+    this->unmapMemory(memory);
+}

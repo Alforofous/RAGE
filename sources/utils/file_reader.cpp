@@ -41,7 +41,7 @@ namespace FileUtils {
             throw std::runtime_error("Failed to open file: " + full_path);
         }
 
-        size_t fileSize = static_cast<size_t>(file.tellg());
+        std::streamsize fileSize = static_cast<std::streamsize>(file.tellg());
         std::vector<char> buffer(fileSize);
 
         file.seekg(0);

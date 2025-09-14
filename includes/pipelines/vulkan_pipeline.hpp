@@ -9,20 +9,25 @@ public:
     VulkanPipeline(VkDevice device, const std::vector<GLSLShader> &glslShaders);
     virtual ~VulkanPipeline();
 
+    // === Core Pipeline Operations ===
     virtual void bind(VkCommandBuffer cmdBuffer) = 0;
     virtual void bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) = 0;
     virtual VkPipelineBindPoint getBindPoint() const = 0;
 
     void pushConstants(VkCommandBuffer cmdBuffer, VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size, const void *data);
 
+    // === Pipeline State ===
     bool isReady() const { return this->pipeline != VK_NULL_HANDLE; }
 
+    // === Layout and Resource Access ===
     VkPipelineLayout getLayout() const { return this->pipelineLayout; }
     VkPipeline getPipeline() const { return this->pipeline; }
 
+    // === Descriptor Set Information ===
     size_t getDescriptorSetLayoutCount() const { return this->descriptorSetLayouts.size(); }
     VkDescriptorSetLayout getDescriptorSetLayout(uint32_t setIndex) const;
 
+    // === Push Constants Information ===
     size_t getPushConstantRangeCount() const { return this->pushConstantRanges.size(); }
     const std::vector<VkPushConstantRange>& getPushConstantRanges() const { return this->pushConstantRanges; }
 
@@ -32,33 +37,64 @@ protected:
         VkShaderStageFlagBits stage;
     };
 
+    // === Virtual Hook for Derived Classes ===
     virtual void createPipeline() = 0;
 
-    void compileShaders(const std::vector<GLSLShader> &glslShaders);
-    void createPipelineLayout();
-    void dispose();
+    // === Resource Access for Derived Classes ===
+    VkDevice getDevice() const { return this->device; }
+    const std::vector<ShaderInfo>& getCompiledShaders() const { return this->shaders; }
     std::vector<VkPipelineShaderStageCreateInfo> getShaderStages() const;
 
-    const VkDevice device;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    // === Helper Methods for Derived Classes ===
+    VkBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, uint32_t memoryTypeIndex, VkDeviceMemory &bufferMemory);
+    void destroyBuffer(VkBuffer buffer, VkDeviceMemory memory);
+    void *mapMemory(VkDeviceMemory memory, VkDeviceSize size);
+    void unmapMemory(VkDeviceMemory memory);
+    VkDeviceAddress getBufferDeviceAddress(VkBuffer buffer);
+    void copyToSBTBuffer(VkBuffer buffer, VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t alignedSize, uint32_t alignment);
+
+    // === Pipeline Creation (Protected for createPipeline() override) ===
     VkPipeline pipeline = VK_NULL_HANDLE;
+    VkDevice device;
+
+private:
+    // === Core Resources (Private - Use Accessors) ===
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
     std::vector<VkPushConstantRange> pushConstantRanges;
     std::vector<ShaderInfo> shaders;
 
-private:
+    // === Construction and Cleanup ===
+    void compileShaders(const std::vector<GLSLShader> &glslShaders);
+    void createPipelineLayout();
+    void dispose();
+
+    // === Internal Implementation ===
     void createShaderModules(const std::vector<std::vector<uint32_t> > &compiledShaders, const std::vector<ShaderKind> &shaderKinds);
     void destroyShaderModule(VkShaderModule module);
     std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);
     bool isValidPushConstantData(VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size) const;
+
+    // === Friend Access for Protected Members ===
+    template<VkPipelineBindPoint> friend class VulkanPipelineBase;
 };
 
 template<VkPipelineBindPoint BindPoint>
 class VulkanPipelineBase : public VulkanPipeline {
 public:
-    VulkanPipelineBase(VkDevice device, const std::vector<GLSLShader> &glslShaders);
+    VulkanPipelineBase(VkDevice device, const std::vector<GLSLShader> &glslShaders)
+        : VulkanPipeline(device, glslShaders) {}
 
-    void bind(VkCommandBuffer cmdBuffer) override;
-    void bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) override;
+    void bind(VkCommandBuffer cmdBuffer) override {
+        vkCmdBindPipeline(cmdBuffer, BindPoint, this->getPipeline());
+    }
+
+    void bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) override {
+        if (setIndex >= this->getDescriptorSetLayoutCount()) {
+            return;
+        }
+        vkCmdBindDescriptorSets(cmdBuffer, BindPoint, this->getLayout(), setIndex, 1, &set, 0, nullptr);
+    }
+
     VkPipelineBindPoint getBindPoint() const override { return BindPoint; }
 };
