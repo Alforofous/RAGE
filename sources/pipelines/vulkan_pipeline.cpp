@@ -228,6 +228,48 @@ VkBuffer VulkanPipeline::createBuffer(VkDeviceSize size, VkBufferUsageFlags usag
     return buffer;
 }
 
+VkBuffer VulkanPipeline::createDeviceAddressBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory) {
+    VkBuffer buffer = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(this->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
+
+    uint32_t memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits, properties);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    VkMemoryAllocateFlagsInfo flagsInfo{};
+    flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    allocInfo.pNext = &flagsInfo;
+
+    if (vkAllocateMemory(this->device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        vkDestroyBuffer(this->device, buffer, nullptr);
+        throw std::runtime_error("Failed to allocate buffer memory");
+    }
+
+    if (vkBindBufferMemory(this->device, buffer, bufferMemory, 0) != VK_SUCCESS) {
+        vkFreeMemory(this->device, bufferMemory, nullptr);
+        vkDestroyBuffer(this->device, buffer, nullptr);
+        throw std::runtime_error("Failed to bind buffer memory");
+    }
+
+    return buffer;
+}
+
 void VulkanPipeline::destroyBuffer(VkBuffer buffer, VkDeviceMemory memory) {
     if (buffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(this->device, buffer, nullptr);
@@ -271,7 +313,7 @@ uint32_t VulkanPipeline::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFla
     vkGetPhysicalDeviceMemoryProperties(this->physicalDevice, &memProperties);
 
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+        if ((typeFilter & (1 << i)) != 0 && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
             return i;
         }
     }

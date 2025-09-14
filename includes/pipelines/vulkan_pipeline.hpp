@@ -20,8 +20,9 @@ public:
     bool isReady() const { return this->pipeline != VK_NULL_HANDLE; }
 
     // === Layout and Resource Access ===
-    VkPipelineLayout getLayout() const { return this->pipelineLayout; }
+    VkDevice getDevice() const { return this->device; }
     VkPipeline getPipeline() const { return this->pipeline; }
+    VkPipelineLayout getLayout() const { return this->pipelineLayout; }
 
     // === Descriptor Set Information ===
     size_t getDescriptorSetLayoutCount() const { return this->descriptorSetLayouts.size(); }
@@ -41,24 +42,24 @@ protected:
     virtual void createPipeline() = 0;
 
     // === Resource Access for Derived Classes ===
-    VkDevice getDevice() const { return this->device; }
     const std::vector<ShaderInfo>& getCompiledShaders() const { return this->shaders; }
     std::vector<VkPipelineShaderStageCreateInfo> getShaderStages() const;
 
     // === Helper Methods for Derived Classes ===
     VkBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory);
+    VkBuffer createDeviceAddressBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory);
     void destroyBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void *mapMemory(VkDeviceMemory memory, VkDeviceSize size);
     void unmapMemory(VkDeviceMemory memory);
     VkDeviceAddress getBufferDeviceAddress(VkBuffer buffer);
     void copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize);
 
-    // === Pipeline Creation (Protected for createPipeline() override) ===
+private:
+    // === Private Members ===
+    VkPhysicalDevice physicalDevice;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkDevice device;
-    VkPhysicalDevice physicalDevice;
 
-private:
     // === Core Resources (Private - Use Accessors) ===
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;

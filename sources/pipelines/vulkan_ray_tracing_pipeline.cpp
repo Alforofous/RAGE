@@ -65,8 +65,8 @@ void VulkanRayTracingPipeline::createPipeline() {
     pipelineInfo.groupCount = static_cast<uint32_t>(shaderGroups.size());
     pipelineInfo.pGroups = shaderGroups.data();
 
-    // Create the pipeline using base class device accessor and protected pipeline member
-    if (this->context->vkCreateRayTracingPipelinesKHR(this->getDevice(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &this->pipeline) != VK_SUCCESS) {
+    VkPipeline pipeline = this->getPipeline();
+    if (this->context->vkCreateRayTracingPipelinesKHR(this->getDevice(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create ray tracing pipeline");
     }
 }
@@ -115,33 +115,33 @@ void VulkanRayTracingPipeline::createShaderBindingTables() {
         throw std::runtime_error("Failed to get ray tracing shader group handles");
     }
 
-    // Create raygen SBT buffer using base class helper (now properly implemented)
-    this->raygenSBTBuffer = this->createBuffer(alignedHandleSize,
-                                               VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                               this->raygenSBTMemory);
+    // Create raygen SBT buffer using specialized device address helper
+    this->raygenSBTBuffer = this->createDeviceAddressBuffer(alignedHandleSize,
+                                                            VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                            this->raygenSBTMemory);
     this->copyToBuffer(this->raygenSBTMemory,
                        &shaderHandleStorage[0 * handleSize], handleSize, alignedHandleSize);
     this->raygenSBT.deviceAddress = this->getBufferDeviceAddress(this->raygenSBTBuffer);
     this->raygenSBT.stride = alignedHandleSize;
     this->raygenSBT.size = alignedHandleSize;
 
-    // Create miss SBT buffer using base class helper
-    this->missSBTBuffer = this->createBuffer(alignedHandleSize,
-                                             VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                             this->missSBTMemory);
+    // Create miss SBT buffer using specialized device address helper
+    this->missSBTBuffer = this->createDeviceAddressBuffer(alignedHandleSize,
+                                                          VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                          this->missSBTMemory);
     this->copyToBuffer(this->missSBTMemory,
                        &shaderHandleStorage[1 * handleSize], handleSize, alignedHandleSize);
     this->missSBT.deviceAddress = this->getBufferDeviceAddress(this->missSBTBuffer);
     this->missSBT.stride = alignedHandleSize;
     this->missSBT.size = alignedHandleSize;
 
-    // Create hit SBT buffer using base class helper
-    this->hitSBTBuffer = this->createBuffer(alignedHandleSize,
-                                            VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                            this->hitSBTMemory);
+    // Create hit SBT buffer using specialized device address helper
+    this->hitSBTBuffer = this->createDeviceAddressBuffer(alignedHandleSize,
+                                                         VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                         this->hitSBTMemory);
     this->copyToBuffer(this->hitSBTMemory,
                        &shaderHandleStorage[2 * handleSize], handleSize, alignedHandleSize);
     this->hitSBT.deviceAddress = this->getBufferDeviceAddress(this->hitSBTBuffer);
