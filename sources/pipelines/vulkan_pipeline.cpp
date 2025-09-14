@@ -206,7 +206,6 @@ VkBuffer VulkanPipeline::createBuffer(VkDeviceSize size, VkBufferUsageFlags usag
     VkMemoryRequirements memRequirements;
     vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
 
-    // Find suitable memory type
     uint32_t memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits, properties);
 
     VkMemoryAllocateInfo allocInfo{};
