@@ -34,6 +34,7 @@ set(SOURCES
 	renderer.cpp
 	vulkan_utils.cpp
 	vulkan_render_target.cpp
+	vulkan_swapchain_manager.cpp
 	node3D.cpp
     matrix4.cpp
     vector2.cpp
