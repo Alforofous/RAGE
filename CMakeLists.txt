@@ -50,6 +50,7 @@ set(SOURCES
     utils/file_reader.cpp
     utils/shader_compiler.cpp
     utils/buffer_utils.cpp
+    vulkan_descriptor_manager.cpp
     materials/ray_tracing_material.cpp
     materials/voxel_ray_tracing_material.cpp
     materials/material.cpp

@@ -1,6 +1,5 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include <vector>
 #include <memory>
 #include <map>
 #include <string>
@@ -10,6 +9,7 @@
 #include "pipelines/vulkan_pipeline.hpp"
 #include "vulkan_render_target.hpp"
 #include "vulkan_swapchain_manager.hpp"
+#include "vulkan_descriptor_manager.hpp"
 #include "materials/material.hpp"
 #include "matrix4.hpp"
 #include "vector3.hpp"
@@ -41,8 +41,7 @@ public:
     VulkanPipeline *getPipelineForMaterial(const Material *material);  // Get or create pipeline for material
 
 private:
-    // Core structures (moved to use VulkanUtils buffer creation)
-
+    // === Simplified Uniform Data ===
     struct CameraProperties {
         glm::mat4 viewInverse;
         glm::mat4 projInverse;
@@ -56,35 +55,27 @@ private:
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     // Utility functions
-    void bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
+    void setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
     void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
-    void cleanupStaticResources();
 
     // Core resources
     const VulkanContext *context;
     Scene *scene;
     Camera *camera;
     std::unique_ptr<VulkanSwapchainManager> swapchainManager;
+    std::unique_ptr<VulkanDescriptorManager> descriptorManager;
 
     // Render resources
     std::unique_ptr<VulkanRenderTarget> renderTarget;  // Main render target
     VkBuffer cameraBuffer;
     VkDeviceMemory cameraMemory;
 
-    // Pipeline management (simplified)
-    struct DescriptorSetManager {
-        VkDescriptorPool pool = VK_NULL_HANDLE;
-        std::vector<VkDescriptorSet> sets;
-    };
-    DescriptorSetManager descriptorSets;                           // For storage image binding
-
     // Pipeline caching
     std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;  // Cache pipelines by shader hash
     std::string generateShaderHash(const Material *material) const;         // Generate hash from material shaders
 
-    // Cached descriptor set resources (to avoid recreating them every frame)
-    VkDescriptorSet cachedDescriptorSet = VK_NULL_HANDLE;
+    // Cached uniform buffers (simplified)
     VkBuffer cachedCameraBuffer = VK_NULL_HANDLE;
     VkDeviceMemory cachedCameraMemory = VK_NULL_HANDLE;
     VkBuffer cachedCubeBuffer = VK_NULL_HANDLE;
