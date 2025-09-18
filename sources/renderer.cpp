@@ -10,52 +10,36 @@
 #include <functional>
 
 Renderer::Renderer(const VulkanContext *context, Scene *scene, Camera *camera)
-    : context(context)
-    , scene(scene)
-    , camera(camera)
-    , swapchainManager(std::make_unique<VulkanSwapchainManager>(context))
-    , descriptorManager(std::make_unique<VulkanDescriptorManager>(context))
-    , renderTarget(std::make_unique<VulkanRenderTarget>(context,
-                                                        context->swapchainExtent.width,
-                                                        context->swapchainExtent.height)) {
-    // Initialize all Vulkan resources in order
-    std::cout << "Initializing uniform buffers..." << std::endl;
+    : context(context),
+    scene(scene),
+    camera(camera),
+    swapchainManager(std::make_unique<VulkanSwapchainManager>(context)),
+    descriptorManager(std::make_unique<VulkanDescriptorManager>(context)),
+    renderTarget(std::make_unique<VulkanRenderTarget>(context,
+                                                      context->swapchainExtent.width,
+                                                      context->swapchainExtent.height)
+    ) {
     initializeUniformBuffers();
-
-    std::cout << "Initializing storage image..." << std::endl;
-    initializeStorageImage();
 }
 
 Renderer::~Renderer() {
-    // Wait for all operations to complete before destroying resources
     vkDeviceWaitIdle(context->device);
-
-    // Clean up cached uniform buffers
     if (cachedCameraBuffer != VK_NULL_HANDLE) {
         BufferUtils::destroyBuffer(context->device, cachedCameraBuffer, cachedCameraMemory);
     }
     if (cachedCubeBuffer != VK_NULL_HANDLE) {
         BufferUtils::destroyBuffer(context->device, cachedCubeBuffer, cachedCubeMemory);
     }
-
-    // Clean up pipeline cache (this will dispose all cached pipelines)
     pipelineCache.clear();
-
-    // Clean up render target
     if (renderTarget) {
         renderTarget->dispose();
     }
-
-    // Clean up uniform buffers
     BufferUtils::destroyBuffer(context->device, cameraBuffer, cameraMemory);
-
-    // Note: VulkanSwapchainManager and VulkanDescriptorManager handle their own cleanup automatically
 }
 
 void Renderer::initializeUniformBuffers() {
     std::cout << "Creating uniform buffers..." << std::endl;
 
-    // Create camera uniform buffer
     VkDeviceSize cameraBufferSize = sizeof(CameraProperties);
     this->cameraBuffer = BufferUtils::createDeviceAddressBuffer(
         this->context->device,
@@ -66,18 +50,10 @@ void Renderer::initializeUniformBuffers() {
         this->cameraMemory
     );
 
-    // Initialize camera buffer with identity matrices
     CameraProperties cameraData{};
     cameraData.viewInverse = glm::mat4(1.0f);
     cameraData.projInverse = glm::mat4(1.0f);
     BufferUtils::copyToDeviceMemory(this->context->device, this->cameraMemory, &cameraData, cameraBufferSize);
-}
-
-void Renderer::initializeStorageImage() {
-    std::cout << "Creating storage image..." << std::endl;
-
-    // The storage image will be transitioned during the first render frame
-    // No need for initial transition since we'll handle it in recordCommandBuffer
 }
 
 void Renderer::renderFrame() {
@@ -90,7 +66,6 @@ void Renderer::renderFrame() {
 }
 
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
-    // Begin command buffer recording
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
@@ -98,9 +73,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         throw std::runtime_error("Failed to begin command buffer");
     }
 
-    // Pipeline binding is now handled per material in the scene traversal
-
-    // Ensure render target is in general layout for ray tracing write
     renderTarget->transitionLayout(
         commandBuffer,
         VK_IMAGE_LAYOUT_UNDEFINED,
@@ -111,22 +83,17 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         VK_ACCESS_SHADER_WRITE_BIT
     );
 
-    // Render each renderable node with its material-specific pipeline
     this->scene->traverse([this, commandBuffer](const Node3D *node) {
         const auto *renderable = dynamic_cast<const RenderableNode3D *>(node);
         if (renderable != nullptr) {
-            // Get or create pipeline for this material
             Material *material = renderable->getMaterial();
             if (material != nullptr) {
                 VulkanPipeline *pipeline = this->getPipelineForMaterial(material);
 
-                // Bind the material-specific pipeline
                 pipeline->bind(commandBuffer);
 
-                // Create and bind descriptor sets for this pipeline
                 this->setupDescriptorSets(commandBuffer, pipeline);
 
-                // Dispatch ray tracing for this material
                 auto *rayTracingPipeline = dynamic_cast<VulkanRayTracingPipeline *>(pipeline);
                 if (rayTracingPipeline != nullptr) {
                     rayTracingPipeline->dispatch(commandBuffer,
@@ -134,7 +101,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
                                                  this->context->swapchainExtent.height);
                 }
 
-                // Add memory barrier to ensure operations are complete
                 VkMemoryBarrier memoryBarrier{};
                 memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
                 memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
@@ -153,7 +119,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         }
     });
 
-    // Wait for ray tracing to complete and transition storage image to transfer source
     VkMemoryBarrier memoryBarrier{};
     memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -169,7 +134,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         0, nullptr
     );
 
-    // Transition render target to transfer source
     renderTarget->transitionLayout(
         commandBuffer,
         VK_IMAGE_LAYOUT_GENERAL,
@@ -180,7 +144,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         VK_ACCESS_TRANSFER_READ_BIT
     );
 
-    // Transition swapchain image to transfer destination
     VkImageMemoryBarrier swapchainBarrier{};
     swapchainBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     swapchainBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -202,7 +165,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         1, &swapchainBarrier
     );
 
-    // Copy storage image to swapchain image
     VkImageCopy copyRegion{};
     copyRegion.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
     copyRegion.dstSubresource = copyRegion.srcSubresource;
@@ -215,7 +177,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         1, &copyRegion
     );
 
-    // Transition swapchain image to present layout
     swapchainBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     swapchainBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     swapchainBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -256,10 +217,8 @@ VulkanPipeline *Renderer::getPipelineForMaterial(const Material *material) {
         throw std::runtime_error("Material cannot be null");
     }
 
-    // Generate hash for this material's shaders
     std::string shaderHash = this->generateShaderHash(material);
 
-    // Check if we already have a pipeline for these shaders
     auto it = this->pipelineCache.find(shaderHash);
     if (it != this->pipelineCache.end()) {
         std::cout << "Using cached pipeline for shader hash: " << shaderHash << std::endl;
@@ -267,16 +226,13 @@ VulkanPipeline *Renderer::getPipelineForMaterial(const Material *material) {
         return it->second.get();
     }
 
-    // Create new pipeline for this material
     std::cout << "Creating new pipeline for shader hash: " << shaderHash << std::endl;
 
-    // Convert material shaders to vector for pipeline creation
     std::vector<GLSLShader> shaders;
     for (const auto &shaderPair : material->getAllShaders()) {
         shaders.push_back(shaderPair.second);
     }
 
-    // Create ray tracing pipeline (assuming all materials are ray tracing for now)
     auto pipeline = std::make_unique<VulkanRayTracingPipeline>(
         this->context,
         material->getShader("raygen"),
@@ -291,7 +247,6 @@ VulkanPipeline *Renderer::getPipelineForMaterial(const Material *material) {
 }
 
 void Renderer::setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline) {
-    // Create uniform buffers if they don't exist
     if (this->cachedCameraBuffer == VK_NULL_HANDLE) {
         this->cachedCameraBuffer = BufferUtils::createBuffer(
             this->context->device,
@@ -314,34 +269,26 @@ void Renderer::setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pi
         );
     }
 
-    // Update uniform buffers with current frame data
     this->updateCameraBuffer(this->cachedCameraBuffer, this->cachedCameraMemory);
     this->updateCubeBuffer(this->cachedCubeBuffer, this->cachedCubeMemory);
 
-    // Get descriptor set layout (assume first layout for now)
     VkDescriptorSetLayout setLayout = pipeline->getDescriptorSetLayout(0);
 
-    // Create descriptor set using VulkanDescriptorManager
     VkDescriptorSet descriptorSet = this->descriptorManager->createDescriptorSet(setLayout);
 
-    // Update descriptor set with our resources
     this->descriptorManager->updateUniformBuffer(descriptorSet, 0, this->cachedCameraBuffer, sizeof(CameraData));
     this->descriptorManager->updateUniformBuffer(descriptorSet, 1, this->cachedCubeBuffer, sizeof(CubeData));
     this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);
 
-    // Bind descriptor set
     this->descriptorManager->bindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->getLayout(), 0, descriptorSet);
 }
 
 void Renderer::updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory) {
     CameraData cameraData{};
 
-    // Get camera matrices
     Matrix4 view = this->camera->getView();
     Matrix4 proj = this->camera->getProjection();
 
-    // For now, just use the matrices as-is (we'll implement inverse later)
-    // TODO: Implement proper matrix inverse
     cameraData.viewInverse = view;
     cameraData.projInverse = proj;
     cameraData.cameraPos = this->camera->getPosition();
@@ -354,12 +301,9 @@ void Renderer::updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory) {
 
 void Renderer::updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory) {
     CubeData cubeData{};
-
-    // Get voxel data from scene (assuming first renderable node is our voxel)
     if (!this->scene->getChildren().empty()) {
         auto *voxel = dynamic_cast<Voxel3D *>(this->scene->getChildren()[0]);
         if (voxel) {
-            // Get voxel properties and convert IntVector3 to Vector3
             IntVector3 intPos = voxel->getPosition();
             IntVector3 intSize = voxel->getSize();
             IntVector3 intColor = voxel->getColor();

@@ -48,7 +48,6 @@ private:
     };
 
     // Initialization functions
-    void initializeStorageImage();
     void initializeUniformBuffers();
 
     // Rendering functions
@@ -67,15 +66,14 @@ private:
     std::unique_ptr<VulkanDescriptorManager> descriptorManager;
 
     // Render resources
-    std::unique_ptr<VulkanRenderTarget> renderTarget;  // Main render target
+    std::unique_ptr<VulkanRenderTarget> renderTarget;
     VkBuffer cameraBuffer;
     VkDeviceMemory cameraMemory;
 
     // Pipeline caching
-    std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;  // Cache pipelines by shader hash
-    std::string generateShaderHash(const Material *material) const;         // Generate hash from material shaders
+    std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;
+    std::string generateShaderHash(const Material *material) const;
 
-    // Cached uniform buffers (simplified)
     VkBuffer cachedCameraBuffer = VK_NULL_HANDLE;
     VkDeviceMemory cachedCameraMemory = VK_NULL_HANDLE;
     VkBuffer cachedCubeBuffer = VK_NULL_HANDLE;
