@@ -190,132 +190,14 @@ void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
     }
 }
 
-VkBuffer VulkanPipeline::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory) {
-    VkBuffer buffer = VK_NULL_HANDLE;
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(this->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create buffer");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
-
-    uint32_t memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits, properties);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-
-    if (vkAllocateMemory(this->device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
-        vkDestroyBuffer(this->device, buffer, nullptr);
-        throw std::runtime_error("Failed to allocate buffer memory");
-    }
-
-    if (vkBindBufferMemory(this->device, buffer, bufferMemory, 0) != VK_SUCCESS) {
-        vkFreeMemory(this->device, bufferMemory, nullptr);
-        vkDestroyBuffer(this->device, buffer, nullptr);
-        throw std::runtime_error("Failed to bind buffer memory");
-    }
-
-    return buffer;
-}
-
-VkBuffer VulkanPipeline::createDeviceAddressBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory) {
-    VkBuffer buffer = VK_NULL_HANDLE;
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(this->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create buffer");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(this->device, buffer, &memRequirements);
-
-    uint32_t memoryTypeIndex = this->findMemoryType(memRequirements.memoryTypeBits, properties);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-
-    VkMemoryAllocateFlagsInfo flagsInfo{};
-    flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-    flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-    allocInfo.pNext = &flagsInfo;
-
-    if (vkAllocateMemory(this->device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
-        vkDestroyBuffer(this->device, buffer, nullptr);
-        throw std::runtime_error("Failed to allocate buffer memory");
-    }
-
-    if (vkBindBufferMemory(this->device, buffer, bufferMemory, 0) != VK_SUCCESS) {
-        vkFreeMemory(this->device, bufferMemory, nullptr);
-        vkDestroyBuffer(this->device, buffer, nullptr);
-        throw std::runtime_error("Failed to bind buffer memory");
-    }
-
-    return buffer;
-}
-
-void VulkanPipeline::destroyBuffer(VkBuffer buffer, VkDeviceMemory memory) {
-    if (buffer != VK_NULL_HANDLE) {
-        vkDestroyBuffer(this->device, buffer, nullptr);
-    }
-    if (memory != VK_NULL_HANDLE) {
-        vkFreeMemory(this->device, memory, nullptr);
-    }
-}
-
-void *VulkanPipeline::mapMemory(VkDeviceMemory memory, VkDeviceSize size) {
+void VulkanPipeline::copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize) {
+    // NOTE: This method needs VulkanContext access to use VulkanUtils functions
+    // For now, use the old implementation until we can refactor to pass context
     void *mappedMemory = nullptr;
-    if (vkMapMemory(this->device, memory, 0, size, 0, &mappedMemory) != VK_SUCCESS) {
+    if (vkMapMemory(this->device, memory, 0, bufferSize, 0, &mappedMemory) != VK_SUCCESS) {
         throw std::runtime_error("Failed to map buffer memory");
     }
 
-    return mappedMemory;
-}
-
-void VulkanPipeline::unmapMemory(VkDeviceMemory memory) {
-    vkUnmapMemory(this->device, memory);
-}
-
-VkDeviceAddress VulkanPipeline::getBufferDeviceAddress(VkBuffer buffer) {
-    VkBufferDeviceAddressInfo addressInfo{};
-    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    addressInfo.buffer = buffer;
-
-    return vkGetBufferDeviceAddress(this->device, &addressInfo);
-}
-
-void VulkanPipeline::copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize) {
-    void *mappedMemory = this->mapMemory(memory, bufferSize);
-
     memcpy(mappedMemory, data, dataSize);
-
-    this->unmapMemory(memory);
-}
-
-uint32_t VulkanPipeline::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(this->physicalDevice, &memProperties);
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) != 0 && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("Failed to find suitable memory type");
+    vkUnmapMemory(this->device, memory);
 }

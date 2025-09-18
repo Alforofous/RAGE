@@ -597,9 +597,29 @@ void destroyBuffer(const VulkanContext *context, VkBuffer buffer, VkDeviceMemory
     }
 }
 
-void copyToDeviceMemory(const VulkanContext *context, VkDeviceMemory memory, const void *data, VkDeviceSize size) {
-    void *mapped = nullptr;
-    vkMapMemory(context->device, memory, 0, size, 0, &mapped);
-    memcpy(mapped, data, size);
+void *mapMemory(const VulkanContext *context, VkDeviceMemory memory, VkDeviceSize size) {
+    void *mappedMemory = nullptr;
+    if (vkMapMemory(context->device, memory, 0, size, 0, &mappedMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to map buffer memory");
+    }
+
+    return mappedMemory;
+}
+
+void unmapMemory(const VulkanContext *context, VkDeviceMemory memory) {
     vkUnmapMemory(context->device, memory);
+}
+
+void copyToDeviceMemory(const VulkanContext *context, VkDeviceMemory memory, const void *data, VkDeviceSize size) {
+    void *mapped = mapMemory(context, memory, size);
+    memcpy(mapped, data, size);
+    unmapMemory(context, memory);
+}
+
+VkDeviceAddress getBufferDeviceAddress(const VulkanContext *context, VkBuffer buffer) {
+    VkBufferDeviceAddressInfo addressInfo{};
+    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    addressInfo.buffer = buffer;
+
+    return vkGetBufferDeviceAddress(context->device, &addressInfo);
 }
