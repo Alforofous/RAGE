@@ -142,7 +142,8 @@ void VulkanRayTracingPipeline::createSBTEntry(
         memory
     );
 
-    this->copyToBuffer(
+    BufferUtils::copyToBuffer(
+        this->context->device,
         memory,
         &handleStorage[groupIndex * handleSize],
         handleSize,

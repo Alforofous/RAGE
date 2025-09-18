@@ -189,7 +189,3 @@ void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
         vkDestroyShaderModule(this->device, module, nullptr);
     }
 }
-
-void VulkanPipeline::copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize) {
-    BufferUtils::copyToBuffer(this->device, memory, data, dataSize, bufferSize);
-}

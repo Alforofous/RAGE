@@ -46,9 +46,6 @@ protected:
     const std::vector<ShaderInfo>& getCompiledShaders() const { return this->shaders; }
     std::vector<VkPipelineShaderStageCreateInfo> getShaderStages() const;
 
-    // === Helper Methods for Derived Classes ===
-    void copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize);
-
     VkPipeline pipeline = VK_NULL_HANDLE;
 
 private:
