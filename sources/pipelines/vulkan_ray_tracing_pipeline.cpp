@@ -1,5 +1,6 @@
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
 #include "vulkan_utils.hpp"
+#include "utils/buffer_utils.hpp"
 #include <stdexcept>
 
 VulkanRayTracingPipeline::VulkanRayTracingPipeline(
@@ -16,13 +17,13 @@ VulkanRayTracingPipeline::VulkanRayTracingPipeline(
 
 VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
     if (this->raygenSBT.buffer != VK_NULL_HANDLE) {
-        destroyBuffer(this->context, this->raygenSBT.buffer, this->raygenSBT.memory);
+        BufferUtils::destroyBuffer(this->context->device, this->raygenSBT.buffer, this->raygenSBT.memory);
     }
     if (this->missSBT.buffer != VK_NULL_HANDLE) {
-        destroyBuffer(this->context, this->missSBT.buffer, this->missSBT.memory);
+        BufferUtils::destroyBuffer(this->context->device, this->missSBT.buffer, this->missSBT.memory);
     }
     if (this->hitSBT.buffer != VK_NULL_HANDLE) {
-        destroyBuffer(this->context, this->hitSBT.buffer, this->hitSBT.memory);
+        BufferUtils::destroyBuffer(this->context->device, this->hitSBT.buffer, this->hitSBT.memory);
     }
 }
 
@@ -132,8 +133,9 @@ void VulkanRayTracingPipeline::createSBTEntry(
     VkDeviceMemory &memory,
     VkStridedDeviceAddressRegionKHR &sbt
 ) {
-    buffer = createDeviceAddressBuffer(
-        this->context,
+    buffer = BufferUtils::createDeviceAddressBuffer(
+        this->context->device,
+        this->context->physicalDevice,
         alignedHandleSize,
         VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -147,7 +149,7 @@ void VulkanRayTracingPipeline::createSBTEntry(
         alignedHandleSize
     );
 
-    sbt.deviceAddress = getBufferDeviceAddress(this->context, buffer);
+    sbt.deviceAddress = BufferUtils::getBufferDeviceAddress(this->context->device, buffer);
     sbt.stride = alignedHandleSize;
     sbt.size = alignedHandleSize;
 }

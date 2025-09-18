@@ -191,13 +191,5 @@ void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
 }
 
 void VulkanPipeline::copyToBuffer(VkDeviceMemory memory, const void *data, uint32_t dataSize, uint32_t bufferSize) {
-    // NOTE: This method needs VulkanContext access to use VulkanUtils functions
-    // For now, use the old implementation until we can refactor to pass context
-    void *mappedMemory = nullptr;
-    if (vkMapMemory(this->device, memory, 0, bufferSize, 0, &mappedMemory) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to map buffer memory");
-    }
-
-    memcpy(mappedMemory, data, dataSize);
-    vkUnmapMemory(this->device, memory);
+    BufferUtils::copyToBuffer(this->device, memory, data, dataSize, bufferSize);
 }

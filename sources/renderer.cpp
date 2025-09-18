@@ -2,6 +2,7 @@
 #include "renderable_node3D.hpp"
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
 #include "voxel3D.hpp"
+#include "utils/buffer_utils.hpp"
 #include <stdexcept>
 #include <vector>
 #include <iostream>
@@ -49,7 +50,7 @@ Renderer::~Renderer() {
     }
 
     // Clean up uniform buffers
-    destroyBuffer(context, cameraBuffer, cameraMemory);
+    BufferUtils::destroyBuffer(context->device, cameraBuffer, cameraMemory);
 
     // Note: VulkanSwapchainManager handles its own cleanup automatically
 }
@@ -59,8 +60,9 @@ void Renderer::initializeUniformBuffers() {
 
     // Create camera uniform buffer
     VkDeviceSize cameraBufferSize = sizeof(CameraProperties);
-    this->cameraBuffer = createDeviceAddressBuffer(
-        this->context,
+    this->cameraBuffer = BufferUtils::createDeviceAddressBuffer(
+        this->context->device,
+        this->context->physicalDevice,
         cameraBufferSize,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -71,7 +73,7 @@ void Renderer::initializeUniformBuffers() {
     CameraProperties cameraData{};
     cameraData.viewInverse = glm::mat4(1.0f);
     cameraData.projInverse = glm::mat4(1.0f);
-    copyToDeviceMemory(this->context, this->cameraMemory, &cameraData, cameraBufferSize);
+    BufferUtils::copyToDeviceMemory(this->context->device, this->cameraMemory, &cameraData, cameraBufferSize);
 }
 
 void Renderer::initializeStorageImage() {
@@ -356,8 +358,8 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
     }
 
     // Create uniform buffers
-    this->cachedCameraBuffer = createBuffer(this->context, sizeof(CameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, this->cachedCameraMemory);
-    this->cachedCubeBuffer = createBuffer(this->context, sizeof(CubeData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, this->cachedCubeMemory);
+    this->cachedCameraBuffer = BufferUtils::createBuffer(this->context->device, this->context->physicalDevice, sizeof(CameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, this->cachedCameraMemory);
+    this->cachedCubeBuffer = BufferUtils::createBuffer(this->context->device, this->context->physicalDevice, sizeof(CubeData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, this->cachedCubeMemory);
 
     // Update buffers with initial data
     this->updateCameraBuffer(this->cachedCameraBuffer, this->cachedCameraMemory);

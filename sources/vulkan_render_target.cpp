@@ -1,5 +1,6 @@
 #include "vulkan_render_target.hpp"
 #include "vulkan/vulkan_core.h"
+#include "utils/buffer_utils.hpp"
 #include <cstdint>
 #include <stdexcept>
 
@@ -62,7 +63,7 @@ void VulkanRenderTarget::createImage() {
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(
+    allocInfo.memoryTypeIndex = BufferUtils::findMemoryType(
         this->context->physicalDevice,
         memRequirements.memoryTypeBits,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT

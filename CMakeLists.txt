@@ -49,6 +49,7 @@ set(SOURCES
     renderable_node3D.cpp
     utils/file_reader.cpp
     utils/shader_compiler.cpp
+    utils/buffer_utils.cpp
     materials/ray_tracing_material.cpp
     materials/voxel_ray_tracing_material.cpp
     materials/material.cpp

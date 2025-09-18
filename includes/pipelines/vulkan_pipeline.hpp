@@ -3,6 +3,7 @@
 #include <map>
 #include <vector>
 #include "glsl_shader.hpp"
+#include "utils/buffer_utils.hpp"
 
 class VulkanPipeline {
 public:
