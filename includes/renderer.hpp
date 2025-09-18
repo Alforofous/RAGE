@@ -31,45 +31,14 @@ struct CubeData {
     float padding3;
 };
 
-enum class PipelineType : uint8_t {
-    RayTracing,
-    Raster
-};
-
 class Renderer {
 public:
-    struct StorageBuffer {
-        VkBuffer buffer = VK_NULL_HANDLE;
-        VkDeviceMemory memory = VK_NULL_HANDLE;
-        VkDeviceSize size = 0;
-    };
-
-    struct DescriptorSetManager {
-        VkDescriptorPool pool = VK_NULL_HANDLE;
-        std::vector<VkDescriptorSet> sets;
-    };
-
-    // Resource management API
-    StorageBuffer createStorageBuffer(VkDeviceSize size);
-    void updateStorageBuffer(StorageBuffer &buffer, const void *data, VkDeviceSize size, VkDeviceSize offset = 0);
-    void destroyStorageBuffer(StorageBuffer &buffer);
-
-    // Descriptor management
-    void allocateDescriptorSets(const VulkanPipeline *pipeline);
-    void updateDescriptorSet(uint32_t setIndex, uint32_t binding, const StorageBuffer &buffer);
-    void bindDescriptorSets(VkCommandBuffer cmdBuffer, const VulkanPipeline *pipeline);
-    void bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
-    void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
-    void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
-
     Renderer(const VulkanContext *context, Scene *scene, Camera *camera);
-
-    void usePipeline(PipelineType type);
-    VulkanPipeline *getPipelineForMaterial(const Material *material);  // Get or create pipeline for material
     ~Renderer();
 
+    // Core rendering interface
     void renderFrame();
-    void drawBindedMaterial();  // Called by RenderableNode3D to render with current material properties
+    VulkanPipeline *getPipelineForMaterial(const Material *material);  // Get or create pipeline for material
 
 private:
     // Core structures (moved to use VulkanUtils buffer creation)
@@ -87,8 +56,9 @@ private:
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     // Utility functions
-    void copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDeviceSize size);
-    void submitCommandBuffer();
+    void bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
+    void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
+    void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void cleanupStaticResources();
 
     // Core resources
@@ -102,10 +72,12 @@ private:
     VkBuffer cameraBuffer;
     VkDeviceMemory cameraMemory;
 
-    // Pipeline management
-    std::unique_ptr<VulkanPipeline> rasterPipeline;                // Raster pipeline (future)
-    VulkanPipeline *currentPipeline = nullptr;                     // Currently bound pipeline
-    DescriptorSetManager descriptorSets;                           // Current descriptor sets
+    // Pipeline management (simplified)
+    struct DescriptorSetManager {
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        std::vector<VkDescriptorSet> sets;
+    };
+    DescriptorSetManager descriptorSets;                           // For storage image binding
 
     // Pipeline caching
     std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;  // Cache pipelines by shader hash
