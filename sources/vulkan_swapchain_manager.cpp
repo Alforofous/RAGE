@@ -106,7 +106,7 @@ void VulkanSwapchainManager::createSynchronizationObjects() {
 
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;  // Start signaled so first frame doesn't wait
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     for (size_t i = 0; i < this->maxFramesInFlight; i++) {
         if (vkCreateSemaphore(this->context->device, &semaphoreInfo, nullptr, &this->imageAvailableSemaphores[i]) != VK_SUCCESS ||
@@ -120,7 +120,7 @@ void VulkanSwapchainManager::createSynchronizationObjects() {
 void VulkanSwapchainManager::createCommandPool() {
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;  // Allow individual command buffer resets
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     poolInfo.queueFamilyIndex = this->context->graphicsQueueFamily;
 
     if (vkCreateCommandPool(this->context->device, &poolInfo, nullptr, &this->commandPool) != VK_SUCCESS) {

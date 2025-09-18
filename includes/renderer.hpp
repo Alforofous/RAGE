@@ -9,6 +9,7 @@
 #include "vulkan_utils.hpp"
 #include "pipelines/vulkan_pipeline.hpp"
 #include "vulkan_render_target.hpp"
+#include "vulkan_swapchain_manager.hpp"
 #include "materials/material.hpp"
 #include "matrix4.hpp"
 #include "vector3.hpp"
@@ -60,7 +61,6 @@ public:
     void bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
     void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
     void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
-    void createUniformBuffer(VkDeviceSize size, VkBuffer &buffer, VkDeviceMemory &memory);
 
     Renderer(const VulkanContext *context, Scene *scene, Camera *camera);
 
@@ -72,12 +72,7 @@ public:
     void drawBindedMaterial();  // Called by RenderableNode3D to render with current material properties
 
 private:
-    // Core structures
-    struct AllocatedBuffer {
-        VkBuffer buffer = VK_NULL_HANDLE;
-        VkDeviceMemory memory = VK_NULL_HANDLE;
-        VkDeviceAddress deviceAddress = 0;
-    };
+    // Core structures (moved to use VulkanUtils buffer creation)
 
     struct CameraProperties {
         glm::mat4 viewInverse;
@@ -85,17 +80,13 @@ private:
     };
 
     // Initialization functions
-    void initializeCommandPool();
-    void initializeCommandBuffers();
     void initializeStorageImage();
     void initializeUniformBuffers();
 
     // Rendering functions
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    void submitAndPresent(uint32_t imageIndex);
 
     // Utility functions
-    AllocatedBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
     void copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDeviceSize size);
     void submitCommandBuffer();
     void cleanupStaticResources();
@@ -104,19 +95,12 @@ private:
     const VulkanContext *context;
     Scene *scene;
     Camera *camera;
-
-    // Vulkan resources
-    VkCommandPool commandPool;
-    std::vector<VkCommandBuffer> commandBuffers;
-    std::vector<VkSemaphore> imageAvailableSemaphores;
-    std::vector<VkSemaphore> renderFinishedSemaphores;
-    std::vector<VkFence> inFlightFences;
-    size_t currentFrame;
-    bool hasSubmittedWork;
+    std::unique_ptr<VulkanSwapchainManager> swapchainManager;
 
     // Render resources
     std::unique_ptr<VulkanRenderTarget> renderTarget;  // Main render target
-    AllocatedBuffer cameraBuffer;
+    VkBuffer cameraBuffer;
+    VkDeviceMemory cameraMemory;
 
     // Pipeline management
     std::unique_ptr<VulkanPipeline> rasterPipeline;                // Raster pipeline (future)
