@@ -596,3 +596,10 @@ void destroyBuffer(const VulkanContext *context, VkBuffer buffer, VkDeviceMemory
         vkFreeMemory(context->device, memory, nullptr);
     }
 }
+
+void copyToDeviceMemory(const VulkanContext *context, VkDeviceMemory memory, const void *data, VkDeviceSize size) {
+    void *mapped = nullptr;
+    vkMapMemory(context->device, memory, 0, size, 0, &mapped);
+    memcpy(mapped, data, size);
+    vkUnmapMemory(context->device, memory);
+}

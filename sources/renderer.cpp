@@ -71,7 +71,7 @@ void Renderer::initializeUniformBuffers() {
     CameraProperties cameraData{};
     cameraData.viewInverse = glm::mat4(1.0f);
     cameraData.projInverse = glm::mat4(1.0f);
-    this->copyToDeviceMemory(this->cameraMemory, &cameraData, cameraBufferSize);
+    copyToDeviceMemory(this->context, this->cameraMemory, &cameraData, cameraBufferSize);
 }
 
 void Renderer::initializeStorageImage() {
@@ -237,13 +237,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     }
 }
 
-void Renderer::copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDeviceSize size) {
-    void *mapped = nullptr;
-    vkMapMemory(context->device, memory, 0, size, 0, &mapped);
-    memcpy(mapped, data, size);
-    vkUnmapMemory(context->device, memory);
-}
-
 std::string Renderer::generateShaderHash(const Material *material) const {
     std::stringstream ss;
     for (const auto &shaderPair : material->getAllShaders()) {
@@ -296,19 +289,6 @@ VulkanPipeline *Renderer::getPipelineForMaterial(const Material *material) {
     this->pipelineCache[shaderHash] = std::move(pipeline);
 
     return pipelinePtr;
-}
-
-void Renderer::usePipeline(PipelineType type) {
-    switch (type) {
-        case PipelineType::RayTracing:
-            // Note: This method is now deprecated in favor of getPipelineForMaterial
-            throw std::runtime_error("Use getPipelineForMaterial instead of usePipeline");
-            break;
-
-        case PipelineType::Raster:
-            throw std::runtime_error("Raster pipeline not implemented yet");
-            break;
-    }
 }
 
 void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline) {
@@ -445,10 +425,6 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
     // Bind descriptor set for ray tracing to index 0 (which corresponds to shader's set 1)
     vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                             pipeline->getLayout(), 0, 1, &descriptorSet, 0, nullptr);
-}
-
-void Renderer::drawBindedMaterial() {
-    renderFrame();
 }
 
 void Renderer::updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory) {
