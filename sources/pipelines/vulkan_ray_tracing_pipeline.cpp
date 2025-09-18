@@ -109,7 +109,6 @@ void VulkanRayTracingPipeline::createShaderBindingTables() {
         throw std::runtime_error("Failed to get ray tracing shader group handles");
     }
 
-    // Create SBT entries using helper method
     this->createSBTEntry(RAYGEN_GROUP_INDEX, shaderHandleStorage, handleSize, alignedHandleSize,
                          this->raygenSBT.buffer, this->raygenSBT.memory, this->raygenSBT.region);
 
@@ -124,15 +123,28 @@ void VulkanRayTracingPipeline::createShaderBindingTables() {
     this->callableSBT.size = 0;
 }
 
-void VulkanRayTracingPipeline::createSBTEntry(size_t groupIndex, const std::vector<uint8_t> &handleStorage,
-                                              size_t handleSize, size_t alignedHandleSize,
-                                              VkBuffer &buffer, VkDeviceMemory &memory, VkStridedDeviceAddressRegionKHR &sbt) {
-    buffer = this->createDeviceAddressBuffer(alignedHandleSize,
-                                             VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                             memory);
+void VulkanRayTracingPipeline::createSBTEntry(
+    size_t groupIndex,
+    const std::vector<uint8_t> &handleStorage,
+    size_t handleSize,
+    size_t alignedHandleSize,
+    VkBuffer &buffer,
+    VkDeviceMemory &memory,
+    VkStridedDeviceAddressRegionKHR &sbt
+) {
+    buffer = this->createDeviceAddressBuffer(
+        alignedHandleSize,
+        VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        memory
+    );
 
-    this->copyToBuffer(memory, &handleStorage[groupIndex * handleSize], handleSize, alignedHandleSize);
+    this->copyToBuffer(
+        memory,
+        &handleStorage[groupIndex * handleSize],
+        handleSize,
+        alignedHandleSize
+    );
 
     sbt.deviceAddress = this->getBufferDeviceAddress(buffer);
     sbt.stride = alignedHandleSize;
