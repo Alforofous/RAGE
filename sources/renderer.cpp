@@ -3,7 +3,6 @@
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
 #include "voxel3D.hpp"
 #include <stdexcept>
-#include <array>
 #include <vector>
 #include <iostream>
 #include <sstream>
@@ -13,9 +12,7 @@ Renderer::Renderer(const VulkanContext *context, Scene *scene, Camera *camera)
     : context(context)
     , scene(scene)
     , camera(camera)
-    , commandPool(VK_NULL_HANDLE)
-    , currentFrame(0)
-    , hasSubmittedWork(false)
+    , swapchainManager(std::make_unique<VulkanSwapchainManager>(context))
     , renderTarget(std::make_unique<VulkanRenderTarget>(context,
                                                         context->swapchainExtent.width,
                                                         context->swapchainExtent.height)) {
@@ -23,12 +20,6 @@ Renderer::Renderer(const VulkanContext *context, Scene *scene, Camera *camera)
     descriptorSets = {};
 
     // Initialize all Vulkan resources in order
-    std::cout << "Initializing command pool..." << std::endl;
-    initializeCommandPool();
-
-    std::cout << "Initializing command buffers..." << std::endl;
-    initializeCommandBuffers();
-
     std::cout << "Initializing uniform buffers..." << std::endl;
     initializeUniformBuffers();
 
@@ -52,103 +43,15 @@ Renderer::~Renderer() {
     // Clean up pipeline cache (this will dispose all cached pipelines)
     pipelineCache.clear();
 
-    // Clean up synchronization objects
-    for (auto *semaphore : imageAvailableSemaphores) {
-        if (semaphore != VK_NULL_HANDLE) {
-            vkDestroySemaphore(context->device, semaphore, nullptr);
-        }
-    }
-    imageAvailableSemaphores.clear();
-
-    for (auto *semaphore : renderFinishedSemaphores) {
-        if (semaphore != VK_NULL_HANDLE) {
-            vkDestroySemaphore(context->device, semaphore, nullptr);
-        }
-    }
-    renderFinishedSemaphores.clear();
-
-    for (auto *fence : inFlightFences) {
-        if (fence != VK_NULL_HANDLE) {
-            vkDestroyFence(context->device, fence, nullptr);
-        }
-    }
-    inFlightFences.clear();
-
     // Clean up render target
     if (renderTarget) {
         renderTarget->dispose();
     }
 
     // Clean up uniform buffers
-    if (cameraBuffer.buffer != VK_NULL_HANDLE) {
-        vkDestroyBuffer(context->device, cameraBuffer.buffer, nullptr);
-        cameraBuffer.buffer = VK_NULL_HANDLE;
-    }
-    if (cameraBuffer.memory != VK_NULL_HANDLE) {
-        vkFreeMemory(context->device, cameraBuffer.memory, nullptr);
-        cameraBuffer.memory = VK_NULL_HANDLE;
-    }
+    destroyBuffer(context, cameraBuffer, cameraMemory);
 
-    // Clean up command pool last (this also frees all allocated command buffers)
-    if (commandPool != VK_NULL_HANDLE) {
-        vkDestroyCommandPool(context->device, commandPool, nullptr);
-        commandPool = VK_NULL_HANDLE;
-    }
-}
-
-const int MAX_FRAMES_IN_FLIGHT = 3;  // Match typical triple buffering setup
-
-void Renderer::initializeCommandPool() {
-    std::cout << "Creating command pool..." << std::endl;
-
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;  // Allow individual command buffer resets
-    poolInfo.queueFamilyIndex = context->graphicsQueueFamily;
-
-    if (vkCreateCommandPool(context->device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create command pool");
-    }
-}
-
-void Renderer::initializeCommandBuffers() {
-    std::cout << "Creating command buffers..." << std::endl;
-
-    // Create command buffers (one per frame in flight)
-    commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-
-    if (vkAllocateCommandBuffers(context->device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate command buffers");
-    }
-
-    std::cout << "Creating synchronization objects..." << std::endl;
-
-    // Create synchronization objects
-    imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-    currentFrame = 0;
-    hasSubmittedWork = false;
-
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;  // Start signaled so first frame doesn't wait
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        if (vkCreateSemaphore(context->device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(context->device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(context->device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create synchronization objects");
-        }
-    }
+    // Note: VulkanSwapchainManager handles its own cleanup automatically
 }
 
 void Renderer::initializeUniformBuffers() {
@@ -156,113 +59,35 @@ void Renderer::initializeUniformBuffers() {
 
     // Create camera uniform buffer
     VkDeviceSize cameraBufferSize = sizeof(CameraProperties);
-    cameraBuffer = createBuffer(
+    this->cameraBuffer = createDeviceAddressBuffer(
+        this->context,
         cameraBufferSize,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        this->cameraMemory
     );
 
     // Initialize camera buffer with identity matrices
     CameraProperties cameraData{};
     cameraData.viewInverse = glm::mat4(1.0f);
     cameraData.projInverse = glm::mat4(1.0f);
-    copyToDeviceMemory(cameraBuffer.memory, &cameraData, cameraBufferSize);
+    this->copyToDeviceMemory(this->cameraMemory, &cameraData, cameraBufferSize);
 }
 
 void Renderer::initializeStorageImage() {
     std::cout << "Creating storage image..." << std::endl;
 
-    // Initial layout transition using a temporary command buffer
-    VkCommandBufferAllocateInfo cmdAllocInfo{};
-    cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmdAllocInfo.commandPool = commandPool;
-    cmdAllocInfo.commandBufferCount = 1;
-
-    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-    if (vkAllocateCommandBuffers(context->device, &cmdAllocInfo, &commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate temporary command buffer");
-    }
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    // Transition to general layout for ray tracing write
-    renderTarget->transitionLayout(
-        commandBuffer,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_GENERAL,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-        0,
-        VK_ACCESS_SHADER_WRITE_BIT
-    );
-
-    vkEndCommandBuffer(commandBuffer);
-
-    // Submit and wait
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    VkFence fence = VK_NULL_HANDLE;
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    if (vkCreateFence(context->device, &fenceInfo, nullptr, &fence) != VK_SUCCESS) {
-        vkFreeCommandBuffers(context->device, commandPool, 1, &commandBuffer);
-        throw std::runtime_error("Failed to create fence");
-    }
-
-    if (vkQueueSubmit(context->graphicsQueue, 1, &submitInfo, fence) != VK_SUCCESS) {
-        vkDestroyFence(context->device, fence, nullptr);
-        vkFreeCommandBuffers(context->device, commandPool, 1, &commandBuffer);
-        throw std::runtime_error("Failed to submit command buffer");
-    }
-
-    // Wait for the command to complete
-    vkWaitForFences(context->device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-    // Clean up
-    vkDestroyFence(context->device, fence, nullptr);
-    vkFreeCommandBuffers(context->device, commandPool, 1, &commandBuffer);
+    // The storage image will be transitioned during the first render frame
+    // No need for initial transition since we'll handle it in recordCommandBuffer
 }
 
 void Renderer::renderFrame() {
-    // std::cout << "Starting render frame..." << std::endl;
-
-    // Wait for previous frame to complete
-    if (hasSubmittedWork) {
-        vkWaitForFences(context->device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-    }
-
-    // Reset fence and command buffer for this frame
-    vkResetFences(context->device, 1, &inFlightFences[currentFrame]);
-    vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-
-    // Acquire next swapchain image
-    uint32_t imageIndex = 0;  // Will be set by vkAcquireNextImageKHR
-    VkResult result = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX,
-                                            imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
-    if (result != VK_SUCCESS) {
-        throw std::runtime_error("Failed to acquire swapchain image: " + std::to_string(result));
-    }
-
-    // Record command buffer
-    recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
-
-    // Submit and present
-    submitAndPresent(imageIndex);
-
-    // Mark that we've submitted work
-    hasSubmittedWork = true;
-
-    // Advance to next frame
-    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-    // std::cout << "Frame complete" << std::endl;
+    this->swapchainManager->waitForCurrentFrame();
+    uint32_t imageIndex = this->swapchainManager->acquireNextImage();
+    VkCommandBuffer commandBuffer = this->swapchainManager->getCurrentCommandBuffer();
+    this->recordCommandBuffer(commandBuffer, imageIndex);
+    this->swapchainManager->submitAndPresent(commandBuffer, imageIndex);
+    this->swapchainManager->advanceFrame();
 }
 
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
@@ -412,95 +237,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     }
 }
 
-void Renderer::submitAndPresent(uint32_t imageIndex) {
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &renderFinishedSemaphores[currentFrame];
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
-
-    std::array<VkPipelineStageFlags, 1> waitStages = { VK_PIPELINE_STAGE_TRANSFER_BIT };
-    submitInfo.pWaitDstStageMask = waitStages.data();
-
-    if (vkQueueSubmit(context->graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to submit command buffer");
-    }
-    hasSubmittedWork = true;
-
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame];
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &context->swapchain;
-    presentInfo.pImageIndices = &imageIndex;
-
-    VkResult result = vkQueuePresentKHR(context->presentQueue, &presentInfo);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        // TODO: Add swapchain recreation
-        return;
-    }
-    if (result != VK_SUCCESS) {
-        throw std::runtime_error("Failed to present swapchain image");
-    }
-}
-
-// Pipeline initialization is now handled by the VulkanRayTracingPipeline class
-
-// Descriptor set management is now handled by the VulkanPipeline class
-
-Renderer::AllocatedBuffer Renderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    AllocatedBuffer buffer{};
-    if (vkCreateBuffer(context->device, &bufferInfo, nullptr, &buffer.buffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create buffer");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(context->device, buffer.buffer, &memRequirements);
-
-    // Add device address flag if the buffer needs it
-    VkMemoryAllocateFlagsInfo allocFlagsInfo{};
-    allocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-    allocFlagsInfo.flags = 0;
-    if ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
-        allocFlagsInfo.flags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-    }
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(this->context->physicalDevice, memRequirements.memoryTypeBits, properties);
-    allocInfo.pNext = ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) ? &allocFlagsInfo : nullptr;
-
-    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &buffer.memory) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate buffer memory");
-    }
-
-    vkBindBufferMemory(context->device, buffer.buffer, buffer.memory, 0);
-
-    // Only get device address if the buffer was created with VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-    if ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
-        VkBufferDeviceAddressInfo bufferDeviceAddressInfo{};
-        bufferDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        bufferDeviceAddressInfo.buffer = buffer.buffer;
-        buffer.deviceAddress = vkGetBufferDeviceAddress(context->device, &bufferDeviceAddressInfo);
-    }
-    else {
-        buffer.deviceAddress = 0;
-    }
-
-    return buffer;
-}
-
 void Renderer::copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDeviceSize size) {
     void *mapped = nullptr;
     vkMapMemory(context->device, memory, 0, size, 0, &mapped);
@@ -510,17 +246,13 @@ void Renderer::copyToDeviceMemory(VkDeviceMemory memory, const void *data, VkDev
 
 std::string Renderer::generateShaderHash(const Material *material) const {
     std::stringstream ss;
-
-    // Create a hash from all shader sources in the material
     for (const auto &shaderPair : material->getAllShaders()) {
         const std::string &name = shaderPair.first;
         const GLSLShader &shader = shaderPair.second;
 
-        // Combine shader name, kind, and source for hash
         ss << name << ":" << static_cast<int>(shader.kind) << ":" << shader.source << ";";
     }
 
-    // Use std::hash to create a shorter hash string
     std::hash<std::string> hasher;
     size_t hashValue = hasher(ss.str());
 
@@ -644,8 +376,8 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
     }
 
     // Create uniform buffers
-    this->createUniformBuffer(sizeof(CameraData), this->cachedCameraBuffer, this->cachedCameraMemory);
-    this->createUniformBuffer(sizeof(CubeData), this->cachedCubeBuffer, this->cachedCubeMemory);
+    this->cachedCameraBuffer = createBuffer(this->context, sizeof(CameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, this->cachedCameraMemory);
+    this->cachedCubeBuffer = createBuffer(this->context, sizeof(CubeData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, this->cachedCubeMemory);
 
     // Update buffers with initial data
     this->updateCameraBuffer(this->cachedCameraBuffer, this->cachedCameraMemory);
@@ -717,33 +449,6 @@ void Renderer::bindStorageImageDescriptorSet(VkCommandBuffer cmdBuffer, VulkanPi
 
 void Renderer::drawBindedMaterial() {
     renderFrame();
-}
-
-void Renderer::createUniformBuffer(VkDeviceSize size, VkBuffer &buffer, VkDeviceMemory &memory) {
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(this->context->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create uniform buffer");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(this->context->device, buffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(this->context->physicalDevice, memRequirements.memoryTypeBits,
-                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    if (vkAllocateMemory(this->context->device, &allocInfo, nullptr, &memory) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate uniform buffer memory");
-    }
-
-    vkBindBufferMemory(this->context->device, buffer, memory, 0);
 }
 
 void Renderer::updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory) {

@@ -508,3 +508,91 @@ uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, Vk
 
     throw std::runtime_error("Failed to find suitable memory type");
 }
+
+VkBuffer createBuffer(const VulkanContext *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory) {
+    VkBuffer buffer = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(context->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(context->device, buffer, &memRequirements);
+
+    uint32_t memoryTypeIndex = findMemoryType(context->physicalDevice, memRequirements.memoryTypeBits, properties);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        vkDestroyBuffer(context->device, buffer, nullptr);
+        throw std::runtime_error("Failed to allocate buffer memory");
+    }
+
+    if (vkBindBufferMemory(context->device, buffer, bufferMemory, 0) != VK_SUCCESS) {
+        vkFreeMemory(context->device, bufferMemory, nullptr);
+        vkDestroyBuffer(context->device, buffer, nullptr);
+        throw std::runtime_error("Failed to bind buffer memory");
+    }
+
+    return buffer;
+}
+
+VkBuffer createDeviceAddressBuffer(const VulkanContext *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory) {
+    VkBuffer buffer = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(context->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(context->device, buffer, &memRequirements);
+
+    uint32_t memoryTypeIndex = findMemoryType(context->physicalDevice, memRequirements.memoryTypeBits, properties);
+
+    VkMemoryAllocateFlagsInfo flagsInfo{};
+    flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+    allocInfo.pNext = &flagsInfo;
+
+    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        vkDestroyBuffer(context->device, buffer, nullptr);
+        throw std::runtime_error("Failed to allocate buffer memory");
+    }
+
+    if (vkBindBufferMemory(context->device, buffer, bufferMemory, 0) != VK_SUCCESS) {
+        vkFreeMemory(context->device, bufferMemory, nullptr);
+        vkDestroyBuffer(context->device, buffer, nullptr);
+        throw std::runtime_error("Failed to bind buffer memory");
+    }
+
+    return buffer;
+}
+
+void destroyBuffer(const VulkanContext *context, VkBuffer buffer, VkDeviceMemory memory) {
+    if (buffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(context->device, buffer, nullptr);
+    }
+    if (memory != VK_NULL_HANDLE) {
+        vkFreeMemory(context->device, memory, nullptr);
+    }
+}

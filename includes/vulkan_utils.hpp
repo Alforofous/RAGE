@@ -36,3 +36,6 @@ struct VulkanContext {
 
 VulkanContext createVulkanGLFWSurface(GLFWwindow *window);
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+VkBuffer createBuffer(const VulkanContext *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory);
+VkBuffer createDeviceAddressBuffer(const VulkanContext *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory &bufferMemory);
+void destroyBuffer(const VulkanContext *context, VkBuffer buffer, VkDeviceMemory memory);
