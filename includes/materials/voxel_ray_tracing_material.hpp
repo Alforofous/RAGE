@@ -5,4 +5,6 @@ class VoxelRayTracingMaterial : public RayTracingMaterial {
 public:
     VoxelRayTracingMaterial();
     ~VoxelRayTracingMaterial();
+
+    void onRenderSetup(SetUniformFunction setUniform, void *object) override;
 };

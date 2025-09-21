@@ -1,7 +1,6 @@
 #include "renderer.hpp"
 #include "renderable_node3D.hpp"
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
-#include "voxel3D.hpp"
 #include "utils/buffer_utils.hpp"
 #include <stdexcept>
 #include <vector>
@@ -26,9 +25,6 @@ Renderer::~Renderer() {
     vkDeviceWaitIdle(context->device);
     if (cachedCameraBuffer != VK_NULL_HANDLE) {
         BufferUtils::destroyBuffer(context->device, cachedCameraBuffer, cachedCameraMemory);
-    }
-    if (cachedCubeBuffer != VK_NULL_HANDLE) {
-        BufferUtils::destroyBuffer(context->device, cachedCubeBuffer, cachedCubeMemory);
     }
     pipelineCache.clear();
     if (renderTarget) {
@@ -92,7 +88,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
                 pipeline->bind(commandBuffer);
 
-                this->setupDescriptorSets(commandBuffer, pipeline);
+                this->setupDescriptorSets(commandBuffer, pipeline, renderable);
 
                 auto *rayTracingPipeline = dynamic_cast<VulkanRayTracingPipeline *>(pipeline);
                 if (rayTracingPipeline != nullptr) {
@@ -246,7 +242,7 @@ VulkanPipeline *Renderer::getPipelineForMaterial(const Material *material) {
     return pipelinePtr;
 }
 
-void Renderer::setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline) {
+void Renderer::setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline, const RenderableNode3D *renderable) {
     if (this->cachedCameraBuffer == VK_NULL_HANDLE) {
         this->cachedCameraBuffer = BufferUtils::createBuffer(
             this->context->device,
@@ -258,27 +254,60 @@ void Renderer::setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pi
         );
     }
 
-    if (this->cachedCubeBuffer == VK_NULL_HANDLE) {
-        this->cachedCubeBuffer = BufferUtils::createBuffer(
-            this->context->device,
-            this->context->physicalDevice,
-            sizeof(CubeData),
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            this->cachedCubeMemory
-        );
-    }
-
     this->updateCameraBuffer(this->cachedCameraBuffer, this->cachedCameraMemory);
-    this->updateCubeBuffer(this->cachedCubeBuffer, this->cachedCubeMemory);
 
     VkDescriptorSetLayout setLayout = pipeline->getDescriptorSetLayout(0);
-
     VkDescriptorSet descriptorSet = this->descriptorManager->createDescriptorSet(setLayout);
 
+    // Always set camera data
     this->descriptorManager->updateUniformBuffer(descriptorSet, 0, this->cachedCameraBuffer, sizeof(CameraData));
-    this->descriptorManager->updateUniformBuffer(descriptorSet, 1, this->cachedCubeBuffer, sizeof(CubeData));
+
+    // Set up render target
     this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);
+
+    // Let the material set up its own uniforms via onRenderSetup
+    Material *material = renderable->getMaterial();
+    if (material != nullptr) {
+        // For now, we'll use a simple approach where we collect all uniform data
+        // and assume it gets packed into binding 1 (this can be made more sophisticated later)
+
+        // Create a buffer to collect uniform data - using a reasonable max size
+        constexpr size_t MAX_UNIFORM_SIZE = 1024; // 1KB should be enough for most uniforms
+
+        VkBuffer tempBuffer;
+        VkDeviceMemory tempMemory;
+
+        tempBuffer = BufferUtils::createBuffer(
+            this->context->device,
+            this->context->physicalDevice,
+            MAX_UNIFORM_SIZE,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            tempMemory
+        );
+
+        // Map the memory so materials can write to it
+        void *bufferData;
+        vkMapMemory(this->context->device, tempMemory, 0, MAX_UNIFORM_SIZE, 0, &bufferData);
+
+        size_t actualUniformSize = 0;
+        auto setUniform = [&bufferData, &actualUniformSize](const std::string &name, const UniformBase &uniform) {
+                              // Copy uniform data to the buffer
+                              uniform.copyTo(bufferData, uniform.getSize());
+                              actualUniformSize = uniform.getSize();
+                          };
+
+        material->onRenderSetup(setUniform, const_cast<void *>(static_cast<const void *>(renderable)));
+
+        vkUnmapMemory(this->context->device, tempMemory);
+
+        // Update descriptor set with the uniform buffer if we got data
+        if (actualUniformSize > 0) {
+            this->descriptorManager->updateUniformBuffer(descriptorSet, 1, tempBuffer, actualUniformSize);
+        }
+
+        // Note: In a production system, you'd want to cache/reuse these buffers
+    }
 
     this->descriptorManager->bindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->getLayout(), 0, descriptorSet);
 }
@@ -296,28 +325,5 @@ void Renderer::updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory) {
     void *data;
     vkMapMemory(this->context->device, memory, 0, sizeof(CameraData), 0, &data);
     memcpy(data, &cameraData, sizeof(CameraData));
-    vkUnmapMemory(this->context->device, memory);
-}
-
-void Renderer::updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory) {
-    CubeData cubeData{};
-    if (!this->scene->getChildren().empty()) {
-        auto *voxel = dynamic_cast<Voxel3D *>(this->scene->getChildren()[0]);
-        if (voxel) {
-            IntVector3 intPos = voxel->getPosition();
-            IntVector3 intSize = voxel->getSize();
-            IntVector3 intColor = voxel->getColor();
-
-            cubeData.position = Vector3(static_cast<float>(intPos.getX()), static_cast<float>(intPos.getY()), static_cast<float>(intPos.getZ()));
-            cubeData.size = Vector3(static_cast<float>(intSize.getX()), static_cast<float>(intSize.getY()), static_cast<float>(intSize.getZ()));
-            cubeData.color = Vector3(static_cast<float>(intColor.getX()) / 255.0f,
-                                     static_cast<float>(intColor.getY()) / 255.0f,
-                                     static_cast<float>(intColor.getZ()) / 255.0f);
-        }
-    }
-
-    void *data;
-    vkMapMemory(this->context->device, memory, 0, sizeof(CubeData), 0, &data);
-    memcpy(data, &cubeData, sizeof(CubeData));
     vkUnmapMemory(this->context->device, memory);
 }

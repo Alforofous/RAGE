@@ -22,4 +22,6 @@ public:
     GLSLShader getRaygenShader() const;
     GLSLShader getClosestHitShader() const;
     GLSLShader getMissShader() const;
+
+    void onRenderSetup(SetUniformFunction setUniform, void *object) override = 0;
 };

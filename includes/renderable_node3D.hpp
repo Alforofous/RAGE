@@ -11,8 +11,8 @@ public:
     RenderableNode3D(Material *material);
     virtual ~RenderableNode3D();
 
-    virtual void render(Renderer& renderer) const = 0;
-    Material* getMaterial() const { return material; }
+    virtual void render(Renderer &renderer) const = 0;
+    Material *getMaterial() const { return material; }
 
 protected:
     Material *material;

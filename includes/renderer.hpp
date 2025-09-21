@@ -22,15 +22,6 @@ struct CameraData {
     float padding;  // Align to 16 bytes
 };
 
-struct CubeData {
-    Vector3 position;
-    float padding1;
-    Vector3 size;
-    float padding2;
-    Vector3 color;
-    float padding3;
-};
-
 class Renderer {
 public:
     Renderer(const VulkanContext *context, Scene *scene, Camera *camera);
@@ -54,9 +45,8 @@ private:
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     // Utility functions
-    void setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline);
+    void setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline, const RenderableNode3D *renderable);
     void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
-    void updateCubeBuffer(VkBuffer buffer, VkDeviceMemory memory);
 
     // Core resources
     const VulkanContext *context;
@@ -76,6 +66,4 @@ private:
 
     VkBuffer cachedCameraBuffer = VK_NULL_HANDLE;
     VkDeviceMemory cachedCameraMemory = VK_NULL_HANDLE;
-    VkBuffer cachedCubeBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory cachedCubeMemory = VK_NULL_HANDLE;
 };
