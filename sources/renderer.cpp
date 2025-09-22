@@ -1,8 +1,7 @@
 #include "renderer.hpp"
 #include "renderable_node3D.hpp"
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
-#include "utils/buffer_utils.hpp"
-#include "materials/renderable_interfaces.hpp"
+#include "materials/ray_tracing_material.hpp"
 #include <stdexcept>
 #include <vector>
 #include <iostream>
@@ -166,18 +165,31 @@ VulkanPipeline *Renderer::getOrCreatePipeline(const Material *material) {
 
     std::cout << "Creating new pipeline for shader hash: " << shaderHash << std::endl;
 
-    // Create ray tracing pipeline from material shaders
-    auto pipeline = std::make_unique<VulkanRayTracingPipeline>(
-        this->context,
-        material->getShader("raygen"),
-        material->getShader("miss"),
-        material->getShader("closestHit")
-    );
+    // Check material type and create appropriate pipeline
+    const auto *rayTracingMaterial = dynamic_cast<const RayTracingMaterial *>(material);
+    if (rayTracingMaterial != nullptr) {
+        // Create ray tracing pipeline
+        auto pipeline = std::make_unique<VulkanRayTracingPipeline>(
+            this->context,
+            material->getShader("raygen"),
+            material->getShader("miss"),
+            material->getShader("closestHit")
+        );
 
-    VulkanPipeline *pipelinePtr = pipeline.get();
-    this->pipelineCache[shaderHash] = std::move(pipeline);
+        VulkanPipeline *pipelinePtr = pipeline.get();
+        this->pipelineCache[shaderHash] = std::move(pipeline);
+        return pipelinePtr;
+    }
 
-    return pipelinePtr;
+    // Add more pipeline types here as needed
+    // else if (const ComputeMaterial *computeMaterial = dynamic_cast<const ComputeMaterial *>(material)) {
+    //     // Create compute pipeline
+    // }
+    // else if (const GraphicsMaterial *graphicsMaterial = dynamic_cast<const GraphicsMaterial *>(material)) {
+    //     // Create graphics pipeline
+    // }
+
+    throw std::runtime_error("Unsupported material type - cannot create pipeline");
 }
 
 std::string Renderer::generateShaderHash(const Material *material) {
