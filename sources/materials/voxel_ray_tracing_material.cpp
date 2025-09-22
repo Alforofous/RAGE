@@ -16,18 +16,21 @@ VoxelRayTracingMaterial::VoxelRayTracingMaterial()
 
 VoxelRayTracingMaterial::~VoxelRayTracingMaterial() = default;
 
-void VoxelRayTracingMaterial::onRenderSetup(SetUniformFunction setUniform, void *object) {
+void VoxelRayTracingMaterial::onRenderSetup(SetUniformFunction setUniform, Camera *camera, void *object) {
     if (object == nullptr) {
         return;
     }
 
     struct CubeData {
         Vector3 position;
-        float padding1;
         Vector3 size;
-        float padding2;
         Vector3 color;
-        float padding3;
+    };
+
+    struct CameraData {
+        Matrix4 projInverse;
+        Matrix4 viewInverse;
+        Vector3 cameraPos;
     };
 
     CubeData cubeData{};
@@ -46,6 +49,14 @@ void VoxelRayTracingMaterial::onRenderSetup(SetUniformFunction setUniform, void 
         cubeData.color = colorable->getColor();
     }
 
+    CameraData cameraData{};
+    cameraData.projInverse = camera->getProjection();
+    cameraData.viewInverse = camera->getView();
+    cameraData.cameraPos = camera->getPosition();
+
+    Uniform<CameraData> cameraUniform(cameraData);
+    setUniform("camera", static_cast<const UniformBase &>(cameraUniform));
+
     Uniform<CubeData> cubeUniform(cubeData);
-    setUniform("CubeData", static_cast<const UniformBase &>(cubeUniform));
+    setUniform("cube", static_cast<const UniformBase &>(cubeUniform));
 }

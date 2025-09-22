@@ -3,6 +3,7 @@
 #include <memory>
 #include <map>
 #include <string>
+#include <vector>
 #include "scene.hpp"
 #include "camera.hpp"
 #include "vulkan_utils.hpp"
@@ -11,17 +12,15 @@
 #include "vulkan_swapchain_manager.hpp"
 #include "vulkan_descriptor_manager.hpp"
 #include "materials/material.hpp"
-#include "matrix4.hpp"
-#include "vector3.hpp"
 
-// Uniform buffer data structures
-struct CameraData {
-    Matrix4 viewInverse;
-    Matrix4 projInverse;
-    Vector3 cameraPos;
-    float padding;  // Align to 16 bytes
-};
-
+/**
+ * Minimal, generic renderer that delegates all material-specific logic to materials themselves.
+ * The renderer only handles:
+ * - Pipeline creation and caching
+ * - Command buffer recording
+ * - Resource management
+ * - Scene traversal
+ */
 class Renderer {
 public:
     Renderer(const VulkanContext *context, Scene *scene, Camera *camera);
@@ -29,24 +28,18 @@ public:
 
     // Core rendering interface
     void renderFrame();
-    VulkanPipeline *getPipelineForMaterial(const Material *material);  // Get or create pipeline for material
 
 private:
-    // === Simplified Uniform Data ===
-    struct CameraProperties {
-        glm::mat4 viewInverse;
-        glm::mat4 projInverse;
-    };
-
-    // Initialization functions
-    void initializeUniformBuffers();
-
     // Rendering functions
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-
-    // Utility functions
-    void setupDescriptorSets(VkCommandBuffer cmdBuffer, VulkanPipeline *pipeline, const RenderableNode3D *renderable);
-    void updateCameraBuffer(VkBuffer buffer, VkDeviceMemory memory);
+    
+    // Pipeline management
+    VulkanPipeline *getOrCreatePipeline(const Material *material);
+    static std::string generateShaderHash(const Material *material);
+    
+    // Material rendering
+    void renderMaterial(VkCommandBuffer commandBuffer, VulkanPipeline *pipeline, 
+                       const Material *material, const RenderableNode3D *renderable);
 
     // Core resources
     const VulkanContext *context;
@@ -54,16 +47,8 @@ private:
     Camera *camera;
     std::unique_ptr<VulkanSwapchainManager> swapchainManager;
     std::unique_ptr<VulkanDescriptorManager> descriptorManager;
-
-    // Render resources
     std::unique_ptr<VulkanRenderTarget> renderTarget;
-    VkBuffer cameraBuffer;
-    VkDeviceMemory cameraMemory;
 
     // Pipeline caching
     std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;
-    std::string generateShaderHash(const Material *material) const;
-
-    VkBuffer cachedCameraBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory cachedCameraMemory = VK_NULL_HANDLE;
 };

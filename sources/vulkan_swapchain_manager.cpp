@@ -1,6 +1,7 @@
 #include "vulkan_swapchain_manager.hpp"
 #include <stdexcept>
 #include <array>
+#include <iostream>
 
 VulkanSwapchainManager::VulkanSwapchainManager(const VulkanContext *context, uint32_t maxFramesInFlight)
     : context(context)
@@ -8,6 +9,10 @@ VulkanSwapchainManager::VulkanSwapchainManager(const VulkanContext *context, uin
     , commandPool(VK_NULL_HANDLE)
     , currentFrame(0)
     , hasSubmittedAnyWork(false) {
+    if (context == nullptr) {
+        throw std::runtime_error("VulkanSwapchainManager: context cannot be null");
+    }
+
     this->createCommandPool();
     this->createCommandBuffers();
     this->createSynchronizationObjects();
@@ -18,12 +23,28 @@ VulkanSwapchainManager::~VulkanSwapchainManager() {
 }
 
 void VulkanSwapchainManager::waitForCurrentFrame() {
+    if (this->context == nullptr) {
+        throw std::runtime_error("VulkanSwapchainManager: context is null");
+    }
+
+    if (this->currentFrame >= this->inFlightFences.size()) {
+        throw std::runtime_error("VulkanSwapchainManager: currentFrame index out of bounds");
+    }
+
     if (this->hasSubmittedAnyWork) {
         vkWaitForFences(this->context->device, 1, &this->inFlightFences[this->currentFrame], VK_TRUE, UINT64_MAX);
     }
 }
 
 uint32_t VulkanSwapchainManager::acquireNextImage() {
+    if (this->context == nullptr) {
+        throw std::runtime_error("VulkanSwapchainManager: context is null");
+    }
+
+    if (this->currentFrame >= this->inFlightFences.size()) {
+        throw std::runtime_error("VulkanSwapchainManager: currentFrame index out of bounds");
+    }
+
     // Reset fence and command buffer for this frame
     vkResetFences(this->context->device, 1, &this->inFlightFences[this->currentFrame]);
     this->resetCurrentCommandBuffer();

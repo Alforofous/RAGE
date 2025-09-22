@@ -50,7 +50,7 @@ public:
         return this->uniforms;
     }
 
-    virtual void onRenderSetup(SetUniformFunction setUniform, void *object) = 0;
+    virtual void onRenderSetup(SetUniformFunction setUniform, Camera *camera, void *object) = 0;
 
 private:
     std::map<std::string, GLSLShader> shaders;

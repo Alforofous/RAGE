@@ -23,5 +23,5 @@ public:
     GLSLShader getClosestHitShader() const;
     GLSLShader getMissShader() const;
 
-    void onRenderSetup(SetUniformFunction setUniform, void *object) override = 0;
+    void onRenderSetup(SetUniformFunction setUniform, Camera *camera, void *object) override = 0;
 };
