@@ -32,6 +32,10 @@ public:
     size_t getPushConstantRangeCount() const { return this->pushConstantRanges.size(); }
     const std::vector<VkPushConstantRange>& getPushConstantRanges() const { return this->pushConstantRanges; }
 
+    // === Uniform Buffer Management ===
+    void setUniform(uint32_t binding, const void* data, size_t size);
+    VkBuffer getUniformBuffer(uint32_t binding) const;
+
 protected:
     struct ShaderInfo {
         VkShaderModule module = VK_NULL_HANDLE;
@@ -58,6 +62,16 @@ private:
     std::vector<VkPushConstantRange> pushConstantRanges;
     std::vector<ShaderInfo> shaders;
 
+    // === Uniform Buffer Management ===
+    struct UniformBuffer {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        size_t size = 0;
+        VkDescriptorType type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    };
+    std::map<uint32_t, UniformBuffer> uniformBuffers; // binding -> buffer
+    std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>> bindingsBySetNumber;
+
     // === Construction and Cleanup ===
     void compileShaders(const std::vector<GLSLShader> &glslShaders);
     void createPipelineLayout();
@@ -68,6 +82,8 @@ private:
     void destroyShaderModule(VkShaderModule module);
     std::vector<VkDescriptorSetLayout> createDescriptorSetLayouts(const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > &bindingsBySetNumber);
     bool isValidPushConstantData(VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size) const;
+    void createUniformBuffers();
+    void destroyUniformBuffers();
 
     // === Friend Access for Protected Members ===
     template<VkPipelineBindPoint> friend class VulkanPipelineBase;

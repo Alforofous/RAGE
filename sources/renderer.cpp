@@ -2,6 +2,7 @@
 #include "renderable_node3D.hpp"
 #include "pipelines/vulkan_ray_tracing_pipeline.hpp"
 #include "utils/buffer_utils.hpp"
+#include "materials/renderable_interfaces.hpp"
 #include <stdexcept>
 #include <vector>
 #include <iostream>
@@ -205,43 +206,20 @@ void Renderer::renderMaterial(VkCommandBuffer commandBuffer, VulkanPipeline *pip
     // Set up render target in descriptor set
     this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);
 
-    // Let the material handle ALL its uniform setup (including camera data)
-    auto setUniform = [this, descriptorSet](const std::string &name, const UniformBase &uniform) {
-                          // For now, assume all uniforms go to binding 0 and 1
-                          // This is a simplified approach - in a real system you'd need more sophisticated binding management
-                          static uint32_t bindingIndex = 0;
+    // Let material set uniforms directly in pipeline's pre-allocated buffers
+    const_cast<Material *>(material)->onRenderSetup(pipeline, this->camera, const_cast<void *>(static_cast<const void *>(renderable)));
 
-                          // Create temporary buffer for this uniform
-                          constexpr size_t MAX_UNIFORM_SIZE = 1024;
-                          VkBuffer tempBuffer;
-                          VkDeviceMemory tempMemory;
-
-                          tempBuffer = BufferUtils::createBuffer(
-                              this->context->device,
-                              this->context->physicalDevice,
-                              MAX_UNIFORM_SIZE,
-                              VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                              tempMemory
-                          );
-
-                          // Copy uniform data to buffer
-                          void *bufferData = nullptr;
-                          vkMapMemory(this->context->device, tempMemory, 0, uniform.getSize(), 0, &bufferData);
-                          uniform.copyTo(bufferData, uniform.getSize());
-                          vkUnmapMemory(this->context->device, tempMemory);
-
-                          // Update descriptor set - use appropriate binding based on uniform name
-                          uint32_t binding = (name == "camera") ? 0 : 1;
-                          this->descriptorManager->updateUniformBuffer(descriptorSet, binding, tempBuffer, uniform.getSize());
-
-                          // Note: In production, you'd want to manage buffer lifetimes properly
-                          // For now, we're accepting the memory leak for simplicity
-                      };
-
-    // Call material's setup with camera and object data
-    const_cast<Material *>(material)->onRenderSetup(setUniform, this->camera,
-                                                    const_cast<void *>(static_cast<const void *>(renderable)));
+    // Bind all uniform buffers from pipeline to descriptor set
+    // Note: We bind buffers for all possible bindings since materials have already filled them
+    for (uint32_t binding = 0; binding < 8; ++binding) { // Check up to 8 bindings (common range)
+        try {
+            VkBuffer uniformBuffer = pipeline->getUniformBuffer(binding);
+            // Use VK_WHOLE_SIZE to bind the entire buffer
+            this->descriptorManager->updateUniformBuffer(descriptorSet, binding, uniformBuffer, VK_WHOLE_SIZE);
+        } catch (const std::exception &) {
+            // This binding doesn't exist, skip it
+        }
+    }
 
     // Bind descriptor sets
     VulkanDescriptorManager::bindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,

@@ -6,11 +6,10 @@
 #include "glsl_shader.hpp"
 #include "uniform.hpp"
 
-// Forward declaration for renderable interface
+// Forward declarations
 class RenderableNode3D;
-
-// Function type for setting uniforms in pipeline
-using SetUniformFunction = std::function<void (const std::string &, const UniformBase &)>;
+class VulkanPipeline;
+class Camera;
 
 /**
  * Material is a base class for all materials.
@@ -50,7 +49,7 @@ public:
         return this->uniforms;
     }
 
-    virtual void onRenderSetup(SetUniformFunction setUniform, Camera *camera, void *object) = 0;
+    virtual void onRenderSetup(VulkanPipeline *pipeline, Camera *camera, void *object) = 0;
 
 private:
     std::map<std::string, GLSLShader> shaders;

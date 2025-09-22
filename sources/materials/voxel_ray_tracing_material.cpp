@@ -1,4 +1,5 @@
 #include "materials/voxel_ray_tracing_material.hpp"
+#include "pipelines/vulkan_pipeline.hpp"
 #include "materials/renderable_interfaces.hpp"
 #include "utils/file_reader.hpp"
 
@@ -16,7 +17,7 @@ VoxelRayTracingMaterial::VoxelRayTracingMaterial()
 
 VoxelRayTracingMaterial::~VoxelRayTracingMaterial() = default;
 
-void VoxelRayTracingMaterial::onRenderSetup(SetUniformFunction setUniform, Camera *camera, void *object) {
+void VoxelRayTracingMaterial::onRenderSetup(VulkanPipeline *pipeline, Camera *camera, void *object) {
     if (object == nullptr) {
         return;
     }
@@ -54,9 +55,9 @@ void VoxelRayTracingMaterial::onRenderSetup(SetUniformFunction setUniform, Camer
     cameraData.viewInverse = camera->getView();
     cameraData.cameraPos = camera->getPosition();
 
-    Uniform<CameraData> cameraUniform(cameraData);
-    setUniform("camera", static_cast<const UniformBase &>(cameraUniform));
+    // Set camera uniform (binding 0)
+    pipeline->setUniform(0, &cameraData, sizeof(cameraData));
 
-    Uniform<CubeData> cubeUniform(cubeData);
-    setUniform("cube", static_cast<const UniformBase &>(cubeUniform));
+    // Set cube uniform (binding 1) 
+    pipeline->setUniform(1, &cubeData, sizeof(cubeData));
 }

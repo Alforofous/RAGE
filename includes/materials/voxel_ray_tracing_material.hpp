@@ -6,5 +6,5 @@ public:
     VoxelRayTracingMaterial();
     ~VoxelRayTracingMaterial();
 
-    void onRenderSetup(SetUniformFunction setUniform, Camera *camera, void *object) override;
+    void onRenderSetup(VulkanPipeline *pipeline, Camera *camera, void *object) override;
 };

@@ -1,5 +1,6 @@
 #include "pipelines/vulkan_pipeline.hpp"
 #include "utils/shader_compiler.hpp"
+#include "utils/buffer_utils.hpp"
 #include <stdexcept>
 #include <map>
 #include <algorithm>
@@ -46,10 +47,14 @@ void VulkanPipeline::compileShaders(const std::vector<GLSLShader> &glslShaders) 
 
     auto combined = ShaderReflector::combineReflectionResults(results);
 
+    // Store binding information for uniform buffer creation
+    this->bindingsBySetNumber = combined.bindingsBySetNumber;
+    
     this->descriptorSetLayouts = this->createDescriptorSetLayouts(combined.bindingsBySetNumber);
     this->pushConstantRanges = combined.pushConstantRanges;
 
     this->createShaderModules(compiledShaders, shaderKinds);
+    this->createUniformBuffers();
 }
 
 void VulkanPipeline::createShaderModules(const std::vector<std::vector<uint32_t> > &compiledShaders, const std::vector<ShaderKind> &shaderKinds) {
@@ -145,6 +150,8 @@ bool VulkanPipeline::isValidPushConstantData(VkShaderStageFlags stageFlags, uint
 }
 
 void VulkanPipeline::dispose() {
+    this->destroyUniformBuffers();
+
     if (this->pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(this->device, this->pipeline, nullptr);
         this->pipeline = VK_NULL_HANDLE;
@@ -188,4 +195,79 @@ void VulkanPipeline::destroyShaderModule(VkShaderModule module) {
     if (module != VK_NULL_HANDLE) {
         vkDestroyShaderModule(this->device, module, nullptr);
     }
+}
+
+void VulkanPipeline::createUniformBuffers() {
+    // Create uniform buffers for all uniform buffer bindings found in shaders
+    for (const auto &setBindings : this->bindingsBySetNumber) {
+        for (const auto &binding : setBindings.second) {
+            if (binding.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
+                UniformBuffer uniformBuffer;
+                uniformBuffer.type = binding.descriptorType;
+                // Use a reasonable default size - materials will specify actual size when setting uniforms
+                uniformBuffer.size = 1024; // 1KB default
+                
+                uniformBuffer.buffer = BufferUtils::createBuffer(
+                    this->device,
+                    this->physicalDevice,
+                    uniformBuffer.size,
+                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    uniformBuffer.memory
+                );
+                
+                this->uniformBuffers[binding.binding] = uniformBuffer;
+            }
+        }
+    }
+}
+
+void VulkanPipeline::destroyUniformBuffers() {
+    for (auto &pair : this->uniformBuffers) {
+        UniformBuffer &uniformBuffer = pair.second;
+        if (uniformBuffer.buffer != VK_NULL_HANDLE) {
+            BufferUtils::destroyBuffer(this->device, uniformBuffer.buffer, uniformBuffer.memory);
+        }
+    }
+    this->uniformBuffers.clear();
+}
+
+void VulkanPipeline::setUniform(uint32_t binding, const void* data, size_t size) {
+    auto it = this->uniformBuffers.find(binding);
+    if (it == this->uniformBuffers.end()) {
+        throw std::runtime_error("Uniform buffer binding " + std::to_string(binding) + " not found in pipeline");
+    }
+    
+    UniformBuffer &uniformBuffer = it->second;
+    
+    // Resize buffer if needed
+    if (size > uniformBuffer.size) {
+        // Destroy old buffer
+        BufferUtils::destroyBuffer(this->device, uniformBuffer.buffer, uniformBuffer.memory);
+        
+        // Create new larger buffer
+        uniformBuffer.size = size;
+        uniformBuffer.buffer = BufferUtils::createBuffer(
+            this->device,
+            this->physicalDevice,
+            uniformBuffer.size,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            uniformBuffer.memory
+        );
+    }
+    
+    // Copy data to buffer
+    void *bufferData = nullptr;
+    vkMapMemory(this->device, uniformBuffer.memory, 0, size, 0, &bufferData);
+    memcpy(bufferData, data, size);
+    vkUnmapMemory(this->device, uniformBuffer.memory);
+}
+
+VkBuffer VulkanPipeline::getUniformBuffer(uint32_t binding) const {
+    auto it = this->uniformBuffers.find(binding);
+    if (it == this->uniformBuffers.end()) {
+        throw std::runtime_error("Uniform buffer binding " + std::to_string(binding) + " not found in pipeline");
+    }
+    return it->second.buffer;
 }
