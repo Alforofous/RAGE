@@ -3,7 +3,6 @@
 #include <memory>
 #include <map>
 #include <string>
-#include <vector>
 #include "scene.hpp"
 #include "camera.hpp"
 #include "vulkan_utils.hpp"
@@ -11,6 +10,7 @@
 #include "vulkan_render_target.hpp"
 #include "vulkan_swapchain_manager.hpp"
 #include "vulkan_descriptor_manager.hpp"
+#include "command_buffer_recorder.hpp"
 #include "materials/material.hpp"
 
 /**
@@ -30,14 +30,12 @@ public:
     void renderFrame();
 
 private:
-    // Rendering functions
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    
     // Pipeline management
-    VulkanPipeline *getOrCreatePipeline(const Material *material);
+    VulkanPipeline *getPipeline(const Material *material);
     static std::string generateShaderHash(const Material *material);
     
-    // Material rendering
+    // Scene and material rendering
+    void renderScene(VkCommandBuffer commandBuffer);
     void renderMaterial(VkCommandBuffer commandBuffer, VulkanPipeline *pipeline, 
                        const Material *material, const RenderableNode3D *renderable);
 
@@ -48,6 +46,7 @@ private:
     std::unique_ptr<VulkanSwapchainManager> swapchainManager;
     std::unique_ptr<VulkanDescriptorManager> descriptorManager;
     std::unique_ptr<VulkanRenderTarget> renderTarget;
+    std::unique_ptr<CommandBufferRecorder> commandBufferRecorder;
 
     // Pipeline caching
     std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;
