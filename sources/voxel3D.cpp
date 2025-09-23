@@ -2,10 +2,11 @@
 #include "materials/voxel_ray_tracing_material.hpp"
 
 namespace {
-    constexpr int DEFAULT_COLOR_VALUE = 255;
+    constexpr float DEFAULT_COLOR_VALUE = 1.0f;
+    constexpr float DEFAULT_SIZE = 1.0f;
 }
 
-Voxel3D::Voxel3D() : RenderableNode3D(new VoxelRayTracingMaterial()), position(0), size(1), color(DEFAULT_COLOR_VALUE) {
+Voxel3D::Voxel3D() : RenderableNode3D(new VoxelRayTracingMaterial()), position(0.0f), size(DEFAULT_SIZE), color(DEFAULT_COLOR_VALUE) {
 }
 Voxel3D::~Voxel3D() {}
 

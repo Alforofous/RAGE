@@ -23,5 +23,5 @@ public:
     GLSLShader getClosestHitShader() const;
     GLSLShader getMissShader() const;
 
-    void onRenderSetup(VulkanPipeline *pipeline, Camera *camera, void *object) override = 0;
+    void onRenderSetup(SetUniform setUniform, Camera *camera, void *object) override = 0;
 };

@@ -111,7 +111,10 @@ void Renderer::renderMaterial(VkCommandBuffer commandBuffer, VulkanPipeline *pip
     this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);
 
     // Let material set uniforms directly in pipeline's pre-allocated buffers
-    const_cast<Material *>(material)->onRenderSetup(pipeline, this->camera, const_cast<void *>(static_cast<const void *>(renderable)));
+    auto setUniform = [pipeline](uint32_t binding, const void* data, size_t size) {
+        pipeline->setUniform(binding, data, size);
+    };
+    const_cast<Material *>(material)->onRenderSetup(setUniform, this->camera, const_cast<void *>(static_cast<const void *>(renderable)));
 
     // Bind all uniform buffers from pipeline to descriptor set
     // Note: We bind buffers for all possible bindings since materials have already filled them

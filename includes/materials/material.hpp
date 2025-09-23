@@ -8,8 +8,9 @@
 
 // Forward declarations
 class RenderableNode3D;
-class VulkanPipeline;
 class Camera;
+
+typedef std::function<void(uint32_t binding, const void* data, size_t size)> SetUniform;
 
 /**
  * Material is a base class for all materials.
@@ -49,7 +50,8 @@ public:
         return this->uniforms;
     }
 
-    virtual void onRenderSetup(VulkanPipeline *pipeline, Camera *camera, void *object) = 0;
+    //first parameter should be function under name setUniform
+    virtual void onRenderSetup(SetUniform setUniform, Camera *camera, void *object) = 0;
 
 private:
     std::map<std::string, GLSLShader> shaders;

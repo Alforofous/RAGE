@@ -259,7 +259,10 @@ void VulkanPipeline::setUniform(uint32_t binding, const void* data, size_t size)
     
     // Copy data to buffer
     void *bufferData = nullptr;
-    vkMapMemory(this->device, uniformBuffer.memory, 0, size, 0, &bufferData);
+    VkResult result = vkMapMemory(this->device, uniformBuffer.memory, 0, size, 0, &bufferData);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Failed to map uniform buffer memory");
+    }
     memcpy(bufferData, data, size);
     vkUnmapMemory(this->device, uniformBuffer.memory);
 }

@@ -26,9 +26,9 @@ App::App() {
     std::cout << "Creating scene..." << std::endl;
     this->scene = std::make_unique<Scene>();
     auto voxel = std::make_unique<Voxel3D>();
-    voxel->setPosition(IntVector3(0, 0, -5));  // Put voxel 5 units in front of camera
-    voxel->setSize(IntVector3(2));             // Make it bigger (2x2x2) so it's easier to see
-    voxel->setColor(IntVector3(0, 0, 255));    // Blue color
+    voxel->setPosition(Vector3(0, 0, -5));  // Put voxel 5 units in front of camera
+    voxel->setSize(Vector3(2));             // Make it bigger (2x2x2) so it's easier to see
+    voxel->setColor(Vector3(1.0, 0.0, 0.0));    // Red color
     this->scene->addChild(voxel.get());
     this->voxel = std::move(voxel);            // Keep voxel alive
 

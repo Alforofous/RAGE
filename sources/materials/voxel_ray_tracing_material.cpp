@@ -1,7 +1,8 @@
 #include "materials/voxel_ray_tracing_material.hpp"
-#include "pipelines/vulkan_pipeline.hpp"
 #include "materials/renderable_interfaces.hpp"
+#include "renderable_node3D.hpp"
 #include "utils/file_reader.hpp"
+#include <glm/glm.hpp>
 
 namespace {
     constexpr float COLOR_NORMALIZATION_FACTOR = 255.0f;
@@ -17,15 +18,18 @@ VoxelRayTracingMaterial::VoxelRayTracingMaterial()
 
 VoxelRayTracingMaterial::~VoxelRayTracingMaterial() = default;
 
-void VoxelRayTracingMaterial::onRenderSetup(VulkanPipeline *pipeline, Camera *camera, void *object) {
+void VoxelRayTracingMaterial::onRenderSetup(SetUniform setUniform, Camera *camera, void *object) {
     if (object == nullptr) {
         return;
     }
 
     struct CubeData {
-        Vector3 position;
-        Vector3 size;
-        Vector3 color;
+        glm::vec3 position;
+        float pad1;
+        glm::vec3 size;
+        float pad2;
+        glm::vec3 color;
+        float pad3;
     };
 
     struct CameraData {
@@ -35,29 +39,33 @@ void VoxelRayTracingMaterial::onRenderSetup(VulkanPipeline *pipeline, Camera *ca
     };
 
     CubeData cubeData{};
-    const auto *positionable = dynamic_cast<const IPositionable<Vector3> *>(static_cast<IPositionable<Vector3> *>(object));
+    
+    const auto *renderable = static_cast<const RenderableNode3D *>(object);
+    const auto *positionable = dynamic_cast<const IPositionable<Vector3> *>(renderable);
+    const auto *sizable = dynamic_cast<const ISizable<Vector3> *>(renderable);
+    const auto *colorable = dynamic_cast<const IColorable<Vector3> *>(renderable);
+
     if (positionable != nullptr) {
-        cubeData.position = positionable->getPosition();
+        Vector3 pos = positionable->getPosition();
+        cubeData.position = glm::vec3(pos.getX(), pos.getY(), pos.getZ());
     }
 
-    const auto *sizable = dynamic_cast<const ISizable<Vector3> *>(static_cast<ISizable<Vector3> *>(object));
     if (sizable != nullptr) {
-        cubeData.size = sizable->getSize();
+        Vector3 fullSize = sizable->getSize();
+        cubeData.size = glm::vec3(fullSize.getX(), fullSize.getY(), fullSize.getZ());
     }
 
-    const auto *colorable = dynamic_cast<const IColorable<Vector3> *>(static_cast<IColorable<Vector3> *>(object));
     if (colorable != nullptr) {
-        cubeData.color = colorable->getColor();
+        Vector3 color = colorable->getColor();
+        cubeData.color = glm::vec3(color.getX(), color.getY(), color.getZ());
     }
+
 
     CameraData cameraData{};
     cameraData.projInverse = camera->getProjection();
     cameraData.viewInverse = camera->getView();
     cameraData.cameraPos = camera->getPosition();
 
-    // Set camera uniform (binding 0)
-    pipeline->setUniform(0, &cameraData, sizeof(cameraData));
-
-    // Set cube uniform (binding 1) 
-    pipeline->setUniform(1, &cubeData, sizeof(cubeData));
+    setUniform(0, &cameraData, sizeof(cameraData));
+    setUniform(1, &cubeData, sizeof(cubeData));
 }

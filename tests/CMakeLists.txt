@@ -36,6 +36,7 @@ target_sources(rage_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/sources/pipelines/shader_reflector.cpp
     ${CMAKE_SOURCE_DIR}/sources/utils/file_reader.cpp
     ${CMAKE_SOURCE_DIR}/sources/utils/shader_compiler.cpp
+    ${CMAKE_SOURCE_DIR}/sources/utils/buffer_utils.cpp
 )
 
 # Enable testing

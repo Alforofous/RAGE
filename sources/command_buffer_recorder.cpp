@@ -23,9 +23,7 @@ void CommandBufferRecorder::recordFrame(
 ) {
     CommandBufferRecorder::beginRecording(commandBuffer);
     this->prepareRenderTarget(commandBuffer);
-
     renderSceneCallback(commandBuffer);
-
     this->finalizeRendering(commandBuffer, imageIndex);
     CommandBufferRecorder::endRecording(commandBuffer);
 }
