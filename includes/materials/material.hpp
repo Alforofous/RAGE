@@ -50,8 +50,8 @@ public:
         return this->uniforms;
     }
 
-    //first parameter should be function under name setUniform
-    virtual void onRenderSetup(SetUniform setUniform, Camera *camera, void *object) = 0;
+    //first parameter should be function under name setUniform // mark as const
+    virtual void onRenderSetup(const SetUniform &setUniform, const Camera *camera, const void *object) const = 0;
 
 private:
     std::map<std::string, GLSLShader> shaders;

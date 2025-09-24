@@ -5,7 +5,7 @@
 
 VulkanDescriptorManager::VulkanDescriptorManager(const VulkanContext *context)
     : context(context) {
-    this->currentPool = this->createDescriptorPool();
+    this->createDescriptorPool();
 }
 
 VulkanDescriptorManager::~VulkanDescriptorManager() {
@@ -25,9 +25,10 @@ VkDescriptorSet VulkanDescriptorManager::createDescriptorSet(VkDescriptorSetLayo
     VkResult result = vkAllocateDescriptorSets(this->context->device, &allocInfo, &descriptorSet);
 
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-        this->currentPool = this->createDescriptorPool();
-        allocInfo.descriptorPool = this->currentPool;
+        VkDescriptorPool newPool = this->createDescriptorPool();
+        allocInfo.descriptorPool = newPool;
         result = vkAllocateDescriptorSets(this->context->device, &allocInfo, &descriptorSet);
+        pool = newPool;
     }
 
     if (result != VK_SUCCESS) {
@@ -45,9 +46,7 @@ VkDescriptorSet VulkanDescriptorManager::createDescriptorSet(VkDescriptorSetLayo
 }
 
 VkDescriptorSet VulkanDescriptorManager::getOrCreateCachedDescriptorSet(VkDescriptorSetLayout layout, const void* cacheKey, size_t cacheKeySize) {
-    DescriptorSetCacheKey key;
-    key.data.resize(cacheKeySize);
-    std::memcpy(key.data.data(), cacheKey, cacheKeySize);
+    DescriptorSetCacheKey key(cacheKey, cacheKeySize);
     
     auto it = this->descriptorSetCache.find(key);
     if (it != this->descriptorSetCache.end()) {
@@ -101,6 +100,7 @@ void VulkanDescriptorManager::bindDescriptorSets(VkCommandBuffer commandBuffer, 
 }
 
 void VulkanDescriptorManager::resetDescriptorPool() {
+    this->clearCache();
     for (auto &poolInfo : this->descriptorPools) {
         if (poolInfo.pool != VK_NULL_HANDLE) {
             vkResetDescriptorPool(this->context->device, poolInfo.pool, 0);
@@ -111,6 +111,38 @@ void VulkanDescriptorManager::resetDescriptorPool() {
 
 void VulkanDescriptorManager::clearCache() {
     this->descriptorSetCache.clear();
+}
+
+size_t VulkanDescriptorManager::getCacheSize() const {
+    return this->descriptorSetCache.size();
+}
+
+size_t VulkanDescriptorManager::getTotalPoolCount() const {
+    return this->descriptorPools.size();
+}
+
+size_t VulkanDescriptorManager::getTotalAllocatedSets() const {
+    size_t total = 0;
+    for (const auto& poolInfo : this->descriptorPools) {
+        total += poolInfo.allocatedSets;
+    }
+    return total;
+}
+
+float VulkanDescriptorManager::getPoolUtilization() const {
+    if (this->descriptorPools.empty()) {
+        return 0.0f;
+    }
+    
+    size_t totalAllocated = 0;
+    size_t totalCapacity = 0;
+    
+    for (const auto& poolInfo : this->descriptorPools) {
+        totalAllocated += poolInfo.allocatedSets;
+        totalCapacity += poolInfo.maxSets;
+    }
+    
+    return totalCapacity > 0 ? static_cast<float>(totalAllocated) / static_cast<float>(totalCapacity) : 0.0f;
 }
 
 VkDescriptorPool VulkanDescriptorManager::createDescriptorPool(uint32_t maxSets) {
@@ -162,5 +194,4 @@ void VulkanDescriptorManager::dispose() {
         }
     }
     this->descriptorPools.clear();
-    this->currentPool = VK_NULL_HANDLE;
 }

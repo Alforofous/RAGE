@@ -6,5 +6,5 @@ public:
     VoxelRayTracingMaterial();
     ~VoxelRayTracingMaterial();
 
-    void onRenderSetup(SetUniform setUniform, Camera *camera, void *object) override;
+    void onRenderSetup(const SetUniform &setUniform, const Camera *camera, const void *object) const override;
 };

@@ -132,7 +132,7 @@ void Renderer::renderMaterial(
     auto setUniform = [pipeline](uint32_t binding, const void *data, size_t size) {
                           pipeline->setUniform(binding, data, size);
                       };
-    const_cast<Material *>(material)->onRenderSetup(setUniform, this->camera, const_cast<void *>(static_cast<const void *>(renderable)));
+    material->onRenderSetup(setUniform, this->camera, static_cast<const void *>(renderable));
 
     // Update descriptor set with current uniform buffers and render target
     this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);

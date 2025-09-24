@@ -18,7 +18,7 @@ VoxelRayTracingMaterial::VoxelRayTracingMaterial()
 
 VoxelRayTracingMaterial::~VoxelRayTracingMaterial() = default;
 
-void VoxelRayTracingMaterial::onRenderSetup(SetUniform setUniform, Camera *camera, void *object) {
+void VoxelRayTracingMaterial::onRenderSetup(const SetUniform &setUniform, const Camera *camera, const void *object) const {
     if (object == nullptr) {
         return;
     }
