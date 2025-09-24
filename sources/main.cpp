@@ -8,7 +8,6 @@ int main(int argc, char *argv[]) {
         (void)argc;
         std::filesystem::path exe_path = std::filesystem::absolute(argv[0]);
         std::filesystem::path project_root = exe_path.parent_path().parent_path();
-        std::cout << "Project root: " << project_root.string() << std::endl;
         FileUtils::setProjectRoot(project_root.string());
         App app;
         app.run();

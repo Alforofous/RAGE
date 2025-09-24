@@ -98,31 +98,48 @@ std::string Renderer::generateShaderHash(const Material *material) {
     return std::to_string(hashValue);
 }
 
-void Renderer::renderMaterial(VkCommandBuffer commandBuffer, VulkanPipeline *pipeline,
-                              const Material *material, const RenderableNode3D *renderable) {
-    // Bind the pipeline
+void Renderer::renderMaterial(
+    VkCommandBuffer commandBuffer,
+    VulkanPipeline *pipeline,
+    const Material *material,
+    const RenderableNode3D *renderable
+) {
     pipeline->bind(commandBuffer);
 
-    // Create descriptor set for this material
     VkDescriptorSetLayout setLayout = pipeline->getDescriptorSetLayout(0);
-    VkDescriptorSet descriptorSet = this->descriptorManager->createDescriptorSet(setLayout);
-
-    // Set up render target in descriptor set
-    this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);
-
-    // Let material set uniforms directly in pipeline's pre-allocated buffers
-    auto setUniform = [pipeline](uint32_t binding, const void* data, size_t size) {
-        pipeline->setUniform(binding, data, size);
+    
+    struct DescriptorCacheKey {
+        const Material* material;
+        VkDescriptorSetLayout layout;
+        VkImageView renderTargetView;
+        uint32_t frameIndex;
     };
+    
+    DescriptorCacheKey cacheKey = {
+        material,
+        setLayout,
+        this->renderTarget->getImageView(),
+        static_cast<uint32_t>(this->swapchainManager->getCurrentFrameIndex())
+    };
+    
+    VkDescriptorSet descriptorSet = this->descriptorManager->getOrCreateCachedDescriptorSet(
+        setLayout,
+        &cacheKey,
+        sizeof(cacheKey)
+    );
+
+    // Always update uniforms since they may change per frame
+    auto setUniform = [pipeline](uint32_t binding, const void *data, size_t size) {
+                          pipeline->setUniform(binding, data, size);
+                      };
     const_cast<Material *>(material)->onRenderSetup(setUniform, this->camera, const_cast<void *>(static_cast<const void *>(renderable)));
 
-    // Bind all uniform buffers from pipeline to descriptor set
-    // Note: We bind buffers for all possible bindings since materials have already filled them
+    // Update descriptor set with current uniform buffers and render target
+    this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);
+
     for (uint32_t binding = 0; binding < 8; ++binding) {
-        // Check up to 8 bindings (common range)
         try {
             VkBuffer uniformBuffer = pipeline->getUniformBuffer(binding);
-            // Use VK_WHOLE_SIZE to bind the entire buffer
             this->descriptorManager->updateUniformBuffer(descriptorSet, binding, uniformBuffer, VK_WHOLE_SIZE);
         }
         catch (const std::exception &) {

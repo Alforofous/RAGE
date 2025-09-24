@@ -2,9 +2,20 @@
 #include <stdexcept>
 #include <vector>
 #include <set>
-#include <iostream>
+#include <array>
 
 namespace {
+    template<typename T>
+    T loadVulkanFunction(VkDevice device, const char *name) {
+        union {
+            PFN_vkVoidFunction voidFunc;
+            T typedFunc;
+        } converter;
+        converter.voidFunc = vkGetDeviceProcAddr(device, name);
+
+        return converter.typedFunc;
+    }
+
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats) {
         for (const auto &availableFormat : availableFormats) {
             if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
@@ -30,34 +41,37 @@ namespace {
         if (capabilities.currentExtent.width != UINT32_MAX) {
             return capabilities.currentExtent;
         }
-        else {
-            int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
+        int width = 0;
+        int height = 0;
+        glfwGetFramebufferSize(window, &width, &height);
 
-            VkExtent2D actualExtent = {
-                static_cast<uint32_t>(width),
-                static_cast<uint32_t>(height)
-            };
+        VkExtent2D actualExtent = {
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height)
+        };
 
-            actualExtent.width = std::max(capabilities.minImageExtent.width,
-                                          std::min(capabilities.maxImageExtent.width, actualExtent.width));
-            actualExtent.height = std::max(capabilities.minImageExtent.height,
-                                           std::min(capabilities.maxImageExtent.height, actualExtent.height));
+        actualExtent.width = std::max(
+            capabilities.minImageExtent.width,
+            std::min(capabilities.maxImageExtent.width, actualExtent.width)
+        );
+        actualExtent.height = std::max(
+            capabilities.minImageExtent.height,
+            std::min(capabilities.maxImageExtent.height, actualExtent.height)
+        );
 
-            return actualExtent;
-        }
+        return actualExtent;
     }
 
     void createSwapchain(GLFWwindow *window, VulkanContext &context) {
         VkSurfaceCapabilitiesKHR capabilities;
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physicalDevice, context.surface, &capabilities);
 
-        uint32_t formatCount;
+        uint32_t formatCount = 0;
         vkGetPhysicalDeviceSurfaceFormatsKHR(context.physicalDevice, context.surface, &formatCount, nullptr);
         std::vector<VkSurfaceFormatKHR> formats(formatCount);
         vkGetPhysicalDeviceSurfaceFormatsKHR(context.physicalDevice, context.surface, &formatCount, formats.data());
 
-        uint32_t presentModeCount;
+        uint32_t presentModeCount = 0;
         vkGetPhysicalDeviceSurfacePresentModesKHR(context.physicalDevice, context.surface, &presentModeCount, nullptr);
         std::vector<VkPresentModeKHR> presentModes(presentModeCount);
         vkGetPhysicalDeviceSurfacePresentModesKHR(context.physicalDevice, context.surface, &presentModeCount, presentModes.data());
@@ -81,11 +95,11 @@ namespace {
         createInfo.imageArrayLayers = 1;
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-        uint32_t queueFamilyIndices[] = { context.graphicsQueueFamily, context.presentQueueFamily };
+        std::array<uint32_t, 2> queueFamilyIndices = { context.graphicsQueueFamily, context.presentQueueFamily };
         if (context.graphicsQueueFamily != context.presentQueueFamily) {
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
+            createInfo.pQueueFamilyIndices = queueFamilyIndices.data();
         }
         else {
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -128,56 +142,37 @@ namespace {
             }
         }
     }
+
     VkInstance createVulkanGLFWInstance() {
-        std::cout << "Checking Vulkan support..." << std::endl;
-        if (!glfwVulkanSupported()) {
+        if (glfwVulkanSupported() == GLFW_FALSE) {
             throw std::runtime_error("GLFW reports that Vulkan is not supported");
         }
 
-        std::cout << "Getting required Vulkan extensions..." << std::endl;
         uint32_t glfwExtensionCount = 0;
         const char **glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-        if (!glfwExtensions) {
+        if (glfwExtensions == nullptr) {
             throw std::runtime_error("Failed to get required Vulkan extensions from GLFW");
         }
 
-        std::cout << "Required extensions:" << std::endl;
         std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-        for (uint32_t i = 0; i < glfwExtensionCount; i++) {
-            std::cout << "  " << glfwExtensions[i] << std::endl;
-        }
-
-        std::cout << "Adding VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME..." << std::endl;
         extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 
-        std::cout << "Creating Vulkan application info..." << std::endl;
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "RAGE Engine";
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "RAGE";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_2;  // Let's try 1.2 first
+        appInfo.apiVersion = VK_API_VERSION_1_2;
 
-        std::cout << "Creating Vulkan instance info..." << std::endl;
-        // Add validation layers in debug builds
         std::vector<const char *> validationLayers = {
             "VK_LAYER_KHRONOS_validation"
         };
 
-        // Check validation layer support
-        uint32_t layerCount;
+        uint32_t layerCount = 0;
         vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
         std::vector<VkLayerProperties> availableLayers(layerCount);
         vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-
-        std::cout << "Available Vulkan layers:" << std::endl;
-        for (const auto &layer : availableLayers) {
-            std::cout << "  " << layer.layerName << " (spec version "
-                      << VK_VERSION_MAJOR(layer.specVersion) << "."
-                      << VK_VERSION_MINOR(layer.specVersion) << "."
-                      << VK_VERSION_PATCH(layer.specVersion) << ")" << std::endl;
-        }
 
         bool validationLayersAvailable = false;
         for (const char *layerName : validationLayers) {
@@ -189,7 +184,6 @@ namespace {
                 }
             }
             if (!layerFound) {
-                std::cout << "Validation layer " << layerName << " not available" << std::endl;
                 validationLayersAvailable = false;
                 break;
             }
@@ -203,34 +197,22 @@ namespace {
         createInfo.ppEnabledExtensionNames = extensions.data();
 
         if (validationLayersAvailable) {
-            std::cout << "Enabling validation layers" << std::endl;
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
 
-            // Add debug extension if validation layers are available
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
             createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
             createInfo.ppEnabledExtensionNames = extensions.data();
         }
         else {
-            std::cout << "Validation layers not available" << std::endl;
             createInfo.enabledLayerCount = 0;
         }
 
-        // Print all extensions we're requesting
-        std::cout << "Requesting Vulkan extensions:" << std::endl;
-        for (uint32_t i = 0; i < extensions.size(); i++) {
-            std::cout << "  " << extensions[i] << std::endl;
-        }
-
-        std::cout << "Creating Vulkan instance..." << std::endl;
         VkInstance instance = VK_NULL_HANDLE;
         VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
         if (result != VK_SUCCESS) {
             throw std::runtime_error("Failed to create Vulkan instance: " + std::to_string(result));
         }
-
-        std::cout << "Vulkan instance created successfully" << std::endl;
 
         return instance;
     }
@@ -284,15 +266,13 @@ namespace {
         throw std::runtime_error("Failed to find a suitable GPU");
     }
 
-    VkDevice createLogicalDevice(VkPhysicalDevice physicalDevice,
-                                 uint32_t graphicsQueueFamily,
-                                 uint32_t presentQueueFamily,
-                                 VkQueue &graphicsQueue,
-                                 VkQueue &presentQueue) {
-        std::cout << "Creating logical device..." << std::endl;
-        std::cout << "Graphics queue family: " << graphicsQueueFamily << std::endl;
-        std::cout << "Present queue family: " << presentQueueFamily << std::endl;
-
+    VkDevice createLogicalDevice(
+        VkPhysicalDevice physicalDevice,
+        uint32_t graphicsQueueFamily,
+        uint32_t presentQueueFamily,
+        VkQueue &graphicsQueue,
+        VkQueue &presentQueue
+    ) {
         // Use a set to ensure unique queue families
         std::set<uint32_t> uniqueQueueFamilies = { graphicsQueueFamily, presentQueueFamily };
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -305,7 +285,6 @@ namespace {
             queueCreateInfo.queueCount = 1;
             queueCreateInfo.pQueuePriorities = &queuePriority;
             queueCreateInfos.push_back(queueCreateInfo);
-            std::cout << "Adding queue create info for family: " << queueFamily << std::endl;
         }
 
         VkPhysicalDeviceFeatures2 deviceFeatures2{};
@@ -364,7 +343,7 @@ namespace {
 }
 
 VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
-    if (!window) {
+    if (window == nullptr) {
         throw std::runtime_error("Invalid window handle provided to createVulkanGLFWSurface");
     }
 
@@ -388,17 +367,20 @@ VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
             throw std::runtime_error("Failed to create window surface: " + std::to_string(result));
         }
 
-        context.physicalDevice = pickPhysicalDevice(context.instance, context.surface,
-                                                    context.graphicsQueueFamily,
-                                                    context.presentQueueFamily);
+        context.physicalDevice = pickPhysicalDevice(
+            context.instance, context.surface,
+            context.graphicsQueueFamily,
+            context.presentQueueFamily
+        );
 
-        context.device = createLogicalDevice(context.physicalDevice,
-                                             context.graphicsQueueFamily,
-                                             context.presentQueueFamily,
-                                             context.graphicsQueue,
-                                             context.presentQueue);
+        context.device = createLogicalDevice(
+            context.physicalDevice,
+            context.graphicsQueueFamily,
+            context.presentQueueFamily,
+            context.graphicsQueue,
+            context.presentQueue
+        );
 
-        // Initialize ray tracing properties
         VkPhysicalDeviceProperties2 deviceProperties2{};
         deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 
@@ -410,74 +392,71 @@ VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
 
         vkGetPhysicalDeviceProperties2(context.physicalDevice, &deviceProperties2);
 
-        // Load ray tracing function pointers
         context.vkGetAccelerationStructureBuildSizesKHR =
-            reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(
-                vkGetDeviceProcAddr(context.device, "vkGetAccelerationStructureBuildSizesKHR"));
-        if (!context.vkGetAccelerationStructureBuildSizesKHR) {
+            loadVulkanFunction<PFN_vkGetAccelerationStructureBuildSizesKHR>(
+                context.device, "vkGetAccelerationStructureBuildSizesKHR");
+        if (context.vkGetAccelerationStructureBuildSizesKHR == nullptr) {
             throw std::runtime_error("Failed to load vkGetAccelerationStructureBuildSizesKHR");
         }
 
         context.vkCreateAccelerationStructureKHR =
-            reinterpret_cast<PFN_vkCreateAccelerationStructureKHR>(
-                vkGetDeviceProcAddr(context.device, "vkCreateAccelerationStructureKHR"));
-        if (!context.vkCreateAccelerationStructureKHR) {
+            loadVulkanFunction<PFN_vkCreateAccelerationStructureKHR>(
+                context.device, "vkCreateAccelerationStructureKHR");
+        if (context.vkCreateAccelerationStructureKHR == nullptr) {
             throw std::runtime_error("Failed to load vkCreateAccelerationStructureKHR");
         }
 
         context.vkDestroyAccelerationStructureKHR =
-            reinterpret_cast<PFN_vkDestroyAccelerationStructureKHR>(
-                vkGetDeviceProcAddr(context.device, "vkDestroyAccelerationStructureKHR"));
-        if (!context.vkDestroyAccelerationStructureKHR) {
+            loadVulkanFunction<PFN_vkDestroyAccelerationStructureKHR>(
+                context.device, "vkDestroyAccelerationStructureKHR");
+        if (context.vkDestroyAccelerationStructureKHR == nullptr) {
             throw std::runtime_error("Failed to load vkDestroyAccelerationStructureKHR");
         }
 
         context.vkGetRayTracingShaderGroupHandlesKHR =
-            reinterpret_cast<PFN_vkGetRayTracingShaderGroupHandlesKHR>(
-                vkGetDeviceProcAddr(context.device, "vkGetRayTracingShaderGroupHandlesKHR"));
-        if (!context.vkGetRayTracingShaderGroupHandlesKHR) {
+            loadVulkanFunction<PFN_vkGetRayTracingShaderGroupHandlesKHR>(
+                context.device, "vkGetRayTracingShaderGroupHandlesKHR");
+        if (context.vkGetRayTracingShaderGroupHandlesKHR == nullptr) {
             throw std::runtime_error("Failed to load vkGetRayTracingShaderGroupHandlesKHR");
         }
 
         context.vkCreateRayTracingPipelinesKHR =
-            reinterpret_cast<PFN_vkCreateRayTracingPipelinesKHR>(
-                vkGetDeviceProcAddr(context.device, "vkCreateRayTracingPipelinesKHR"));
-        if (!context.vkCreateRayTracingPipelinesKHR) {
+            loadVulkanFunction<PFN_vkCreateRayTracingPipelinesKHR>(
+                context.device, "vkCreateRayTracingPipelinesKHR");
+        if (context.vkCreateRayTracingPipelinesKHR == nullptr) {
             throw std::runtime_error("Failed to load vkCreateRayTracingPipelinesKHR");
         }
 
         context.vkCmdTraceRaysKHR =
-            reinterpret_cast<PFN_vkCmdTraceRaysKHR>(
-                vkGetDeviceProcAddr(context.device, "vkCmdTraceRaysKHR"));
-        if (!context.vkCmdTraceRaysKHR) {
+            loadVulkanFunction<PFN_vkCmdTraceRaysKHR>(
+                context.device, "vkCmdTraceRaysKHR");
+        if (context.vkCmdTraceRaysKHR == nullptr) {
             throw std::runtime_error("Failed to load vkCmdTraceRaysKHR");
         }
 
         context.vkCmdBuildAccelerationStructuresKHR =
-            reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(
-                vkGetDeviceProcAddr(context.device, "vkCmdBuildAccelerationStructuresKHR"));
-        if (!context.vkCmdBuildAccelerationStructuresKHR) {
+            loadVulkanFunction<PFN_vkCmdBuildAccelerationStructuresKHR>(
+                context.device, "vkCmdBuildAccelerationStructuresKHR");
+        if (context.vkCmdBuildAccelerationStructuresKHR == nullptr) {
             throw std::runtime_error("Failed to load vkCmdBuildAccelerationStructuresKHR");
         }
 
         context.vkGetAccelerationStructureDeviceAddressKHR =
-            reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(
-                vkGetDeviceProcAddr(context.device, "vkGetAccelerationStructureDeviceAddressKHR"));
-        if (!context.vkGetAccelerationStructureDeviceAddressKHR) {
+            loadVulkanFunction<PFN_vkGetAccelerationStructureDeviceAddressKHR>(
+                context.device, "vkGetAccelerationStructureDeviceAddressKHR");
+        if (context.vkGetAccelerationStructureDeviceAddressKHR == nullptr) {
             throw std::runtime_error("Failed to load vkGetAccelerationStructureDeviceAddressKHR");
         }
 
-        // Create swapchain
         createSwapchain(window, context);
 
         return context;
     }
     catch (const std::exception &e) {
-        // Clean up in case of error
         if (context.swapchain != VK_NULL_HANDLE) {
             vkDestroySwapchainKHR(context.device, context.swapchain, nullptr);
         }
-        for (auto imageView : context.swapchainImageViews) {
+        for (auto *imageView : context.swapchainImageViews) {
             if (imageView != VK_NULL_HANDLE) {
                 vkDestroyImageView(context.device, imageView, nullptr);
             }
@@ -491,6 +470,6 @@ VulkanContext createVulkanGLFWSurface(GLFWwindow *window) {
         if (context.instance != VK_NULL_HANDLE) {
             vkDestroyInstance(context.instance, nullptr);
         }
-        throw; // Re-throw the exception after cleanup
+        throw std::runtime_error("Failed to create Vulkan GLFW surface: " + std::string(e.what()));
     }
 }

@@ -1,6 +1,8 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <vector>
+#include <unordered_map>
+#include <functional>
 #include "vulkan_utils.hpp"
 
 class VulkanDescriptorManager {
@@ -10,6 +12,7 @@ public:
 
     // === Descriptor Set Management ===
     VkDescriptorSet createDescriptorSet(VkDescriptorSetLayout layout);
+    VkDescriptorSet getOrCreateCachedDescriptorSet(VkDescriptorSetLayout layout, const void* cacheKey, size_t cacheKeySize);
     void updateStorageImage(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL);
     void updateUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, VkBuffer buffer, VkDeviceSize size, VkDeviceSize offset = 0);
 
@@ -18,6 +21,7 @@ public:
 
     // === Resource Management ===
     void resetDescriptorPool();
+    void clearCache();
     void dispose();
 
 private:
@@ -32,6 +36,23 @@ private:
 
     std::vector<DescriptorPoolInfo> descriptorPools;
     VkDescriptorPool currentPool = VK_NULL_HANDLE;
+
+    // === Descriptor Set Caching ===
+    struct DescriptorSetCacheKey {
+        std::vector<uint8_t> data;
+        
+        bool operator==(const DescriptorSetCacheKey& other) const {
+            return this->data == other.data;
+        }
+    };
+    
+    struct DescriptorSetCacheKeyHash {
+        size_t operator()(const DescriptorSetCacheKey& key) const {
+            return std::hash<std::string>{}(std::string(key.data.begin(), key.data.end()));
+        }
+    };
+    
+    std::unordered_map<DescriptorSetCacheKey, VkDescriptorSet, DescriptorSetCacheKeyHash> descriptorSetCache;
 
     // === Pool Creation ===
     VkDescriptorPool createDescriptorPool(uint32_t maxSets = DEFAULT_MAX_SETS);

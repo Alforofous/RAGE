@@ -1,5 +1,6 @@
 #include "vulkan_descriptor_manager.hpp"
 #include <stdexcept>
+#include <cstring>
 #include <iostream>
 
 VulkanDescriptorManager::VulkanDescriptorManager(const VulkanContext *context)
@@ -40,6 +41,22 @@ VkDescriptorSet VulkanDescriptorManager::createDescriptorSet(VkDescriptorSetLayo
         }
     }
 
+    return descriptorSet;
+}
+
+VkDescriptorSet VulkanDescriptorManager::getOrCreateCachedDescriptorSet(VkDescriptorSetLayout layout, const void* cacheKey, size_t cacheKeySize) {
+    DescriptorSetCacheKey key;
+    key.data.resize(cacheKeySize);
+    std::memcpy(key.data.data(), cacheKey, cacheKeySize);
+    
+    auto it = this->descriptorSetCache.find(key);
+    if (it != this->descriptorSetCache.end()) {
+        return it->second;
+    }
+    
+    VkDescriptorSet descriptorSet = this->createDescriptorSet(layout);
+    this->descriptorSetCache[key] = descriptorSet;
+    
     return descriptorSet;
 }
 
@@ -92,6 +109,10 @@ void VulkanDescriptorManager::resetDescriptorPool() {
     }
 }
 
+void VulkanDescriptorManager::clearCache() {
+    this->descriptorSetCache.clear();
+}
+
 VkDescriptorPool VulkanDescriptorManager::createDescriptorPool(uint32_t maxSets) {
     std::vector<VkDescriptorPoolSize> poolSizes = {
         { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, POOL_SIZE_STORAGE_IMAGE },
@@ -133,6 +154,7 @@ VkDescriptorPool VulkanDescriptorManager::getOrCreateAvailablePool() {
 }
 
 void VulkanDescriptorManager::dispose() {
+    this->clearCache();
     for (auto &poolInfo : this->descriptorPools) {
         if (poolInfo.pool != VK_NULL_HANDLE) {
             vkDestroyDescriptorPool(this->context->device, poolInfo.pool, nullptr);
