@@ -104,8 +104,6 @@ void Renderer::renderMaterial(
     const Material *material,
     const RenderableNode3D *renderable
 ) {
-    pipeline->bind(commandBuffer);
-
     VkDescriptorSetLayout setLayout = pipeline->getDescriptorSetLayout(0);
     
     struct DescriptorCacheKey {
@@ -128,28 +126,20 @@ void Renderer::renderMaterial(
         sizeof(cacheKey)
     );
 
-    // Always update uniforms since they may change per frame
+    // Setup material uniforms (high-level logic stays in renderer)
     auto setUniform = [pipeline](uint32_t binding, const void *data, size_t size) {
-                          pipeline->setUniform(binding, data, size);
-                      };
+        pipeline->setUniform(binding, data, size);
+    };
     material->onRenderSetup(setUniform, this->camera, static_cast<const void *>(renderable));
 
-    // Update descriptor set with current uniform buffers and render target
+    // Use pipeline helper to automatically bind uniform buffers from reflection
+    pipeline->updateDescriptorSetFromReflection(descriptorSet, this->descriptorManager.get());
+
+    // Handle render target storage image (renderer-specific knowledge)
     this->descriptorManager->updateStorageImage(descriptorSet, 4, this->renderTarget->getImageView(), VK_IMAGE_LAYOUT_GENERAL);
 
-    for (uint32_t binding = 0; binding < 8; ++binding) {
-        try {
-            VkBuffer uniformBuffer = pipeline->getUniformBuffer(binding);
-            this->descriptorManager->updateUniformBuffer(descriptorSet, binding, uniformBuffer, VK_WHOLE_SIZE);
-        }
-        catch (const std::exception &) {
-            // This binding doesn't exist, skip it
-        }
-    }
-
-    // Bind descriptor sets
-    VulkanDescriptorManager::bindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                                                pipeline->getLayout(), 0, descriptorSet);
+    // Use pipeline helper for binding
+    pipeline->bindWithDescriptors(commandBuffer, descriptorSet);
 
     // Dispatch ray tracing if this is a ray tracing pipeline
     auto *rayTracingPipeline = dynamic_cast<VulkanRayTracingPipeline *>(pipeline);

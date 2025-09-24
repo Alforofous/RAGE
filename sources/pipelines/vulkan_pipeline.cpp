@@ -5,6 +5,7 @@
 #include <map>
 #include <algorithm>
 #include "pipelines/shader_reflector.hpp"
+#include "vulkan_descriptor_manager.hpp"
 
 VulkanPipeline::VulkanPipeline(VkDevice device, VkPhysicalDevice physicalDevice, const std::vector<GLSLShader> &glslShaders)
     : device(device), physicalDevice(physicalDevice) {
@@ -273,4 +274,37 @@ VkBuffer VulkanPipeline::getUniformBuffer(uint32_t binding) const {
         throw std::runtime_error("Uniform buffer binding " + std::to_string(binding) + " not found in pipeline");
     }
     return it->second.buffer;
+}
+
+void VulkanPipeline::updateDescriptorSetFromReflection(VkDescriptorSet descriptorSet, 
+                                                      VulkanDescriptorManager* descriptorManager) const {
+    for (const auto& setBindings : this->bindingsBySetNumber) {
+        for (const auto& binding : setBindings.second) {
+            try {
+                switch (binding.descriptorType) {
+                    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
+                        VkBuffer uniformBuffer = this->getUniformBuffer(binding.binding);
+                        descriptorManager->updateUniformBuffer(descriptorSet, binding.binding, uniformBuffer, VK_WHOLE_SIZE);
+                        break;
+                    }
+                    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+            catch (const std::exception&) {
+            }
+        }
+    }
+}
+
+void VulkanPipeline::bindWithDescriptors(VkCommandBuffer commandBuffer, VkDescriptorSet descriptorSet) const {
+    this->bind(commandBuffer);
+    vkCmdBindDescriptorSets(commandBuffer, this->getBindPoint(), this->pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+}
+
+const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>& VulkanPipeline::getBindingsBySetNumber() const {
+    return this->bindingsBySetNumber;
 }

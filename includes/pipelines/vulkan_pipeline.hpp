@@ -10,7 +10,7 @@ public:
     virtual ~VulkanPipeline();
 
     // === Core Pipeline Operations ===
-    virtual void bind(VkCommandBuffer cmdBuffer) = 0;
+    virtual void bind(VkCommandBuffer cmdBuffer) const = 0;
     virtual void bindDescriptorSet(VkCommandBuffer cmdBuffer, uint32_t setIndex, VkDescriptorSet set) = 0;
     virtual VkPipelineBindPoint getBindPoint() const = 0;
 
@@ -33,8 +33,15 @@ public:
     const std::vector<VkPushConstantRange>& getPushConstantRanges() const { return this->pushConstantRanges; }
 
     // === Uniform Buffer Management ===
-    void setUniform(uint32_t binding, const void* data, size_t size);
+    void setUniform(uint32_t binding, const void *data, size_t size);
     VkBuffer getUniformBuffer(uint32_t binding) const;
+
+    // === Descriptor Set Helpers ===
+    void updateDescriptorSetFromReflection(
+        VkDescriptorSet descriptorSet,
+        class VulkanDescriptorManager *descriptorManager) const;
+    void bindWithDescriptors(VkCommandBuffer commandBuffer, VkDescriptorSet descriptorSet) const;
+    const std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> >& getBindingsBySetNumber() const;
 
 protected:
     struct ShaderInfo {
@@ -70,7 +77,7 @@ private:
         VkDescriptorType type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     };
     std::map<uint32_t, UniformBuffer> uniformBuffers; // binding -> buffer
-    std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>> bindingsBySetNumber;
+    std::map<uint32_t, std::vector<VkDescriptorSetLayoutBinding> > bindingsBySetNumber;
 
     // === Construction and Cleanup ===
     void compileShaders(const std::vector<GLSLShader> &glslShaders);
@@ -95,7 +102,7 @@ public:
     VulkanPipelineBase(VkDevice device, VkPhysicalDevice physicalDevice, const std::vector<GLSLShader> &glslShaders)
         : VulkanPipeline(device, physicalDevice, glslShaders) {}
 
-    void bind(VkCommandBuffer cmdBuffer) override {
+    void bind(VkCommandBuffer cmdBuffer) const override {
         vkCmdBindPipeline(cmdBuffer, BindPoint, this->getPipeline());
     }
 

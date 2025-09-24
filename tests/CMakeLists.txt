@@ -37,6 +37,11 @@ target_sources(rage_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/sources/utils/file_reader.cpp
     ${CMAKE_SOURCE_DIR}/sources/utils/shader_compiler.cpp
     ${CMAKE_SOURCE_DIR}/sources/utils/buffer_utils.cpp
+    ${CMAKE_SOURCE_DIR}/sources/vulkan_descriptor_manager.cpp
+    ${CMAKE_SOURCE_DIR}/sources/vulkan_utils.cpp
+    ${CMAKE_SOURCE_DIR}/sources/materials/material.cpp
+    ${CMAKE_SOURCE_DIR}/sources/renderable_node3D.cpp
+    ${CMAKE_SOURCE_DIR}/sources/node3D.cpp
 )
 
 # Enable testing

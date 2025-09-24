@@ -3,6 +3,7 @@
 #include <vector>
 #include <set>
 #include <array>
+#include <string>
 
 namespace {
     template<typename T>
