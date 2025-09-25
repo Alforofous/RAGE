@@ -13,6 +13,14 @@ Node3D::~Node3D() {
     this->children.clear();
 }
 
+Node3D::Node3D(const Node3D &other)
+    : matrix(other.matrix),
+    position(other.position),
+    quaternion(other.quaternion),
+    scale(other.scale),
+    matrixNeedsUpdate(other.matrixNeedsUpdate) {
+}
+
 void Node3D::setPosition(const Vector3 &position) {
     this->position = position;
     this->matrixNeedsUpdate = true;

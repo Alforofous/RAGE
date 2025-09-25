@@ -1,8 +1,8 @@
 #include "materials/voxel_ray_tracing_material.hpp"
 #include "materials/renderable_interfaces.hpp"
-#include "renderable_node3D.hpp"
 #include "utils/file_reader.hpp"
 #include <glm/glm.hpp>
+#include <iostream>
 
 namespace {
     constexpr float COLOR_NORMALIZATION_FACTOR = 255.0f;
@@ -40,13 +40,14 @@ void VoxelRayTracingMaterial::onRenderSetup(const SetUniform &setUniform, const 
 
     CubeData cubeData{};
     
-    const auto *renderable = static_cast<const RenderableNode3D *>(object);
-    const auto *positionable = dynamic_cast<const IPositionable<Vector3> *>(renderable);
-    const auto *sizable = dynamic_cast<const ISizable<Vector3> *>(renderable);
-    const auto *colorable = dynamic_cast<const IColorable<Vector3> *>(renderable);
+    const auto *node = static_cast<const Node3D *>(object);
+    const auto *sizable = dynamic_cast<const ISizable<Vector3> *>(node);
+    const auto *colorable = dynamic_cast<const IColorable<Vector3> *>(node);
 
-    if (positionable != nullptr) {
-        Vector3 pos = positionable->getPosition();
+    std::cout << "node: " << node << std::endl;
+
+    if (node != nullptr) {
+        Vector3 pos = node->getPosition();
         cubeData.position = glm::vec3(pos.getX(), pos.getY(), pos.getZ());
     }
 

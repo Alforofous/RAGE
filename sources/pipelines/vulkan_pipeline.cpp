@@ -295,6 +295,7 @@ void VulkanPipeline::updateDescriptorSetFromReflection(VkDescriptorSet descripto
                 }
             }
             catch (const std::exception&) {
+                throw std::runtime_error("Failed to update descriptor set from reflection");
             }
         }
     }

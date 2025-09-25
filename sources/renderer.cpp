@@ -45,6 +45,7 @@ void Renderer::renderFrame() {
 }
 
 void Renderer::renderScene(VkCommandBuffer commandBuffer) {
+    std::cout << "Rendering scene with " << this->scene->getChildren().size() << " children" << std::endl;
     this->scene->traverse([this, commandBuffer](const Node3D *node) {
         const auto *renderable = dynamic_cast<const RenderableNode3D *>(node);
         if (renderable != nullptr && renderable->getMaterial() != nullptr) {
