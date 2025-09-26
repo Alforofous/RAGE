@@ -9,11 +9,11 @@
 class RenderableNode3D : public Node3D {
 public:
     RenderableNode3D(Material *material);
+    RenderableNode3D(const RenderableNode3D &other);
     virtual ~RenderableNode3D();
 
     virtual void render(Renderer &renderer) const = 0;
     Material *getMaterial() const { return material; }
-
 protected:
     Material *material;
 };

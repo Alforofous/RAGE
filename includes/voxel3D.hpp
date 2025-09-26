@@ -12,6 +12,7 @@ class Voxel3D : public RenderableNode3D,
     public IColorable<Vector3> {
 public:
     Voxel3D();
+    Voxel3D(const Voxel3D &other);
     ~Voxel3D();
 
     void render(Renderer &renderer) const override;

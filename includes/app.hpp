@@ -3,7 +3,6 @@
 #include "window.hpp"
 #include "renderer.hpp"
 #include "vulkan_utils.hpp"
-#include "voxel3D.hpp"
 #include "camera_controls.hpp"
 #include "input_handler.hpp"
 
@@ -24,6 +23,5 @@ private:
     std::unique_ptr<Camera> camera;
     std::unique_ptr<CameraControls> cameraControls;
     std::unique_ptr<InputHandler> inputHandler;
-    std::unique_ptr<Voxel3D> voxel;  // Keep voxel alive with the app
     VulkanContext context;
 };

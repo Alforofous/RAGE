@@ -12,6 +12,7 @@
 class Node3D {
 public:
     Node3D();
+    Node3D(const Node3D &other);
     virtual ~Node3D();
 
     void setMatrix(const Matrix4& matrix);
