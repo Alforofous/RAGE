@@ -23,6 +23,8 @@ public:
                           VkAccessFlags srcAccessMask,
                           VkAccessFlags dstAccessMask);
 
+    void clearImage(VkCommandBuffer cmdBuffer);
+
 private:
     const VulkanContext *context;
 

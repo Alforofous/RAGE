@@ -19,12 +19,17 @@ App::App() {
 
     this->context = createVulkanGLFWSurface(this->window->getWindow());
 
-    this->scene = std::make_unique<Scene>();
-    auto voxel1 = std::make_unique<Voxel3D>();
-    voxel1->setPosition(Vector3(0, 0, -5));  // Put voxel 5 units in front of camera
-    voxel1->setSize(Vector3(2));             // Make it bigger (2x2x2) so it's easier to see
+    this->scene = Scene::create();
+    auto voxel1 = Voxel3D::create();
+    auto voxel2 = Voxel3D::create();
+    voxel1->setPosition(Vector3(2, 0, -5));  // Put voxel 5 units in front of camera
+    voxel1->setScale(Vector3(0.5));             // Make it bigger (2x2x2) so it's easier to see
     voxel1->setColor(Vector3(1.0, 0.0, 0.0));    // Red color
-    this->scene->addChild(voxel1.get());
+    this->scene->addChild(voxel1);
+    voxel2->setPosition(Vector3(-2, 0, -5));
+    voxel2->setScale(Vector3(0.5));
+    voxel2->setColor(Vector3(0.0, 1.0, 0.0));
+    this->scene->addChild(voxel2);
 
     this->camera = std::make_unique<PerspectiveCamera>();
     this->camera->setPosition(Vector3(0.0f, 0.0f, 0.0f));   // Camera at origin

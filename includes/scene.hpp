@@ -9,4 +9,6 @@ class Scene : public Node3D {
 public:
     Scene();
     ~Scene();
+    
+    static std::shared_ptr<Scene> create();
 };

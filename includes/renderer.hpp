@@ -28,6 +28,7 @@ public:
 
     // Core rendering interface
     void renderFrame();
+    void setAutoClear(bool autoClear);
 
 private:
     // Pipeline management
@@ -50,4 +51,7 @@ private:
 
     // Pipeline caching
     std::map<std::string, std::unique_ptr<VulkanPipeline> > pipelineCache;
+
+    // Auto clear the render target
+    bool autoClear;
 };

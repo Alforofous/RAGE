@@ -78,7 +78,6 @@ void main() {
     vec3 boxMax = cube.position + cube.size;
     
     float tNear, tFar;
-    vec4 color = vec4(0.0, 0.0, 0.0, 1.0);  // Background color (black)
     
     // Test ray-cube intersection
     if (rayAABBIntersect(rayOrigin, rayDir, boxMin, boxMax, tNear, tFar)) {
@@ -91,9 +90,8 @@ void main() {
         float NdotL = max(dot(normal, lightDir), 0.2);    // Ambient + diffuse
         
         // Apply cube color with shading
-        color.rgb = cube.color * NdotL;
-        color.a = 1.0;
+        vec4 color = vec4(cube.color * NdotL, 1.0);
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), color);
     }
-    
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), color);
+    // If ray misses, don't write anything - leave pixel unchanged
 }

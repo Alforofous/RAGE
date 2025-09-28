@@ -49,7 +49,7 @@ void VulkanRenderTarget::createImage() {
     imageInfo.arrayLayers = 1;
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    imageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -113,6 +113,18 @@ void VulkanRenderTarget::dispose() {
         vkFreeMemory(this->context->device, this->memory, nullptr);
         this->memory = VK_NULL_HANDLE;
     }
+}
+
+void VulkanRenderTarget::clearImage(VkCommandBuffer cmdBuffer) {
+    VkClearColorValue clearColor = {{0.0f, 0.0f, 0.0f, 0.0f}};
+    VkImageSubresourceRange range{};
+    range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    range.baseMipLevel = 0;
+    range.levelCount = 1;
+    range.baseArrayLayer = 0;
+    range.layerCount = 1;
+
+    vkCmdClearColorImage(cmdBuffer, this->image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
 }
 
 void VulkanRenderTarget::transitionLayout(

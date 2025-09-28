@@ -19,7 +19,7 @@ public:
 private:
     std::unique_ptr<Window> window;
     std::unique_ptr<Renderer> renderer;
-    std::unique_ptr<Scene> scene;
+    std::shared_ptr<Scene> scene;
     std::unique_ptr<Camera> camera;
     std::unique_ptr<CameraControls> cameraControls;
     std::unique_ptr<InputHandler> inputHandler;

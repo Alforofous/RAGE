@@ -22,7 +22,8 @@ Renderer::Renderer(const VulkanContext *context, Scene *scene, Camera *camera)
         )
     ),
     commandBufferRecorder(std::make_unique<CommandBufferRecorder>(context, this->renderTarget.get())
-    ) {
+    ),
+    autoClear(true) {
 }
 
 Renderer::~Renderer() {
@@ -45,9 +46,11 @@ void Renderer::renderFrame() {
 }
 
 void Renderer::renderScene(VkCommandBuffer commandBuffer) {
-    std::cout << "Rendering scene with " << this->scene->getChildren().size() << " children" << std::endl;
-    this->scene->traverse([this, commandBuffer](const Node3D *node) {
-        const auto *renderable = dynamic_cast<const RenderableNode3D *>(node);
+    if (this->autoClear) {
+        // this->renderTarget->clearImage(commandBuffer);
+    }
+    this->scene->traverse([this, commandBuffer](const Node3DRef &node) {
+        const auto *renderable = dynamic_cast<const RenderableNode3D *>(node.get());
         if (renderable != nullptr && renderable->getMaterial() != nullptr) {
             Material *material = renderable->getMaterial();
             VulkanPipeline *pipeline = this->getPipeline(material);
@@ -106,21 +109,21 @@ void Renderer::renderMaterial(
     const RenderableNode3D *renderable
 ) {
     VkDescriptorSetLayout setLayout = pipeline->getDescriptorSetLayout(0);
-    
+
     struct DescriptorCacheKey {
-        const Material* material;
+        const Material *material;
         VkDescriptorSetLayout layout;
         VkImageView renderTargetView;
         uint32_t frameIndex;
     };
-    
+
     DescriptorCacheKey cacheKey = {
         material,
         setLayout,
         this->renderTarget->getImageView(),
         static_cast<uint32_t>(this->swapchainManager->getCurrentFrameIndex())
     };
-    
+
     VkDescriptorSet descriptorSet = this->descriptorManager->getOrCreateCachedDescriptorSet(
         setLayout,
         &cacheKey,
@@ -129,8 +132,8 @@ void Renderer::renderMaterial(
 
     // Setup material uniforms (high-level logic stays in renderer)
     auto setUniform = [pipeline](uint32_t binding, const void *data, size_t size) {
-        pipeline->setUniform(binding, data, size);
-    };
+                          pipeline->setUniform(binding, data, size);
+                      };
     material->onRenderSetup(setUniform, this->camera, static_cast<const void *>(renderable));
 
     // Use pipeline helper to automatically bind uniform buffers from reflection

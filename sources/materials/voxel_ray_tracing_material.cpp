@@ -1,5 +1,4 @@
 #include "materials/voxel_ray_tracing_material.hpp"
-#include "materials/renderable_interfaces.hpp"
 #include "utils/file_reader.hpp"
 #include <glm/glm.hpp>
 #include <iostream>
@@ -41,24 +40,20 @@ void VoxelRayTracingMaterial::onRenderSetup(const SetUniform &setUniform, const 
     CubeData cubeData{};
     
     const auto *node = static_cast<const Node3D *>(object);
-    const auto *sizable = dynamic_cast<const ISizable<Vector3> *>(node);
-    const auto *colorable = dynamic_cast<const IColorable<Vector3> *>(node);
-
-    std::cout << "node: " << node << std::endl;
 
     if (node != nullptr) {
         Vector3 pos = node->getPosition();
         cubeData.position = glm::vec3(pos.getX(), pos.getY(), pos.getZ());
-    }
-
-    if (sizable != nullptr) {
-        Vector3 fullSize = sizable->getSize();
+        
+        Vector3 fullSize = node->getScale();
         cubeData.size = glm::vec3(fullSize.getX(), fullSize.getY(), fullSize.getZ());
     }
 
-    if (colorable != nullptr) {
-        Vector3 color = colorable->getColor();
-        cubeData.color = glm::vec3(color.getX(), color.getY(), color.getZ());
+    // For now, use different colors based on position to distinguish voxels
+    if (cubeData.position.x > 0) {
+        cubeData.color = glm::vec3(1.0, 0.0, 0.0);  // Red for positive X
+    } else {
+        cubeData.color = glm::vec3(0.0, 1.0, 0.0);  // Green for negative X
     }
 
 

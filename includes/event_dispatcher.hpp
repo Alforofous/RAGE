@@ -68,19 +68,6 @@ public:
         }
     }
 
-    /** Convenience overload for void events */
-    template<const char *EventName>
-    void dispatchEvent() {
-        static_assert(has_event<EventMapType, EventName>::value, "Event type not defined in EventMap");
-        static_assert(std::is_same_v<EventDataType<EventName>, void>, "This overload is only for void events");
-
-        auto it = this->listeners.find(EventName);
-        if (it != this->listeners.end()) {
-            for (const auto &listener : it->second) {
-                listener(nullptr);
-            }
-        }
-    }
 
     /** Check if event listener is registered */
     template<const char *EventName>
