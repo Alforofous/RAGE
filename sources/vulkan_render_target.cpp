@@ -14,7 +14,8 @@ VulkanRenderTarget::VulkanRenderTarget(
     memory(VK_NULL_HANDLE),
     imageView(VK_NULL_HANDLE),
     format(VK_FORMAT_R8G8B8A8_UNORM),
-    extent{width, height} {
+    extent{width, height},
+    currentLayout(VK_IMAGE_LAYOUT_UNDEFINED) {
     this->createResources();
 }
 
@@ -29,6 +30,7 @@ void VulkanRenderTarget::resize(uint32_t width, uint32_t height) {
     this->dispose();
     this->extent.width = width;
     this->extent.height = height;
+    this->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     this->createResources();
 }
 
@@ -167,4 +169,6 @@ void VulkanRenderTarget::transitionLayout(
         0, nullptr,
         1, &barrier
     );
+
+    this->currentLayout = newLayout;
 }

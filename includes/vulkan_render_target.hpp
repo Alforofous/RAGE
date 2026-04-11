@@ -14,6 +14,7 @@ public:
     VkImageView getImageView() const { return imageView; }
     VkFormat getFormat() const { return format; }
     VkExtent2D getExtent() const { return extent; }
+    VkImageLayout getCurrentLayout() const { return currentLayout; }
 
     void transitionLayout(VkCommandBuffer cmdBuffer,
                           VkImageLayout oldLayout,
@@ -33,6 +34,7 @@ private:
     VkImageView imageView;
     VkFormat format;
     VkExtent2D extent;
+    VkImageLayout currentLayout;
 
     void createResources();
     void createImage();

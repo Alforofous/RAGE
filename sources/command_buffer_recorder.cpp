@@ -45,7 +45,6 @@ void CommandBufferRecorder::endRecording(VkCommandBuffer commandBuffer) {
 }
 
 void CommandBufferRecorder::prepareRenderTarget(VkCommandBuffer commandBuffer) {
-    this->transitionRenderTargetForRendering(commandBuffer);
 }
 
 void CommandBufferRecorder::finalizeRendering(VkCommandBuffer commandBuffer, uint32_t imageIndex) {

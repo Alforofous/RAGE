@@ -21,15 +21,21 @@ App::App() {
 
     this->scene = Scene::create();
     auto voxel1 = Voxel3D::create();
-    auto voxel2 = Voxel3D::create();
     voxel1->setPosition(Vector3(2, 0, -5));  // Put voxel 5 units in front of camera
     voxel1->setScale(Vector3(0.5));             // Make it bigger (2x2x2) so it's easier to see
     voxel1->setColor(Vector3(1.0, 0.0, 0.0));    // Red color
     this->scene->addChild(voxel1);
+    auto voxel2 = Voxel3D::create();
     voxel2->setPosition(Vector3(-2, 0, -5));
     voxel2->setScale(Vector3(0.5));
     voxel2->setColor(Vector3(0.0, 1.0, 0.0));
     this->scene->addChild(voxel2);
+    auto voxel3 = Voxel3D::create();
+    voxel3->setPosition(Vector3(0, 0, -5));
+    voxel3->setScale(Vector3(1.0));
+    voxel3->setColor(Vector3(1.0, 1.0, 0.0));
+    this->scene->addChild(voxel3);
+
 
     this->camera = std::make_unique<PerspectiveCamera>();
     this->camera->setPosition(Vector3(0.0f, 0.0f, 0.0f));   // Camera at origin

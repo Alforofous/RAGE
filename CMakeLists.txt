@@ -51,6 +51,7 @@ set(SOURCES
     utils/shader_compiler.cpp
     utils/buffer_utils.cpp
     vulkan_descriptor_manager.cpp
+    uniform_buffer_manager.cpp
     command_buffer_recorder.cpp
     materials/ray_tracing_material.cpp
     materials/voxel_ray_tracing_material.cpp

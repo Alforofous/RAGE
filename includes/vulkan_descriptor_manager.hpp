@@ -10,12 +10,14 @@
 
 class VulkanDescriptorManager {
 public:
-    VulkanDescriptorManager(const VulkanContext *context);
+    VulkanDescriptorManager(const VulkanContext *context, uint32_t maxFramesInFlight);
     ~VulkanDescriptorManager();
 
     // === Descriptor Set Management ===
     VkDescriptorSet createDescriptorSet(VkDescriptorSetLayout layout);
+    VkDescriptorSet createDescriptorSet(uint32_t frameIndex, VkDescriptorSetLayout layout);
     VkDescriptorSet getOrCreateCachedDescriptorSet(VkDescriptorSetLayout layout, const void* cacheKey, size_t cacheKeySize);
+    VkDescriptorSet getOrCreateCachedDescriptorSet(uint32_t frameIndex, VkDescriptorSetLayout layout, const void* cacheKey, size_t cacheKeySize);
     void updateStorageImage(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL);
     void updateUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, VkBuffer buffer, VkDeviceSize size, VkDeviceSize offset = 0);
 
@@ -24,6 +26,7 @@ public:
 
     // === Resource Management ===
     void resetDescriptorPool();
+    void resetDescriptorPoolForFrame(uint32_t frameIndex);
     void clearCache();
     void dispose();
     
@@ -35,6 +38,7 @@ public:
 
 private:
     const VulkanContext *context;
+    uint32_t maxFramesInFlight;
 
     // === Descriptor Pool Management ===
     struct DescriptorPoolInfo {
@@ -43,7 +47,7 @@ private:
         uint32_t maxSets;
     };
 
-    std::vector<DescriptorPoolInfo> descriptorPools;
+    std::vector<std::vector<DescriptorPoolInfo>> descriptorPools;
 
     // === Descriptor Set Caching ===
     struct DescriptorSetCacheKey {
@@ -77,11 +81,11 @@ private:
         }
     };
     
-    std::unordered_map<DescriptorSetCacheKey, VkDescriptorSet, DescriptorSetCacheKeyHash> descriptorSetCache;
+    std::vector<std::unordered_map<DescriptorSetCacheKey, VkDescriptorSet, DescriptorSetCacheKeyHash>> descriptorSetCachePerFrame;
 
     // === Pool Creation ===
-    VkDescriptorPool createDescriptorPool(uint32_t maxSets = DEFAULT_MAX_SETS);
-    VkDescriptorPool getOrCreateAvailablePool();
+    VkDescriptorPool createDescriptorPool(uint32_t frameIndex, uint32_t maxSets = DEFAULT_MAX_SETS);
+    VkDescriptorPool getOrCreateAvailablePool(uint32_t frameIndex);
 
     // === Configuration Constants ===
     static constexpr uint32_t POOL_SIZE_STORAGE_IMAGE = 20;
