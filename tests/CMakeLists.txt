@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 # Create test executable
 add_executable(rage_tests
     pipelines/vulkan_pipeline_test.cpp
+    platform/gpu/gpu_allocator_test.cpp
 )
 
 # Link against Google Test, Google Mock, and project libraries
@@ -25,6 +26,10 @@ endif()
 # Include directories
 target_include_directories(rage_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/includes
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/shared
+    ${CMAKE_SOURCE_DIR}/src/platform
+    ${CMAKE_SOURCE_DIR}/src/platform/gpu
     ${CMAKE_SOURCE_DIR}/libraries
     ${CMAKE_SOURCE_DIR}/libraries/spirv-reflect
     $ENV{VULKAN_SDK}/Include
