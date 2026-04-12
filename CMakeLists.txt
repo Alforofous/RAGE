@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.16...3.28)
 set(CMAKE_C_COMPILER "C:/Program Files/LLVM/bin/clang.exe")
 set(CMAKE_CXX_COMPILER "C:/Program Files/LLVM/bin/clang++.exe")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 project(RAGE CXX C)
 
 # Debug symbols configuration for GDB
@@ -53,6 +53,8 @@ set(SOURCES
     vulkan_descriptor_manager.cpp
     uniform_buffer_manager.cpp
     command_buffer_recorder.cpp
+    ../src/platform/gpu/vulkan_allocator.cpp
+    ../src/platform/gpu/vulkan_image.cpp
     materials/ray_tracing_material.cpp
     materials/voxel_ray_tracing_material.cpp
     materials/material.cpp
@@ -83,6 +85,13 @@ add_subdirectory(tests/)
 
 list(APPEND PROJECT_INCLUDES
 	${INCLUDES_DIRECTORY}
+	src/
+	src/shared
+	src/platform
+	src/platform/gpu
+)
+
+list(APPEND SYSTEM_INCLUDES
 	${LIBRARY_INCLUDE_DIRECTORIES}
 	libraries/
 	libraries/stb
@@ -90,7 +99,7 @@ list(APPEND PROJECT_INCLUDES
 	libraries/imgui
 	libraries/glm
 	libraries/spirv-reflect
-	libraries/
+	libraries/vma/include
 	$ENV{VULKAN_SDK}/Include
 )
 
@@ -153,6 +162,7 @@ add_executable(
 )
 
 target_include_directories(RAGE PUBLIC ${PROJECT_INCLUDES})
+target_include_directories(RAGE SYSTEM PUBLIC ${SYSTEM_INCLUDES})
 target_precompile_headers(RAGE PUBLIC ${PRECOMPILE_HEADERS})
 
 # Add Vulkan library directory if available

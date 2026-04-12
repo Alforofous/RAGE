@@ -11,8 +11,15 @@ set(GLFW_INSTALL OFF CACHE BOOL "Generate installation target" FORCE)
 # Add GLFW as a subdirectory
 add_subdirectory(glfw)
 
-# Add ImGui as a subdirectory
-add_subdirectory(imgui)
+# Build ImGui as a static library (no CMakeLists.txt in upstream repo)
+add_library(imgui STATIC
+    imgui/imgui.cpp
+    imgui/imgui_demo.cpp
+    imgui/imgui_draw.cpp
+    imgui/imgui_tables.cpp
+    imgui/imgui_widgets.cpp
+)
+target_include_directories(imgui PUBLIC imgui)
 
 # Add GLM as a subdirectory
 add_subdirectory(glm)

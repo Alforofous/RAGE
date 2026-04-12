@@ -1,10 +1,5 @@
 build/
 
-libraries/glfw
-libraries/glm
-libraries/imgui
-libraries/googletest
-libraries/spirv-reflect
 
 RAGE
 RAGE.exe
@@ -14,3 +9,6 @@ RAGE.pdb
 desktop.ini
 .vscode
 .cache
+.cursor
+.claude
+CLAUDE.md
