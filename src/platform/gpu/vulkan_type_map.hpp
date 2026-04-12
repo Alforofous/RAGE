@@ -7,25 +7,51 @@
 namespace RAGE {
     inline VkBufferUsageFlags toVkBufferUsage(BufferUsage usage) {
         VkBufferUsageFlags flags = 0;
-        if (hasFlag(usage, BufferUsage::Uniform)) flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        if (hasFlag(usage, BufferUsage::Storage)) flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        if (hasFlag(usage, BufferUsage::Vertex)) flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        if (hasFlag(usage, BufferUsage::Index)) flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        if (hasFlag(usage, BufferUsage::DeviceAddress)) flags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        if (hasFlag(usage, BufferUsage::TransferSrc)) flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        if (hasFlag(usage, BufferUsage::TransferDst)) flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        if (hasFlag(usage, BufferUsage::Uniform)) {
+            flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        }
+        if (hasFlag(usage, BufferUsage::Storage)) {
+            flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        }
+        if (hasFlag(usage, BufferUsage::Vertex)) {
+            flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        }
+        if (hasFlag(usage, BufferUsage::Index)) {
+            flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        }
+        if (hasFlag(usage, BufferUsage::DeviceAddress)) {
+            flags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        }
+        if (hasFlag(usage, BufferUsage::TransferSrc)) {
+            flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        }
+        if (hasFlag(usage, BufferUsage::TransferDst)) {
+            flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        }
 
         return flags;
     }
 
     inline VkImageUsageFlags toVkImageUsage(ImageUsage usage) {
         VkImageUsageFlags flags = 0;
-        if (hasFlag(usage, ImageUsage::ColorAttachment)) flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        if (hasFlag(usage, ImageUsage::DepthStencil)) flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        if (hasFlag(usage, ImageUsage::Sampled)) flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
-        if (hasFlag(usage, ImageUsage::Storage)) flags |= VK_IMAGE_USAGE_STORAGE_BIT;
-        if (hasFlag(usage, ImageUsage::TransferSrc)) flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        if (hasFlag(usage, ImageUsage::TransferDst)) flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        if (hasFlag(usage, ImageUsage::ColorAttachment)) {
+            flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        }
+        if (hasFlag(usage, ImageUsage::DepthStencil)) {
+            flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        }
+        if (hasFlag(usage, ImageUsage::Sampled)) {
+            flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        }
+        if (hasFlag(usage, ImageUsage::Storage)) {
+            flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+        }
+        if (hasFlag(usage, ImageUsage::TransferSrc)) {
+            flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        }
+        if (hasFlag(usage, ImageUsage::TransferDst)) {
+            flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        }
 
         return flags;
     }

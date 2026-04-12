@@ -7,8 +7,8 @@ SRC_DIR="$PROJECT_ROOT/src"
 
 echo "=== Running clang-tidy ==="
 
-# Only check .cpp files — headers get checked transitively
-FILES=$(find "$SRC_DIR" -name "*.cpp" 2>/dev/null)
+# Check both .cpp and .hpp files in src/
+FILES=$(find "$SRC_DIR" -name "*.cpp" -o -name "*.hpp" 2>/dev/null)
 
 if [[ -z "$FILES" ]]; then
     echo "No source files found in src/"

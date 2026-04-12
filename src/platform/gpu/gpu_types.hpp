@@ -35,7 +35,7 @@ namespace RAGE {
     };
     RAGE_DEFINE_FLAGS(ImageUsage)
 
-    enum class ImageFormat {
+    enum class ImageFormat : uint8_t {
         RGBA8_UNORM,
         BGRA8_UNORM,
         RGBA8_SRGB,
@@ -51,7 +51,7 @@ namespace RAGE {
         D32_SFLOAT_S8_UINT,
     };
 
-    enum class MemoryLocation {
+    enum class MemoryLocation : uint8_t {
         GpuOnly,
         CpuToGpu,
         GpuToCpu,
