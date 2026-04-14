@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 #include "gpu_types.hpp"
