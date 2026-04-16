@@ -35,6 +35,12 @@ namespace RAGE {
         uint32_t graphicsQueueFamily() const { return graphicsQueueFamily_; }
 
     private:
+        void createInstance(const VulkanContextCreateInfo &info);
+        void createDebugMessenger(const VulkanContextCreateInfo &info);
+        void selectPhysicalDevice();
+        void createLogicalDevice();
+        void destroy();
+
         VkInstance instance_ = VK_NULL_HANDLE;
         VkPhysicalDevice physicalDevice_ = VK_NULL_HANDLE;
         VkDevice device_ = VK_NULL_HANDLE;

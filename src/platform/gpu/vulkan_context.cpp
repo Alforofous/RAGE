@@ -2,70 +2,107 @@
 #include "../../shared/logger.hpp"
 #include <stdexcept>
 #include <cstring>
+#include <utility>
 
-namespace RAGE {
-    namespace {
-        VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                                                     VkDebugUtilsMessageTypeFlagsEXT type,
-                                                     const VkDebugUtilsMessengerCallbackDataEXT *callbackData,
-                                                     void *userData) {
-            (void)type;
-            (void)userData;
+using RAGE::log;
+using RAGE::LogLevel;
 
-            if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-                log(LogLevel::Warn, callbackData->pMessage);
-            }
+namespace {
+    VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                                 VkDebugUtilsMessageTypeFlagsEXT type,
+                                                 const VkDebugUtilsMessengerCallbackDataEXT *callbackData,
+                                                 void *userData) {
+        (void)type;
+        (void)userData;
 
-            return VK_FALSE;
+        if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+            log(LogLevel::Warn, callbackData->pMessage);
         }
 
-        bool checkValidationLayerSupport(const char *layerName) {
-            uint32_t layerCount = 0;
-            vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-            std::vector<VkLayerProperties> layers(layerCount);
-            vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
-
-            for (const auto &layer : layers) {
-                if (strcmp(layer.layerName, layerName) == 0) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        uint32_t scorePhysicalDevice(VkPhysicalDevice device) {
-            VkPhysicalDeviceProperties props;
-            vkGetPhysicalDeviceProperties(device, &props);
-
-            uint32_t score = 0;
-            if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-                score += 1000;
-            } else if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
-                score += 100;
-            }
-
-            return score;
-        }
-
-        int32_t findGraphicsQueueFamily(VkPhysicalDevice device) {
-            uint32_t queueFamilyCount = 0;
-            vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-            std::vector<VkQueueFamilyProperties> families(queueFamilyCount);
-            vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, families.data());
-
-            for (uint32_t i = 0; i < queueFamilyCount; i++) {
-                if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
-                    return static_cast<int32_t>(i);
-                }
-            }
-
-            return -1;
-        }
+        return VK_FALSE;
     }
 
+    bool checkValidationLayerSupport(const char *layerName) {
+        uint32_t layerCount = 0;
+        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+        std::vector<VkLayerProperties> layers(layerCount);
+        vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
+
+        for (const auto &layer : layers) {
+            if (strcmp(layer.layerName, layerName) == 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    uint32_t scorePhysicalDevice(VkPhysicalDevice device) {
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(device, &props);
+
+        uint32_t score = 0;
+        if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            score += 1000;
+        } else if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+            score += 100;
+        }
+
+        return score;
+    }
+
+    int32_t findGraphicsQueueFamily(VkPhysicalDevice device) {
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> families(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, families.data());
+
+        for (uint32_t i = 0; i < queueFamilyCount; i++) {
+            if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
+                return static_cast<int32_t>(i);
+            }
+        }
+
+        return -1;
+    }
+}
+
+namespace RAGE {
     VulkanContext::VulkanContext(const VulkanContextCreateInfo &info) {
-        // --- Instance ---
+        createInstance(info);
+        createDebugMessenger(info);
+        selectPhysicalDevice();
+        createLogicalDevice();
+    }
+
+    VulkanContext::~VulkanContext() {
+        destroy();
+    }
+
+    VulkanContext::VulkanContext(VulkanContext &&other) noexcept
+        : instance_(std::exchange(other.instance_, VK_NULL_HANDLE))
+        , physicalDevice_(std::exchange(other.physicalDevice_, VK_NULL_HANDLE))
+        , device_(std::exchange(other.device_, VK_NULL_HANDLE))
+        , graphicsQueue_(std::exchange(other.graphicsQueue_, VK_NULL_HANDLE))
+        , graphicsQueueFamily_(std::exchange(other.graphicsQueueFamily_, 0))
+        , debugMessenger_(std::exchange(other.debugMessenger_, VK_NULL_HANDLE)) {}
+
+    VulkanContext &VulkanContext::operator=(VulkanContext &&other) noexcept {
+        if (this != &other) {
+            destroy();
+
+            instance_ = std::exchange(other.instance_, VK_NULL_HANDLE);
+            physicalDevice_ = std::exchange(other.physicalDevice_, VK_NULL_HANDLE);
+            device_ = std::exchange(other.device_, VK_NULL_HANDLE);
+            graphicsQueue_ = std::exchange(other.graphicsQueue_, VK_NULL_HANDLE);
+            graphicsQueueFamily_ = std::exchange(other.graphicsQueueFamily_, 0);
+            debugMessenger_ = std::exchange(other.debugMessenger_, VK_NULL_HANDLE);
+        }
+
+        return *this;
+    }
+
+    void VulkanContext::createInstance(const VulkanContextCreateInfo &info) {
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = info.appName.c_str();
@@ -97,26 +134,36 @@ namespace RAGE {
         if (vkCreateInstance(&createInfo, nullptr, &instance_) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create Vulkan instance");
         }
+    }
 
-        // --- Debug messenger ---
-        if (info.enableValidation && createInfo.enabledLayerCount > 0) {
-            VkDebugUtilsMessengerCreateInfoEXT messengerInfo{};
-            messengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            messengerInfo.messageSeverity =
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            messengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            messengerInfo.pfnUserCallback = debugCallback;
-
-            auto createFunc = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-                vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT"));
-            if (createFunc != nullptr) {
-                createFunc(instance_, &messengerInfo, nullptr, &debugMessenger_);
-            }
+    void VulkanContext::createDebugMessenger(const VulkanContextCreateInfo &info) {
+        if (!info.enableValidation) {
+            return;
         }
 
-        // --- Physical device ---
+        VkDebugUtilsMessengerCreateInfoEXT messengerInfo{};
+        messengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        messengerInfo.messageSeverity =
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        messengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        messengerInfo.pfnUserCallback = debugCallback;
+
+        auto createFunc = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT"));
+        if (createFunc == nullptr) {
+            log(LogLevel::Warn, "Failed to load vkCreateDebugUtilsMessengerEXT");
+
+            return;
+        }
+
+        if (createFunc(instance_, &messengerInfo, nullptr, &debugMessenger_) != VK_SUCCESS) {
+            log(LogLevel::Warn, "Failed to create debug messenger");
+        }
+    }
+
+    void VulkanContext::selectPhysicalDevice() {
         uint32_t deviceCount = 0;
         vkEnumeratePhysicalDevices(instance_, &deviceCount, nullptr);
         if (deviceCount == 0) {
@@ -150,8 +197,9 @@ namespace RAGE {
 
         physicalDevice_ = bestDevice;
         graphicsQueueFamily_ = static_cast<uint32_t>(bestQueueFamily);
+    }
 
-        // --- Logical device ---
+    void VulkanContext::createLogicalDevice() {
         const float queuePriority = 1.0f;
         VkDeviceQueueCreateInfo queueCreateInfo{};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -179,7 +227,7 @@ namespace RAGE {
         vkGetDeviceQueue(device_, graphicsQueueFamily_, 0, &graphicsQueue_);
     }
 
-    VulkanContext::~VulkanContext() {
+    void VulkanContext::destroy() {
         if (device_ != VK_NULL_HANDLE) {
             vkDestroyDevice(device_, nullptr);
         }
@@ -195,56 +243,12 @@ namespace RAGE {
         if (instance_ != VK_NULL_HANDLE) {
             vkDestroyInstance(instance_, nullptr);
         }
-    }
 
-    VulkanContext::VulkanContext(VulkanContext &&other) noexcept
-        : instance_(other.instance_)
-        , physicalDevice_(other.physicalDevice_)
-        , device_(other.device_)
-        , graphicsQueue_(other.graphicsQueue_)
-        , graphicsQueueFamily_(other.graphicsQueueFamily_)
-        , debugMessenger_(other.debugMessenger_) {
-        other.instance_ = VK_NULL_HANDLE;
-        other.physicalDevice_ = VK_NULL_HANDLE;
-        other.device_ = VK_NULL_HANDLE;
-        other.graphicsQueue_ = VK_NULL_HANDLE;
-        other.graphicsQueueFamily_ = 0;
-        other.debugMessenger_ = VK_NULL_HANDLE;
-    }
-
-    VulkanContext &VulkanContext::operator=(VulkanContext &&other) noexcept {
-        if (this != &other) {
-            // Destroy current
-            if (device_ != VK_NULL_HANDLE) {
-                vkDestroyDevice(device_, nullptr);
-            }
-            if (debugMessenger_ != VK_NULL_HANDLE) {
-                auto destroyFunc = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-                    vkGetInstanceProcAddr(instance_, "vkDestroyDebugUtilsMessengerEXT"));
-                if (destroyFunc != nullptr) {
-                    destroyFunc(instance_, debugMessenger_, nullptr);
-                }
-            }
-            if (instance_ != VK_NULL_HANDLE) {
-                vkDestroyInstance(instance_, nullptr);
-            }
-
-            // Transfer
-            instance_ = other.instance_;
-            physicalDevice_ = other.physicalDevice_;
-            device_ = other.device_;
-            graphicsQueue_ = other.graphicsQueue_;
-            graphicsQueueFamily_ = other.graphicsQueueFamily_;
-            debugMessenger_ = other.debugMessenger_;
-
-            other.instance_ = VK_NULL_HANDLE;
-            other.physicalDevice_ = VK_NULL_HANDLE;
-            other.device_ = VK_NULL_HANDLE;
-            other.graphicsQueue_ = VK_NULL_HANDLE;
-            other.graphicsQueueFamily_ = 0;
-            other.debugMessenger_ = VK_NULL_HANDLE;
-        }
-
-        return *this;
+        instance_ = VK_NULL_HANDLE;
+        physicalDevice_ = VK_NULL_HANDLE;
+        device_ = VK_NULL_HANDLE;
+        graphicsQueue_ = VK_NULL_HANDLE;
+        graphicsQueueFamily_ = 0;
+        debugMessenger_ = VK_NULL_HANDLE;
     }
 }

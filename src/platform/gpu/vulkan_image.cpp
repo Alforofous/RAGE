@@ -2,20 +2,20 @@
 #include "vulkan_type_map.hpp"
 #include <stdexcept>
 
-namespace RAGE {
-    namespace {
-        VkImageViewType deduceViewType(uint32_t depth, uint32_t arrayLayers) {
-            if (depth > 1) {
-                return VK_IMAGE_VIEW_TYPE_3D;
-            }
-            if (arrayLayers > 1) {
-                return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-            }
-
-            return VK_IMAGE_VIEW_TYPE_2D;
+namespace {
+    VkImageViewType deduceViewType(uint32_t depth, uint32_t arrayLayers) {
+        if (depth > 1) {
+            return VK_IMAGE_VIEW_TYPE_3D;
         }
-    }
+        if (arrayLayers > 1) {
+            return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        }
 
+        return VK_IMAGE_VIEW_TYPE_2D;
+    }
+}
+
+namespace RAGE {
     VulkanImage::VulkanImage(VkDevice device, VmaAllocator allocator, VkImage image, VmaAllocation allocation,
                              ImageCreateInfo info)
         : device_(device)

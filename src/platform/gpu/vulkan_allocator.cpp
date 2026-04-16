@@ -3,6 +3,23 @@
 #include "vulkan_type_map.hpp"
 #include <stdexcept>
 
+using RAGE::MemoryLocation;
+
+namespace {
+    VmaMemoryUsage toVmaMemoryUsage(MemoryLocation loc) {
+        switch (loc) {
+            case MemoryLocation::GpuOnly:
+                return VMA_MEMORY_USAGE_GPU_ONLY;
+            case MemoryLocation::CpuToGpu:
+                return VMA_MEMORY_USAGE_CPU_TO_GPU;
+            case MemoryLocation::GpuToCpu:
+                return VMA_MEMORY_USAGE_GPU_TO_CPU;
+        }
+
+        return VMA_MEMORY_USAGE_AUTO;
+    }
+}
+
 namespace RAGE {
     VulkanAllocator::VulkanAllocator(VulkanAllocatorCreateInfo info)
         : device_(info.device) {
@@ -43,21 +60,6 @@ namespace RAGE {
         }
 
         return *this;
-    }
-
-    namespace {
-        VmaMemoryUsage toVmaMemoryUsage(MemoryLocation loc) {
-            switch (loc) {
-                case MemoryLocation::GpuOnly:
-                    return VMA_MEMORY_USAGE_GPU_ONLY;
-                case MemoryLocation::CpuToGpu:
-                    return VMA_MEMORY_USAGE_CPU_TO_GPU;
-                case MemoryLocation::GpuToCpu:
-                    return VMA_MEMORY_USAGE_GPU_TO_CPU;
-            }
-
-            return VMA_MEMORY_USAGE_AUTO;
-        }
     }
 
     VulkanBuffer VulkanAllocator::createBuffer(BufferCreateInfo info) {
