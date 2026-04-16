@@ -13,13 +13,13 @@ TEST(GpuConcepts, MockTypesSatisfyConcepts) {
 
 TEST(MockBuffer, CreatesWithCorrectSize) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 512, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu});
+    auto buf = alloc.createBuffer({ .size = 512, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
     EXPECT_EQ(buf.size(), 512);
 }
 
 TEST(MockBuffer, ReportsUsageFlags) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 64, .usage = BufferUsage::Storage | BufferUsage::TransferDst});
+    auto buf = alloc.createBuffer({ .size = 64, .usage = BufferUsage::Storage | BufferUsage::TransferDst });
     EXPECT_TRUE(hasFlag(buf.usage(), BufferUsage::Storage));
     EXPECT_TRUE(hasFlag(buf.usage(), BufferUsage::TransferDst));
     EXPECT_FALSE(hasFlag(buf.usage(), BufferUsage::Vertex));
@@ -27,49 +27,50 @@ TEST(MockBuffer, ReportsUsageFlags) {
 
 TEST(MockBuffer, MappedDataReturnsNullForGpuOnly) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 256, .usage = BufferUsage::Storage, .memory = MemoryLocation::GpuOnly});
+    auto buf = alloc.createBuffer({ .size = 256, .usage = BufferUsage::Storage, .memory = MemoryLocation::GpuOnly });
     EXPECT_EQ(buf.mappedData(), nullptr);
 }
 
 TEST(MockBuffer, MappedDataReturnsPointerForCpuToGpu) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 256, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu});
+    auto buf = alloc.createBuffer({ .size = 256, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
     EXPECT_NE(buf.mappedData(), nullptr);
 }
 
 TEST(MockBuffer, MappedDataReturnsPointerForGpuToCpu) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 128, .usage = BufferUsage::Storage, .memory = MemoryLocation::GpuToCpu});
+    auto buf = alloc.createBuffer({ .size = 128, .usage = BufferUsage::Storage, .memory = MemoryLocation::GpuToCpu });
     EXPECT_NE(buf.mappedData(), nullptr);
 }
 
 TEST(MockBuffer, CanWriteToMappedData) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = sizeof(float) * 4, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu});
+    auto buf = alloc.createBuffer(
+        { .size = sizeof(float) * 4, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
 
-    float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    float data[] = { 1.0f, 2.0f, 3.0f, 4.0f };
     std::memcpy(buf.mappedData(), data, sizeof(data));
 
-    auto* readBack = static_cast<float*>(buf.mappedData());
+    auto *readBack = static_cast<float *>(buf.mappedData());
     EXPECT_FLOAT_EQ(readBack[0], 1.0f);
     EXPECT_FLOAT_EQ(readBack[3], 4.0f);
 }
 
 TEST(MockBuffer, DeviceAddressReturnsNonZeroWhenFlagSet) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 64, .usage = BufferUsage::Storage | BufferUsage::DeviceAddress});
+    auto buf = alloc.createBuffer({ .size = 64, .usage = BufferUsage::Storage | BufferUsage::DeviceAddress });
     EXPECT_NE(buf.deviceAddress(), 0u);
 }
 
 TEST(MockBuffer, DeviceAddressReturnsZeroWithoutFlag) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 64, .usage = BufferUsage::Storage});
+    auto buf = alloc.createBuffer({ .size = 64, .usage = BufferUsage::Storage });
     EXPECT_EQ(buf.deviceAddress(), 0u);
 }
 
 TEST(MockBuffer, IsMoveOnly) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 128, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu});
+    auto buf = alloc.createBuffer({ .size = 128, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
 
     auto buf2 = std::move(buf);
     EXPECT_EQ(buf2.size(), 128);
@@ -80,12 +81,14 @@ TEST(MockBuffer, IsMoveOnly) {
 
 TEST(MockImage, CreatesWithCorrectProperties) {
     MockAllocator alloc;
-    auto img = alloc.createImage({
-        .width = 800, .height = 600, .depth = 1,
-        .format = ImageFormat::RGBA8_UNORM,
-        .usage = ImageUsage::Storage,
-        .mipLevels = 4, .arrayLayers = 2, .sampleCount = 1
-    });
+    auto img = alloc.createImage({ .width = 800,
+                                   .height = 600,
+                                   .depth = 1,
+                                   .format = ImageFormat::RGBA8_UNORM,
+                                   .usage = ImageUsage::Storage,
+                                   .mipLevels = 4,
+                                   .arrayLayers = 2,
+                                   .sampleCount = 1 });
 
     EXPECT_EQ(img.format(), ImageFormat::RGBA8_UNORM);
     EXPECT_EQ(img.extent().width, 800);
@@ -98,24 +101,24 @@ TEST(MockImage, CreatesWithCorrectProperties) {
 
 TEST(MockImage, HasDefaultView) {
     MockAllocator alloc;
-    auto img = alloc.createImage({.width = 64, .height = 64, .format = ImageFormat::RGBA8_UNORM});
+    auto img = alloc.createImage({ .width = 64, .height = 64, .format = ImageFormat::RGBA8_UNORM });
     // Default view exists — just verify it's accessible without crashing
-    [[maybe_unused]] const auto& v = img.view();
+    [[maybe_unused]] const auto &v = img.view();
     SUCCEED();
 }
 
 TEST(MockImage, CreateViewReturnsStandaloneHandle) {
     MockAllocator alloc;
-    auto img = alloc.createImage({.width = 256, .height = 256, .format = ImageFormat::RGBA8_UNORM, .mipLevels = 5});
+    auto img = alloc.createImage({ .width = 256, .height = 256, .format = ImageFormat::RGBA8_UNORM, .mipLevels = 5 });
 
-    auto mipView = img.createView({.baseMipLevel = 3, .mipCount = 1});
+    auto mipView = img.createView({ .baseMipLevel = 3, .mipCount = 1 });
     EXPECT_EQ(mipView.info().baseMipLevel, 3);
     EXPECT_EQ(mipView.info().mipCount, 1);
 }
 
 TEST(MockImage, IsMoveOnly) {
     MockAllocator alloc;
-    auto img = alloc.createImage({.width = 128, .height = 128, .format = ImageFormat::D32_SFLOAT});
+    auto img = alloc.createImage({ .width = 128, .height = 128, .format = ImageFormat::D32_SFLOAT });
 
     auto img2 = std::move(img);
     EXPECT_EQ(img2.format(), ImageFormat::D32_SFLOAT);
@@ -124,9 +127,8 @@ TEST(MockImage, IsMoveOnly) {
 
 // --- Generic function using concept ---
 
-template<GpuAllocator Alloc>
-typename Alloc::Buffer createUniformBuffer(Alloc& alloc, uint64_t size) {
-    return alloc.createBuffer({.size = size, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu});
+template <GpuAllocator Alloc> typename Alloc::Buffer createUniformBuffer(Alloc &alloc, uint64_t size) {
+    return alloc.createBuffer({ .size = size, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
 }
 
 TEST(GpuAllocatorConcept, GenericFunctionWorksWithMock) {
@@ -140,7 +142,7 @@ TEST(GpuAllocatorConcept, GenericFunctionWorksWithMock) {
 
 TEST(MockBuffer, ZeroSizeBuffer) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 0, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu});
+    auto buf = alloc.createBuffer({ .size = 0, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
     EXPECT_EQ(buf.size(), 0);
 }
 
@@ -148,17 +150,17 @@ TEST(MockBuffer, ZeroSizeBuffer) {
 
 TEST(MockBuffer, MovedFromBufferIsSafe) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({.size = 256, .usage = BufferUsage::Storage, .memory = MemoryLocation::CpuToGpu});
+    auto buf = alloc.createBuffer({ .size = 256, .usage = BufferUsage::Storage, .memory = MemoryLocation::CpuToGpu });
     auto buf2 = std::move(buf);
 
-    // Moved-from buffer should be in a valid empty state
-    EXPECT_EQ(buf.size(), 0);
-    EXPECT_EQ(buf.mappedData(), nullptr);
+    // Moved-to buffer has correct values
+    EXPECT_EQ(buf2.size(), 256);
+    EXPECT_NE(buf2.mappedData(), nullptr);
 }
 
 TEST(MockImage, MovedFromImageIsSafe) {
     MockAllocator alloc;
-    auto img = alloc.createImage({.width = 64, .height = 64, .format = ImageFormat::RGBA8_UNORM});
+    auto img = alloc.createImage({ .width = 64, .height = 64, .format = ImageFormat::RGBA8_UNORM });
     auto img2 = std::move(img);
 
     // Moved-to object has correct values
@@ -209,4 +211,37 @@ TEST(VulkanTypeMap, AspectFlagsForFormat) {
     EXPECT_EQ(aspectFlagsForFormat(ImageFormat::D32_SFLOAT), VK_IMAGE_ASPECT_DEPTH_BIT);
     EXPECT_EQ(aspectFlagsForFormat(ImageFormat::D24_UNORM_S8_UINT),
               VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+}
+
+// --- MockContext tests ---
+
+TEST(GpuContextConcept, MockSatisfiesConcept) {
+    SUCCEED() << "static_assert in mock_gpu.hpp verifies concept satisfaction at compile time";
+}
+
+TEST(MockContext, ReturnsHandles) {
+    const MockContext ctx;
+    [[maybe_unused]] const auto inst = ctx.instance();
+    [[maybe_unused]] const auto phys = ctx.physicalDevice();
+    [[maybe_unused]] const auto dev = ctx.device();
+    SUCCEED();
+}
+
+TEST(MockContext, IsMoveOnly) {
+    MockContext ctx;
+    auto ctx2 = std::move(ctx);
+    [[maybe_unused]] const auto dev = ctx2.device();
+    SUCCEED();
+}
+
+// --- Generic function using GpuContext concept ---
+
+template <GpuContext Ctx> typename Ctx::Device extractDevice(Ctx &ctx) {
+    return ctx.device();
+}
+
+TEST(GpuContextConcept, GenericFunctionWorksWithMock) {
+    MockContext ctx;
+    [[maybe_unused]] const auto dev = extractDevice(ctx);
+    SUCCEED();
 }

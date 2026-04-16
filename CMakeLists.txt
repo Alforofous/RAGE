@@ -33,6 +33,7 @@ add_subdirectory(libraries/)
 set(ENGINE_SOURCES
     src/platform/gpu/vulkan_allocator.cpp
     src/platform/gpu/vulkan_image.cpp
+    src/platform/gpu/vulkan_context.cpp
 )
 
 add_library(rage_engine STATIC ${ENGINE_SOURCES})
