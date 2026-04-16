@@ -8,10 +8,11 @@
 
 namespace RAGE {
     class VulkanBuffer {
-public:
+    public:
         VulkanBuffer() = default;
 
-        VulkanBuffer(VmaAllocator allocator, BufferCreateInfo info, VkBuffer buffer, VmaAllocation allocation, void *mapped, uint64_t deviceAddr)
+        VulkanBuffer(VmaAllocator allocator, BufferCreateInfo info, VkBuffer buffer, VmaAllocation allocation,
+                     void *mapped, uint64_t deviceAddr)
             : allocator_(allocator)
             , buffer_(buffer)
             , allocation_(allocation)
@@ -23,10 +24,10 @@ public:
         ~VulkanBuffer() { destroy(); }
 
         VulkanBuffer(const VulkanBuffer &) = delete;
-        VulkanBuffer& operator=(const VulkanBuffer &) = delete;
+        VulkanBuffer &operator=(const VulkanBuffer &) = delete;
 
         VulkanBuffer(VulkanBuffer &&other) noexcept { swap(other); }
-        VulkanBuffer& operator=(VulkanBuffer &&other) noexcept {
+        VulkanBuffer &operator=(VulkanBuffer &&other) noexcept {
             if (this != &other) {
                 destroy();
                 swap(other);
@@ -52,7 +53,7 @@ public:
 
         VkBuffer vulkanHandle() const { return buffer_; }
 
-private:
+    private:
         void destroy() {
             if (buffer_ != VK_NULL_HANDLE && allocator_ != VK_NULL_HANDLE) {
                 vmaDestroyBuffer(allocator_, buffer_, allocation_);

@@ -16,14 +16,14 @@ namespace RAGE {
         }
     }
 
-    VulkanImage::VulkanImage(VkDevice device, VmaAllocator allocator, VkImage image,
-                             VmaAllocation allocation, ImageCreateInfo info)
+    VulkanImage::VulkanImage(VkDevice device, VmaAllocator allocator, VkImage image, VmaAllocation allocation,
+                             ImageCreateInfo info)
         : device_(device)
         , allocator_(allocator)
         , image_(image)
         , allocation_(allocation)
         , format_(info.format)
-        , extent_{.width = info.width, .height = info.height, .depth = info.depth}
+        , extent_{ .width = info.width, .height = info.height, .depth = info.depth }
         , mipLevels_(info.mipLevels)
         , arrayLayers_(info.arrayLayers)
         , sampleCount_(info.sampleCount) {

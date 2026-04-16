@@ -3,35 +3,35 @@
 #include <cstdint>
 
 namespace RAGE {
-#define RAGE_DEFINE_FLAGS(EnumType) \
-        inline EnumType operator|(EnumType a, EnumType b) { \
-            return static_cast<EnumType>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b)); \
-        } \
-        inline EnumType operator&(EnumType a, EnumType b) { \
-            return static_cast<EnumType>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b)); \
-        } \
-        inline bool hasFlag(EnumType flags, EnumType flag) { \
-            return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(flag)) != 0; \
-        }
+#define RAGE_DEFINE_FLAGS(EnumType)                                                                                    \
+    inline EnumType operator|(EnumType a, EnumType b) {                                                                \
+        return static_cast<EnumType>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));                             \
+    }                                                                                                                  \
+    inline EnumType operator&(EnumType a, EnumType b) {                                                                \
+        return static_cast<EnumType>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));                             \
+    }                                                                                                                  \
+    inline bool hasFlag(EnumType flags, EnumType flag) {                                                               \
+        return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(flag)) != 0;                                      \
+    }
 
     enum class BufferUsage : uint32_t {
-        Uniform       = 1 << 0,
-        Storage       = 1 << 1,
-        Vertex        = 1 << 2,
-        Index         = 1 << 3,
+        Uniform = 1 << 0,
+        Storage = 1 << 1,
+        Vertex = 1 << 2,
+        Index = 1 << 3,
         DeviceAddress = 1 << 4,
-        TransferSrc   = 1 << 5,
-        TransferDst   = 1 << 6,
+        TransferSrc = 1 << 5,
+        TransferDst = 1 << 6,
     };
     RAGE_DEFINE_FLAGS(BufferUsage)
 
     enum class ImageUsage : uint32_t {
         ColorAttachment = 1 << 0,
-        DepthStencil    = 1 << 1,
-        Sampled         = 1 << 2,
-        Storage         = 1 << 3,
-        TransferSrc     = 1 << 4,
-        TransferDst     = 1 << 5,
+        DepthStencil = 1 << 1,
+        Sampled = 1 << 2,
+        Storage = 1 << 3,
+        TransferSrc = 1 << 4,
+        TransferDst = 1 << 5,
     };
     RAGE_DEFINE_FLAGS(ImageUsage)
 

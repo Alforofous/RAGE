@@ -25,12 +25,13 @@ namespace RAGE {
     }
 
     VulkanAllocator::VulkanAllocator(VulkanAllocator &&other) noexcept
-        : allocator_(other.allocator_), device_(other.device_) {
+        : allocator_(other.allocator_)
+        , device_(other.device_) {
         other.allocator_ = VK_NULL_HANDLE;
         other.device_ = VK_NULL_HANDLE;
     }
 
-    VulkanAllocator& VulkanAllocator::operator=(VulkanAllocator &&other) noexcept {
+    VulkanAllocator &VulkanAllocator::operator=(VulkanAllocator &&other) noexcept {
         if (this != &other) {
             if (allocator_ != VK_NULL_HANDLE) {
                 vmaDestroyAllocator(allocator_);
@@ -47,9 +48,12 @@ namespace RAGE {
     namespace {
         VmaMemoryUsage toVmaMemoryUsage(MemoryLocation loc) {
             switch (loc) {
-                case MemoryLocation::GpuOnly:  return VMA_MEMORY_USAGE_GPU_ONLY;
-                case MemoryLocation::CpuToGpu: return VMA_MEMORY_USAGE_CPU_TO_GPU;
-                case MemoryLocation::GpuToCpu: return VMA_MEMORY_USAGE_GPU_TO_CPU;
+                case MemoryLocation::GpuOnly:
+                    return VMA_MEMORY_USAGE_GPU_ONLY;
+                case MemoryLocation::CpuToGpu:
+                    return VMA_MEMORY_USAGE_CPU_TO_GPU;
+                case MemoryLocation::GpuToCpu:
+                    return VMA_MEMORY_USAGE_GPU_TO_CPU;
             }
 
             return VMA_MEMORY_USAGE_AUTO;

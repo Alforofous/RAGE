@@ -4,7 +4,7 @@
 #include <cstdio>
 
 namespace RAGE {
-    enum class LogLevel : uint8_t {Error, Warn, Info, Debug};
+    enum class LogLevel : uint8_t { Error, Warn, Info, Debug };
 
     inline void log(LogLevel level, const char *msg) {
         const char *prefix[] = { "ERROR", "WARN", "INFO", "DEBUG" };

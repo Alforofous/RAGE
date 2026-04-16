@@ -8,19 +8,21 @@
 
 namespace RAGE {
     class VulkanImageView {
-public:
+    public:
         VulkanImageView() = default;
 
         VulkanImageView(VkDevice device, VkImageView view, ImageViewCreateInfo info)
-            : device_(device), view_(view), info_(info) {}
+            : device_(device)
+            , view_(view)
+            , info_(info) {}
 
         ~VulkanImageView() { destroy(); }
 
         VulkanImageView(const VulkanImageView &) = delete;
-        VulkanImageView& operator=(const VulkanImageView &) = delete;
+        VulkanImageView &operator=(const VulkanImageView &) = delete;
 
         VulkanImageView(VulkanImageView &&other) noexcept { swap(other); }
-        VulkanImageView& operator=(VulkanImageView &&other) noexcept {
+        VulkanImageView &operator=(VulkanImageView &&other) noexcept {
             if (this != &other) {
                 destroy();
                 swap(other);
@@ -30,9 +32,9 @@ public:
         }
 
         VkImageView vulkanHandle() const { return view_; }
-        const ImageViewCreateInfo& info() const { return info_; }
+        const ImageViewCreateInfo &info() const { return info_; }
 
-private:
+    private:
         void destroy() {
             if (view_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
                 vkDestroyImageView(device_, view_, nullptr);
@@ -52,7 +54,7 @@ private:
     };
 
     class VulkanImage {
-public:
+    public:
         using ViewType = VulkanImageView;
 
         VulkanImage() = default;
@@ -63,10 +65,10 @@ public:
         ~VulkanImage() { destroy(); }
 
         VulkanImage(const VulkanImage &) = delete;
-        VulkanImage& operator=(const VulkanImage &) = delete;
+        VulkanImage &operator=(const VulkanImage &) = delete;
 
         VulkanImage(VulkanImage &&other) noexcept { swap(other); }
-        VulkanImage& operator=(VulkanImage &&other) noexcept {
+        VulkanImage &operator=(VulkanImage &&other) noexcept {
             if (this != &other) {
                 destroy();
                 swap(other);
@@ -81,13 +83,13 @@ public:
         uint32_t arrayLayers() const { return arrayLayers_; }
         uint32_t sampleCount() const { return sampleCount_; }
 
-        const VulkanImageView& view() const { return defaultView_; }
+        const VulkanImageView &view() const { return defaultView_; }
 
         VulkanImageView createView(ImageViewCreateInfo viewInfo);
 
         VkImage vulkanHandle() const { return image_; }
 
-private:
+    private:
         void destroy() {
             if (image_ != VK_NULL_HANDLE && allocator_ != VK_NULL_HANDLE) {
                 defaultView_ = VulkanImageView{};

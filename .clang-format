@@ -1,0 +1,53 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+# Braces on same line (K&R / Attach)
+BreakBeforeBraces: Attach
+
+# Namespace
+NamespaceIndentation: All
+FixNamespaceComments: false
+
+# Classes
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+
+# Pointers/References — star/ref with variable name
+PointerAlignment: Right
+ReferenceAlignment: Right
+
+# Includes
+SortIncludes: Never
+
+# C++20 concepts
+RequiresExpressionIndentation: OuterScope
+RequiresClausePosition: OwnLine
+IndentRequiresClause: true
+
+# Short forms
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Inline
+AllowShortEnumsOnASingleLine: true
+
+# Switch-case
+IndentCaseLabels: true
+
+# Blank lines
+MaxEmptyLinesToKeep: 1
+
+# Constructor initializer list
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+
+# Designated initializers
+Cpp11BracedListStyle: false
+
+# Spacing
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyBlock: false
+SpacesInAngles: Never

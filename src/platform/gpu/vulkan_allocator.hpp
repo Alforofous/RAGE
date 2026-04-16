@@ -15,7 +15,7 @@ namespace RAGE {
     };
 
     class VulkanAllocator {
-public:
+    public:
         using Buffer = VulkanBuffer;
         using Image = VulkanImage;
         using ImageView = VulkanImageView;
@@ -25,9 +25,9 @@ public:
         ~VulkanAllocator();
 
         VulkanAllocator(const VulkanAllocator &) = delete;
-        VulkanAllocator& operator=(const VulkanAllocator &) = delete;
+        VulkanAllocator &operator=(const VulkanAllocator &) = delete;
         VulkanAllocator(VulkanAllocator &&other) noexcept;
-        VulkanAllocator& operator=(VulkanAllocator &&other) noexcept;
+        VulkanAllocator &operator=(VulkanAllocator &&other) noexcept;
 
         VulkanBuffer createBuffer(BufferCreateInfo info);
         VulkanImage createImage(ImageCreateInfo info);
@@ -35,7 +35,7 @@ public:
         VmaAllocator vmaHandle() const { return allocator_; }
         VkDevice device() const { return device_; }
 
-private:
+    private:
         VmaAllocator allocator_ = VK_NULL_HANDLE;
         VkDevice device_ = VK_NULL_HANDLE;
     };
