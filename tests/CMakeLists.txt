@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 
 add_executable(rage_tests
     platform/gpu/gpu_allocator_test.cpp
+    platform/gpu/gpu_command_test.cpp
     shared/small_vector_test.cpp
 )
 
