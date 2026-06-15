@@ -1,22 +1,24 @@
 #pragma once
 
 #include <cstdint>
+#include <tuple>
 #include <utility>
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+#include "gpu_queue_kind.hpp"
 #include "gpu_types.hpp"
 
 namespace RAGE {
+    class VulkanAllocator;
+    class VulkanImage;
+    template <QueueKind K> class VulkanRecorder;
+
     class VulkanImageView {
     public:
         VulkanImageView() = default;
-
-        VulkanImageView(VkDevice device, VkImageView view, ImageViewCreateInfo info)
-            : device_(device)
-            , view_(view)
-            , info_(info) {}
-
         ~VulkanImageView() { destroy(); }
+
+        bool isValid() const { return view_ != VK_NULL_HANDLE; }
 
         VulkanImageView(const VulkanImageView &) = delete;
         VulkanImageView &operator=(const VulkanImageView &) = delete;
@@ -31,10 +33,17 @@ namespace RAGE {
             return *this;
         }
 
-        VkImageView vulkanHandle() const { return view_; }
         const ImageViewCreateInfo &info() const { return info_; }
 
     private:
+        friend class VulkanImage;
+        friend class VulkanDescriptorWriter;
+
+        VulkanImageView(VkDevice device, VkImageView view, ImageViewCreateInfo info)
+            : device_(device)
+            , view_(view)
+            , info_(info) {}
+
         void destroy() {
             if (view_ != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
                 vkDestroyImageView(device_, view_, nullptr);
@@ -57,11 +66,7 @@ namespace RAGE {
     public:
         using ViewType = VulkanImageView;
 
-        VulkanImage() = default;
-
-        VulkanImage(VkDevice device, VmaAllocator allocator, VkImage image, VmaAllocation allocation,
-                    ImageCreateInfo info);
-
+        VulkanImage() = delete;
         ~VulkanImage() { destroy(); }
 
         VulkanImage(const VulkanImage &) = delete;
@@ -77,22 +82,24 @@ namespace RAGE {
             return *this;
         }
 
-        ImageFormat format() const { return format_; }
-        Extent3D extent() const { return extent_; }
-        uint32_t mipLevels() const { return mipLevels_; }
-        uint32_t arrayLayers() const { return arrayLayers_; }
-        uint32_t sampleCount() const { return sampleCount_; }
-
-        const VulkanImageView &view() const { return defaultView_; }
+        ImageFormat format() const { return info_.format; }
+        VkImage handle() const { return image_; }
+        std::tuple<uint32_t, uint32_t, uint32_t> extent() const { return { info_.width, info_.height, info_.depth }; }
+        uint32_t mipLevels() const { return info_.mipLevels; }
+        uint32_t arrayLayers() const { return info_.arrayLayers; }
+        SampleCount sampleCount() const { return info_.sampleCount; }
 
         VulkanImageView createView(ImageViewCreateInfo viewInfo);
 
-        VkImage vulkanHandle() const { return image_; }
-
     private:
+        friend class VulkanAllocator;
+        template <QueueKind K> friend class VulkanRecorder;
+
+        VulkanImage(VkDevice device, VmaAllocator allocator, VkImage image, VmaAllocation allocation,
+                    ImageCreateInfo info);
+
         void destroy() {
             if (image_ != VK_NULL_HANDLE && allocator_ != VK_NULL_HANDLE) {
-                defaultView_ = VulkanImageView{};
                 vmaDestroyImage(allocator_, image_, allocation_);
                 image_ = VK_NULL_HANDLE;
                 allocation_ = VK_NULL_HANDLE;
@@ -104,23 +111,13 @@ namespace RAGE {
             std::swap(allocator_, other.allocator_);
             std::swap(image_, other.image_);
             std::swap(allocation_, other.allocation_);
-            std::swap(defaultView_, other.defaultView_);
-            std::swap(format_, other.format_);
-            std::swap(extent_, other.extent_);
-            std::swap(mipLevels_, other.mipLevels_);
-            std::swap(arrayLayers_, other.arrayLayers_);
-            std::swap(sampleCount_, other.sampleCount_);
+            std::swap(info_, other.info_);
         }
 
         VkDevice device_ = VK_NULL_HANDLE;
         VmaAllocator allocator_ = VK_NULL_HANDLE;
         VkImage image_ = VK_NULL_HANDLE;
         VmaAllocation allocation_ = VK_NULL_HANDLE;
-        VulkanImageView defaultView_;
-        ImageFormat format_ = ImageFormat::RGBA8_UNORM;
-        Extent3D extent_{};
-        uint32_t mipLevels_ = 1;
-        uint32_t arrayLayers_ = 1;
-        uint32_t sampleCount_ = 1;
+        ImageCreateInfo info_{};
     };
 }

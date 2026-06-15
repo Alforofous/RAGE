@@ -8,32 +8,31 @@
 #include "vulkan_image.hpp"
 
 namespace RAGE {
-    struct VulkanAllocatorCreateInfo {
-        VkInstance instance;
-        VkPhysicalDevice physicalDevice;
-        VkDevice device;
-    };
+    class VulkanContext;
 
     class VulkanAllocator {
     public:
         using Buffer = VulkanBuffer;
         using Image = VulkanImage;
-        using ImageView = VulkanImageView;
 
-        VulkanAllocator() = default;
-        explicit VulkanAllocator(VulkanAllocatorCreateInfo info);
+        VulkanAllocator() = delete;
+        VulkanAllocator(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
         ~VulkanAllocator();
 
         VulkanAllocator(const VulkanAllocator &) = delete;
         VulkanAllocator &operator=(const VulkanAllocator &) = delete;
-        VulkanAllocator(VulkanAllocator &&other) noexcept;
-        VulkanAllocator &operator=(VulkanAllocator &&other) noexcept;
+        VulkanAllocator(VulkanAllocator &&) = delete;
+        VulkanAllocator &operator=(VulkanAllocator &&) = delete;
 
         VulkanBuffer createBuffer(BufferCreateInfo info);
         VulkanImage createImage(ImageCreateInfo info);
 
-        VmaAllocator vmaHandle() const { return allocator_; }
-        VkDevice device() const { return device_; }
+        struct Stats {
+            uint64_t usedBytes = 0;
+            uint32_t allocationCount = 0;
+            uint32_t blockCount = 0;
+        };
+        Stats stats() const;
 
     private:
         VmaAllocator allocator_ = VK_NULL_HANDLE;

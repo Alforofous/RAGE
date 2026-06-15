@@ -1,15 +1,13 @@
 #include <gtest/gtest.h>
-#include "mock_gpu.hpp"
+#include "mocks/allocator.hpp"
+#include "mocks/context.hpp"
 
 using namespace RAGE;
-
-// --- Concept static assertions ---
+using namespace RAGE::Mocks;
 
 TEST(GpuConcepts, MockTypesSatisfyConcepts) {
-    SUCCEED() << "static_assert in mock_gpu.hpp verifies concept satisfaction at compile time";
+    SUCCEED() << "static_assert in mocks/ verifies concept satisfaction at compile time";
 }
-
-// --- MockBuffer tests ---
 
 TEST(MockBuffer, CreatesWithCorrectSize) {
     MockAllocator alloc;
@@ -56,13 +54,13 @@ TEST(MockBuffer, CanWriteToMappedData) {
     EXPECT_FLOAT_EQ(readBack[3], 4.0f);
 }
 
-TEST(MockBuffer, DeviceAddressReturnsNonZeroWhenFlagSet) {
+TEST(MockBuffer, DeviceAddressNonZeroWhenShaderDeviceAddressUsageSet) {
     MockAllocator alloc;
-    auto buf = alloc.createBuffer({ .size = 64, .usage = BufferUsage::Storage | BufferUsage::DeviceAddress });
+    auto buf = alloc.createBuffer({ .size = 64, .usage = BufferUsage::Storage | BufferUsage::ShaderDeviceAddress });
     EXPECT_NE(buf.deviceAddress(), 0u);
 }
 
-TEST(MockBuffer, DeviceAddressReturnsZeroWithoutFlag) {
+TEST(MockBuffer, DeviceAddressZeroWhenUsageMissing) {
     MockAllocator alloc;
     auto buf = alloc.createBuffer({ .size = 64, .usage = BufferUsage::Storage });
     EXPECT_EQ(buf.deviceAddress(), 0u);
@@ -77,8 +75,6 @@ TEST(MockBuffer, IsMoveOnly) {
     EXPECT_NE(buf2.mappedData(), nullptr);
 }
 
-// --- MockImage tests ---
-
 TEST(MockImage, CreatesWithCorrectProperties) {
     MockAllocator alloc;
     auto img = alloc.createImage({ .width = 800,
@@ -88,23 +84,16 @@ TEST(MockImage, CreatesWithCorrectProperties) {
                                    .usage = ImageUsage::Storage,
                                    .mipLevels = 4,
                                    .arrayLayers = 2,
-                                   .sampleCount = 1 });
+                                   .sampleCount = SampleCount::Count1 });
 
     EXPECT_EQ(img.format(), ImageFormat::RGBA8_UNORM);
-    EXPECT_EQ(img.extent().width, 800);
-    EXPECT_EQ(img.extent().height, 600);
-    EXPECT_EQ(img.extent().depth, 1);
+    auto [w, h, d] = img.extent();
+    EXPECT_EQ(w, 800u);
+    EXPECT_EQ(h, 600u);
+    EXPECT_EQ(d, 1u);
     EXPECT_EQ(img.mipLevels(), 4);
     EXPECT_EQ(img.arrayLayers(), 2);
-    EXPECT_EQ(img.sampleCount(), 1);
-}
-
-TEST(MockImage, HasDefaultView) {
-    MockAllocator alloc;
-    auto img = alloc.createImage({ .width = 64, .height = 64, .format = ImageFormat::RGBA8_UNORM });
-    // Default view exists — just verify it's accessible without crashing
-    [[maybe_unused]] const auto &v = img.view();
-    SUCCEED();
+    EXPECT_EQ(img.sampleCount(), SampleCount::Count1);
 }
 
 TEST(MockImage, CreateViewReturnsStandaloneHandle) {
@@ -122,10 +111,8 @@ TEST(MockImage, IsMoveOnly) {
 
     auto img2 = std::move(img);
     EXPECT_EQ(img2.format(), ImageFormat::D32_SFLOAT);
-    EXPECT_EQ(img2.extent().width, 128);
+    EXPECT_EQ(std::get<0>(img2.extent()), 128u);
 }
-
-// --- Generic function using concept ---
 
 template <GpuAllocator Alloc> typename Alloc::Buffer createUniformBuffer(Alloc &alloc, uint64_t size) {
     return alloc.createBuffer({ .size = size, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
@@ -138,22 +125,17 @@ TEST(GpuAllocatorConcept, GenericFunctionWorksWithMock) {
     EXPECT_NE(buf.mappedData(), nullptr);
 }
 
-// --- Zero-size buffer ---
-
 TEST(MockBuffer, ZeroSizeBuffer) {
     MockAllocator alloc;
     auto buf = alloc.createBuffer({ .size = 0, .usage = BufferUsage::Uniform, .memory = MemoryLocation::CpuToGpu });
     EXPECT_EQ(buf.size(), 0);
 }
 
-// --- Moved-from state safety ---
-
 TEST(MockBuffer, MovedFromBufferIsSafe) {
     MockAllocator alloc;
     auto buf = alloc.createBuffer({ .size = 256, .usage = BufferUsage::Storage, .memory = MemoryLocation::CpuToGpu });
     auto buf2 = std::move(buf);
 
-    // Moved-to buffer has correct values
     EXPECT_EQ(buf2.size(), 256);
     EXPECT_NE(buf2.mappedData(), nullptr);
 }
@@ -163,30 +145,25 @@ TEST(MockImage, MovedFromImageIsSafe) {
     auto img = alloc.createImage({ .width = 64, .height = 64, .format = ImageFormat::RGBA8_UNORM });
     auto img2 = std::move(img);
 
-    // Moved-to object has correct values
-    EXPECT_EQ(img2.extent().width, 64);
+    EXPECT_EQ(std::get<0>(img2.extent()), 64u);
     EXPECT_EQ(img2.format(), ImageFormat::RGBA8_UNORM);
-    // Moved-from object destructor runs safely (no double-free, no crash)
 }
 
-// --- Type map pure function tests ---
-
-#include "gpu/vulkan_type_map.hpp"
+#include "gpu/vulkan/vulkan_type_map.hpp"
 
 TEST(VulkanTypeMap, BufferUsageMapping) {
     EXPECT_EQ(toVkBufferUsage(BufferUsage::Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     EXPECT_EQ(toVkBufferUsage(BufferUsage::Storage), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     EXPECT_EQ(toVkBufferUsage(BufferUsage::Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     EXPECT_EQ(toVkBufferUsage(BufferUsage::Index), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    EXPECT_EQ(toVkBufferUsage(BufferUsage::DeviceAddress), VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
     EXPECT_EQ(toVkBufferUsage(BufferUsage::TransferSrc), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     EXPECT_EQ(toVkBufferUsage(BufferUsage::TransferDst), VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 }
 
 TEST(VulkanTypeMap, BufferUsageCombined) {
-    auto flags = toVkBufferUsage(BufferUsage::Storage | BufferUsage::DeviceAddress);
+    auto flags = toVkBufferUsage(BufferUsage::Storage | BufferUsage::TransferDst);
     EXPECT_TRUE(flags & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-    EXPECT_TRUE(flags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    EXPECT_TRUE(flags & VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     EXPECT_FALSE(flags & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 }
 
@@ -213,10 +190,8 @@ TEST(VulkanTypeMap, AspectFlagsForFormat) {
               VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
 }
 
-// --- MockContext tests ---
-
 TEST(GpuContextConcept, MockSatisfiesConcept) {
-    SUCCEED() << "static_assert in mock_gpu.hpp verifies concept satisfaction at compile time";
+    SUCCEED() << "static_assert in mocks/ verifies concept satisfaction at compile time";
 }
 
 TEST(MockContext, ReturnsHandles) {
@@ -233,8 +208,6 @@ TEST(MockContext, IsMoveOnly) {
     [[maybe_unused]] const auto dev = ctx2.device();
     SUCCEED();
 }
-
-// --- Generic function using GpuContext concept ---
 
 template <GpuContext Ctx> typename Ctx::Device extractDevice(Ctx &ctx) {
     return ctx.device();

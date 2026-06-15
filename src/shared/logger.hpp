@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 
-namespace RAGE {
+namespace RAGE::Core {
     enum class LogLevel : uint8_t { Error, Warn, Info, Debug };
 
     inline void log(LogLevel level, const char *msg) {

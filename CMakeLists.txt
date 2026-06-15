@@ -31,9 +31,22 @@ add_subdirectory(libraries/)
 # --- Engine library ---
 
 set(ENGINE_SOURCES
-    src/platform/gpu/vulkan_allocator.cpp
-    src/platform/gpu/vulkan_image.cpp
-    src/platform/gpu/vulkan_context.cpp
+    src/platform/gpu/vulkan/vma_impl.cpp
+    src/platform/gpu/vulkan/vulkan_allocator.cpp
+    src/platform/gpu/vulkan/vulkan_image.cpp
+    src/platform/gpu/vulkan/vulkan_context.cpp
+    src/platform/gpu/vulkan/vulkan_instance.cpp
+    src/platform/gpu/vulkan/vulkan_device.cpp
+    src/platform/gpu/vulkan/vulkan_fence_pool.cpp
+    src/platform/gpu/vulkan/vulkan_compute_pipeline.cpp
+    src/platform/gpu/vulkan/vulkan_descriptor_layout_cache.cpp
+    src/platform/gpu/vulkan/vulkan_descriptor_pool.cpp
+    src/platform/gpu/vulkan/vulkan_descriptor_writer.cpp
+    src/platform/gpu/vulkan/vulkan_pipeline.cpp
+    src/platform/gpu/vulkan/vulkan_render_target.cpp
+    src/platform/gpu/vulkan/vulkan_semaphore_pool.cpp
+    src/platform/gpu/vulkan/vulkan_shader_module.cpp
+    src/platform/gpu/vulkan/vulkan_swapchain.cpp
 )
 
 add_library(rage_engine STATIC ${ENGINE_SOURCES})
