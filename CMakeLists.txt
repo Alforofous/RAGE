@@ -76,10 +76,41 @@ endif()
 
 target_link_libraries(rage_engine project_libraries spirv-reflect-static)
 
+# --- Shader compilation ---
+
+find_program(GLSLC NAMES glslc HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
+if(NOT GLSLC)
+    message(FATAL_ERROR "glslc not found; set VULKAN_SDK or install Vulkan SDK")
+endif()
+
+set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/shaders")
+file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
+
+file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/shaders/*.comp")
+set(SHADER_OUTPUTS "")
+foreach(SHADER_SRC ${SHADER_SOURCES})
+    get_filename_component(SHADER_NAME ${SHADER_SRC} NAME)
+    set(SPV_OUT "${SHADER_OUTPUT_DIR}/${SHADER_NAME}.spv")
+    add_custom_command(
+        OUTPUT ${SPV_OUT}
+        COMMAND ${GLSLC} ${SHADER_SRC} -o ${SPV_OUT}
+        DEPENDS ${SHADER_SRC}
+        COMMENT "Compiling ${SHADER_NAME} -> ${SHADER_NAME}.spv"
+        VERBATIM
+    )
+    list(APPEND SHADER_OUTPUTS ${SPV_OUT})
+endforeach()
+
+add_custom_target(shaders ALL DEPENDS ${SHADER_OUTPUTS})
+
 # --- App (temporary test executable) ---
 
-add_executable(RAGE src/app/main.cpp)
+add_executable(RAGE
+    src/app/main.cpp
+    src/app/window.cpp
+)
 target_link_libraries(RAGE rage_engine)
+add_dependencies(RAGE shaders)
 
 # --- Tests ---
 
