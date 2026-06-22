@@ -2,6 +2,11 @@
 cmake_minimum_required(VERSION 3.16)
 
 add_executable(rage_tests
+    engine/materials/material_test.cpp
+    engine/rendering/frame_context_test.cpp
+    engine/scene/camera_test.cpp
+    engine/scene/node3d_test.cpp
+    engine/scene/renderable_node3d_test.cpp
     platform/gpu/gpu_allocator_test.cpp
     platform/gpu/gpu_command_test.cpp
     shared/math/color_test.cpp

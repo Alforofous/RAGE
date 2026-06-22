@@ -47,6 +47,11 @@ set(ENGINE_SOURCES
     src/platform/gpu/vulkan/vulkan_semaphore_pool.cpp
     src/platform/gpu/vulkan/vulkan_shader_module.cpp
     src/platform/gpu/vulkan/vulkan_swapchain.cpp
+    src/engine/materials/pipeline_cache.cpp
+    src/engine/rendering/renderer.cpp
+    src/engine/scene/camera.cpp
+    src/engine/scene/node3d.cpp
+    src/engine/scene/renderable_node3d.cpp
 )
 
 add_library(rage_engine STATIC ${ENGINE_SOURCES})
