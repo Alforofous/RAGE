@@ -7,20 +7,10 @@
 #include <string>
 #include <vector>
 #include <vulkan/vulkan.h>
+#include "gpu/gpu_shader_module.hpp"
+#include "gpu/gpu_types.hpp"
 
 namespace RAGE {
-    enum class ShaderStage : uint8_t {
-        Vertex,
-        Fragment,
-        Compute,
-        RayGeneration,
-        Miss,
-        ClosestHit,
-        AnyHit,
-        Intersection,
-        Callable,
-    };
-
     struct ShaderDescriptorBinding {
         uint32_t set = 0;
         uint32_t binding = 0;
@@ -88,4 +78,6 @@ namespace RAGE {
         std::vector<ShaderPushConstantRange> pushConstants_;
         std::array<uint32_t, 3> localWorkgroupSize_{ 0, 0, 0 };
     };
+
+    static_assert(GpuShaderModule<VulkanShaderModule>, "VulkanShaderModule must satisfy GpuShaderModule concept");
 }

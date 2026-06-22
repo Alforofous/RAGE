@@ -193,6 +193,18 @@ namespace RAGE {
         RayTracing,
     };
 
+    enum class ShaderStage : uint8_t {
+        Vertex,
+        Fragment,
+        Compute,
+        RayGeneration,
+        Miss,
+        ClosestHit,
+        AnyHit,
+        Intersection,
+        Callable,
+    };
+
     struct BufferCopy {
         uint64_t srcOffset = 0;
         uint64_t dstOffset = 0;
