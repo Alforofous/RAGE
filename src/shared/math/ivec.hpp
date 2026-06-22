@@ -1,0 +1,37 @@
+#pragma once
+
+#include <cstdint>
+
+namespace RAGE {
+    /**
+     * Three-component integer vector. Used primarily for voxel-grid indices and other discrete
+     * 3D coordinates where Vec3's floating-point storage would invite rounding errors.
+     *
+     * Minimal API by design — just enough arithmetic for the use cases that already exist. Add
+     * more ops when a concrete consumer needs them.
+     */
+    struct IVec3 {
+        int32_t x = 0;
+        int32_t y = 0;
+        int32_t z = 0;
+
+        constexpr IVec3() = default;
+        constexpr IVec3(int32_t x_, int32_t y_, int32_t z_)
+            : x(x_)
+            , y(y_)
+            , z(z_) {}
+
+        static constexpr IVec3 zero() { return { 0, 0, 0 }; }
+
+        constexpr IVec3 operator+(const IVec3 &o) const { return { x + o.x, y + o.y, z + o.z }; }
+        constexpr IVec3 operator-(const IVec3 &o) const { return { x - o.x, y - o.y, z - o.z }; }
+        constexpr IVec3 operator*(int32_t s) const { return { x * s, y * s, z * s }; }
+        constexpr IVec3 operator-() const { return { -x, -y, -z }; }
+
+        bool operator==(const IVec3 &) const = default;
+
+        constexpr int64_t volume() const {
+            return static_cast<int64_t>(x) * static_cast<int64_t>(y) * static_cast<int64_t>(z);
+        }
+    };
+}
