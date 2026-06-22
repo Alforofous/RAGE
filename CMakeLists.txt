@@ -52,6 +52,7 @@ set(ENGINE_SOURCES
     src/engine/scene/camera.cpp
     src/engine/scene/node3d.cpp
     src/engine/scene/renderable_node3d.cpp
+    src/engine/scene/voxel3d.cpp
 )
 
 add_library(rage_engine STATIC ${ENGINE_SOURCES})
@@ -111,6 +112,7 @@ add_custom_target(shaders ALL DEPENDS ${SHADER_OUTPUTS})
 # --- App (temporary test executable) ---
 
 add_executable(RAGE
+    src/app/free_fly_controller.cpp
     src/app/main.cpp
     src/app/window.cpp
 )

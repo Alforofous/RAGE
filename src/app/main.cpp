@@ -1,27 +1,26 @@
-#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
-#include <optional>
+#include <memory>
+#include <numbers>
 #include <stdexcept>
 #include <vector>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include "gpu/gpu_queue_kind.hpp"
-#include "gpu/gpu_types.hpp"
+#include "engine/materials/material.hpp"
+#include "engine/rendering/renderer.hpp"
+#include "engine/scene/camera.hpp"
+#include "engine/scene/node3d.hpp"
+#include "engine/scene/voxel3d.hpp"
+#include "free_fly_controller.hpp"
 #include "gpu/vulkan/vulkan_allocator.hpp"
-#include "gpu/vulkan/vulkan_command_buffer.hpp"
-#include "gpu/vulkan/vulkan_command_pool.hpp"
-#include "gpu/vulkan/vulkan_compute_pipeline.hpp"
 #include "gpu/vulkan/vulkan_context.hpp"
-#include "gpu/vulkan/vulkan_descriptor_layout_cache.hpp"
-#include "gpu/vulkan/vulkan_descriptor_pool.hpp"
-#include "gpu/vulkan/vulkan_descriptor_writer.hpp"
 #include "gpu/vulkan/vulkan_queue.hpp"
-#include "gpu/vulkan/vulkan_render_target.hpp"
-#include "gpu/vulkan/vulkan_semaphore_pool.hpp"
 #include "gpu/vulkan/vulkan_shader_module.hpp"
 #include "gpu/vulkan/vulkan_swapchain.hpp"
+#include "math/color.hpp"
+#include "math/ivec.hpp"
+#include "math/vec.hpp"
 #include "window.hpp"
 
 namespace {
@@ -81,184 +80,64 @@ int main(int /*argc*/, char **argv) {
 
         VulkanContext ctx(buildContextInfo());
         VulkanAllocator allocator(ctx.vkInstance(), ctx.physicalDevice(), ctx.vkDevice());
-
         const SurfaceGuard surfaceGuard(ctx.vkInstance(), window.glfwHandle());
-        VkSurfaceKHR surface = surfaceGuard.handle();
 
         const std::filesystem::path shaderDir = executableDir(argv[0]) / "shaders";
-        const VulkanShaderModule gradientShader =
-            VulkanShaderModule::fromFile(ctx.vkDevice(), shaderDir / "gradient.comp.spv");
+        auto voxelShader = std::make_shared<const VulkanShaderModule>(
+            VulkanShaderModule::fromFile(ctx.vkDevice(), shaderDir / "voxel_raycast.comp.spv"));
 
-        VulkanDescriptorSetLayoutCache layoutCache(ctx.vkDevice());
-        VulkanComputePipeline pipeline(ctx.vkDevice(), layoutCache, gradientShader);
+        auto voxelMaterial = std::make_shared<Material<VulkanShaderModule>>(voxelShader);
+
+        constexpr IVec3 kGridDims{ 32, 32, 32 };
+        constexpr float kVoxelSize = 0.05f;
+        auto voxels = std::make_unique<Voxel3D>(allocator, kGridDims, kVoxelSize);
+        voxels->fill([](IVec3 c) -> Color {
+            const Vec3 p(static_cast<float>(c.x), static_cast<float>(c.y), static_cast<float>(c.z));
+            const Vec3 centre(15.5f, 15.5f, 15.5f);
+            const float d = (p - centre).length();
+            if (d < 13.0f) {
+                return Color(static_cast<float>(c.x) / 32.0f, static_cast<float>(c.y) / 32.0f,
+                             static_cast<float>(c.z) / 32.0f, 1.0f);
+            }
+            return Color::transparent();
+        });
+        voxels->setMaterial(voxelMaterial);
+        voxels->setPosition(Vec3(-0.8f, -0.8f, -3.0f));
+
+        Node3D root;
+        root.add(std::move(voxels));
+
+        const auto [initW, initH] = window.framebufferExtent();
+        Camera camera(std::numbers::pi_v<float> * 0.4f,
+                      static_cast<float>(initW) / static_cast<float>(initH > 0 ? initH : 1), 0.1f, 100.0f);
 
         {
-            const auto [initW, initH] = window.framebufferExtent();
-
             VulkanSwapchain swapchain({ .physicalDevice = ctx.physicalDevice(),
                                         .device = ctx.vkDevice(),
-                                        .surface = surface,
+                                        .surface = surfaceGuard.handle(),
                                         .graphicsQueueFamily = ctx.graphicsQueue().queueFamily(),
                                         .width = initW,
                                         .height = initH,
                                         .vsync = true });
 
-            VulkanCommandPool<queue_kind::Graphics> cmdPool(ctx.vkDevice(), ctx.graphicsQueue().queueFamily());
+            Renderer renderer(ctx, allocator, swapchain);
+            App::FreeFlyController controller(camera, window);
 
-            VulkanDescriptorPool descPool(ctx.vkDevice(), {});
-
-            std::optional<VulkanRenderTarget> renderTarget;
-            VkDescriptorSet descSet = VK_NULL_HANDLE;
-
-            const auto rebuildRenderTarget = [&](uint32_t w, uint32_t h) {
-                renderTarget.emplace(
-                    allocator, VulkanRenderTargetCreateInfo{ .width = w,
-                                                             .height = h,
-                                                             .format = ImageFormat::RGBA8_UNORM,
-                                                             .usage = ImageUsage::Storage | ImageUsage::TransferSrc });
-                descPool.reset();
-                descSet = descPool.allocate(pipeline.descriptorSetLayouts()[0]);
-                VulkanDescriptorWriter writer(ctx.vkDevice());
-                writer.writeStorageImage(descSet, 0, *renderTarget, ImageLayout::General);
-                writer.commit();
-            };
-
-            std::vector<VulkanSemaphoreHandle> renderDoneByImage;
-            const auto rebuildPerImageSemaphores = [&]() {
-                renderDoneByImage.clear();
-                renderDoneByImage.reserve(swapchain.imageCount());
-                for (uint32_t i = 0; i < swapchain.imageCount(); ++i) {
-                    renderDoneByImage.push_back(ctx.semaphores().acquire());
-                }
-            };
-
-            rebuildRenderTarget(initW, initH);
-            rebuildPerImageSemaphores();
-
-            std::optional<VulkanPendingSubmission<queue_kind::Graphics>> inFlight;
-
+            double lastTime = glfwGetTime();
             while (!window.shouldClose()) {
                 window.pollEvents();
+                const double now = glfwGetTime();
+                const auto dt = static_cast<float>(now - lastTime);
+                lastTime = now;
+
+                controller.update(dt);
 
                 const auto [w, h] = window.framebufferExtent();
-                if (w == 0 || h == 0) {
-                    continue;
+                window.clearResized();
+                if (h > 0) {
+                    camera.setAspect(static_cast<float>(w) / static_cast<float>(h));
                 }
-
-                if (window.wasResized()) {
-                    if (inFlight.has_value()) {
-                        std::move(*inFlight).wait();
-                        inFlight.reset();
-                    }
-                    vkDeviceWaitIdle(ctx.vkDevice());
-                    swapchain.recreate(w, h);
-                    rebuildRenderTarget(w, h);
-                    rebuildPerImageSemaphores();
-                    window.clearResized();
-                    continue;
-                }
-
-                if (inFlight.has_value()) {
-                    const VulkanCommandBuffer<queue_kind::Graphics> recycled = std::move(*inFlight).wait();
-                    inFlight.reset();
-                    (void)recycled;
-                }
-
-                const VulkanSemaphoreHandle imageReady = ctx.semaphores().acquire();
-
-                const VulkanSwapchainAcquire acq = swapchain.acquireNextImage(imageReady);
-                if (acq.outOfDate) {
-                    vkDeviceWaitIdle(ctx.vkDevice());
-                    swapchain.recreate(w, h);
-                    rebuildRenderTarget(w, h);
-                    rebuildPerImageSemaphores();
-                    continue;
-                }
-
-                const VulkanSemaphoreHandle &renderDone = renderDoneByImage[acq.imageIndex];
-
-                VulkanCommandBuffer<queue_kind::Graphics> cmd = cmdPool.allocate();
-                VulkanRecorder<queue_kind::Graphics> rec = std::move(cmd).begin();
-
-                VulkanRenderTarget &rt = *renderTarget;
-                VkImage targetImage = rt.image().handle();
-                VkImage swapImage = swapchain.image(acq.imageIndex);
-                const uint32_t rtW = rt.width();
-                const uint32_t rtH = rt.height();
-
-                const std::array<VulkanImageBarrier, 1> toGeneral{ { { .image = targetImage,
-                                                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                       .oldLayout = ImageLayout::Undefined,
-                                                                       .newLayout = ImageLayout::General,
-                                                                       .srcStage = PipelineStage::TopOfPipe,
-                                                                       .dstStage = PipelineStage::ComputeShader,
-                                                                       .srcAccess = AccessFlags::None,
-                                                                       .dstAccess = AccessFlags::ShaderWrite } } };
-                rec.pipelineBarrier(toGeneral);
-
-                const std::array<VkDescriptorSet, 1> sets{ descSet };
-                const auto [gx, gy, gz] = pipeline.groupCountsFor(rtW, rtH);
-                pipeline.execute(
-                    rec, PipelineExecuteContext{ .descriptorSets = sets, .groupsX = gx, .groupsY = gy, .groupsZ = gz });
-
-                const std::array<VulkanImageBarrier, 2> toBlit{ { { .image = targetImage,
-                                                                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                    .oldLayout = ImageLayout::General,
-                                                                    .newLayout = ImageLayout::TransferSrcOptimal,
-                                                                    .srcStage = PipelineStage::ComputeShader,
-                                                                    .dstStage = PipelineStage::Transfer,
-                                                                    .srcAccess = AccessFlags::ShaderWrite,
-                                                                    .dstAccess = AccessFlags::TransferRead },
-                                                                  { .image = swapImage,
-                                                                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                    .oldLayout = ImageLayout::Undefined,
-                                                                    .newLayout = ImageLayout::TransferDstOptimal,
-                                                                    .srcStage = PipelineStage::TopOfPipe,
-                                                                    .dstStage = PipelineStage::Transfer,
-                                                                    .srcAccess = AccessFlags::None,
-                                                                    .dstAccess = AccessFlags::TransferWrite } } };
-                rec.pipelineBarrier(toBlit);
-
-                rec.blitImage(targetImage, ImageLayout::TransferSrcOptimal, rtW, rtH, swapImage,
-                              ImageLayout::TransferDstOptimal, w, h);
-
-                const std::array<VulkanImageBarrier, 1> toPresent{ { { .image = swapImage,
-                                                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                       .oldLayout = ImageLayout::TransferDstOptimal,
-                                                                       .newLayout = ImageLayout::PresentSrc,
-                                                                       .srcStage = PipelineStage::Transfer,
-                                                                       .dstStage = PipelineStage::BottomOfPipe,
-                                                                       .srcAccess = AccessFlags::TransferWrite,
-                                                                       .dstAccess = AccessFlags::None } } };
-                rec.pipelineBarrier(toPresent);
-
-                VulkanExecutable<queue_kind::Graphics> exe = std::move(rec).end();
-
-                const std::array<VulkanSemaphoreWait, 1> waits{ { { .semaphore = imageReady,
-                                                                    .stage = PipelineStage::Transfer } } };
-                const std::array<VulkanSemaphoreHandle, 1> signals{ renderDone };
-
-                inFlight.emplace(
-                    ctx.graphicsQueue().submit(std::move(exe), VulkanSubmitInfo{ .wait = waits, .signal = signals }));
-
-                const bool presentOutOfDate = swapchain.present(ctx.graphicsQueue(), renderDone, acq.imageIndex);
-                if (presentOutOfDate) {
-                    if (inFlight.has_value()) {
-                        std::move(*inFlight).wait();
-                        inFlight.reset();
-                    }
-                    vkDeviceWaitIdle(ctx.vkDevice());
-                    swapchain.recreate(w, h);
-                    rebuildRenderTarget(w, h);
-                    rebuildPerImageSemaphores();
-                }
-            }
-
-            vkDeviceWaitIdle(ctx.vkDevice());
-
-            if (inFlight.has_value()) {
-                std::move(*inFlight).wait();
-                inFlight.reset();
+                renderer.render(root, camera, FrameExtent{ .width = w, .height = h });
             }
         }
     } catch (const std::exception &e) {
