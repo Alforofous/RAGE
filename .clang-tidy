@@ -50,6 +50,7 @@ Checks: >
   -modernize-use-using,
   -performance-avoid-endl,
   -performance-enum-size,
+  -portability-template-virtual-member-function,
   -readability-convert-member-functions-to-static,
   -readability-identifier-length,
   -readability-redundant-member-init,
