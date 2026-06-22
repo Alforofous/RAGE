@@ -8,22 +8,27 @@ echo "  RAGE — Full check pipeline"
 echo "=========================================="
 echo ""
 
-echo "[1/4] Build"
-bash "$SCRIPT_DIR/build.sh"
-echo ""
+run_step() {
+    local label="$1"
+    shift
+    local start
+    start=$(date +%s)
+    echo ">>> $label"
+    "$@"
+    local end
+    end=$(date +%s)
+    echo "<<< $label finished in $((end - start))s"
+    echo ""
+}
 
-echo "[2/4] Tests"
-bash "$SCRIPT_DIR/test.sh"
-echo ""
+PIPELINE_START=$(date +%s)
 
-echo "[3/4] Lint"
-bash "$SCRIPT_DIR/lint.sh"
-echo ""
+run_step "[1/4] Build"      bash "$SCRIPT_DIR/build.sh"
+run_step "[2/4] Tests"      bash "$SCRIPT_DIR/test.sh"
+run_step "[3/4] Lint"       bash "$SCRIPT_DIR/lint.sh"
+run_step "[4/4] Formatting" bash "$SCRIPT_DIR/format.sh"
 
-echo "[4/4] Formatting"
-bash "$SCRIPT_DIR/format.sh"
-echo ""
-
+TOTAL=$(($(date +%s) - PIPELINE_START))
 echo "=========================================="
-echo "  All checks passed"
+echo "  All checks passed in ${TOTAL}s"
 echo "=========================================="
