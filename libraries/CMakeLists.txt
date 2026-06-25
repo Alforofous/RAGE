@@ -26,7 +26,7 @@ add_subdirectory(glm)
 
 # Tracy profiler: opt-in client library. Off by default so non-profiling builds don't carry
 # its threads or symbols. Enable with -DRAGE_ENABLE_PROFILING=ON at configure time.
-option(RAGE_ENABLE_PROFILING "Build and link the Tracy profiler client" OFF)
+option(RAGE_ENABLE_PROFILING "Build and link the Tracy profiler client" ON)
 if(RAGE_ENABLE_PROFILING)
     set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
     set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)

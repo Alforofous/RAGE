@@ -57,9 +57,10 @@ namespace RAGE::App {
      *
      * Running it
      * ==========
-     * 1. Configure with profiling: `cmake -B build -DRAGE_ENABLE_PROFILING=ON`
-     *    (CMake auto-downloads the Tracy server GUI binary under libraries/tracy-server/
-     *    on Windows; ~12 MB one-time fetch from the upstream release.)
+     * 1. Configure: `cmake -B build` — profiling is ON by default. CMake auto-downloads the
+     *    Tracy server GUI binary under libraries/tracy-server/ on Windows (~12 MB one-time
+     *    fetch from the upstream release). Opt out with `-DRAGE_ENABLE_PROFILING=OFF` if you
+     *    want a lean build with no Tracy client linked.
      * 2. Build: `cmake --build build`
      * 3. Launch the engine *and* the profiler GUI in one step:
      *        ./build/RAGE.exe --profile
