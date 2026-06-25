@@ -1,13 +1,16 @@
 # PowerShell counterpart of build.sh — configure and build RAGE on Windows from PowerShell.
 #
 # Usage (from the project root):
-#   .\scripts\build.ps1
+#   .\scripts\build.ps1                  # lean build, no profiling
+#   .\scripts\build.ps1 -Profile         # build with Tracy profiling enabled
 #
 # Or, if your execution policy blocks unsigned scripts:
-#   powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
+#   powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1 [-Profile]
 #
-# Native Windows tooling only — no bash, no WSL. Idempotent: re-configures only when the
-# CMake cache is missing or stale, otherwise just rebuilds.
+# Native Windows tooling only — no bash, no WSL. CMake is always re-invoked so toggling
+# -Profile between runs correctly updates the cache.
+
+param([switch] $Profile)
 
 $ErrorActionPreference = 'Stop'
 
@@ -21,19 +24,17 @@ function Invoke-CheckedNative {
 
 $ProjectRoot = (Get-Item $PSScriptRoot).Parent.FullName
 $BuildDir = Join-Path $ProjectRoot 'build'
+$ProfileFlag = if ($Profile) { 'ON' } else { 'OFF' }
 
-Write-Host '=== Building RAGE ===' -ForegroundColor Cyan
+Write-Host "=== Building RAGE (profiling=$ProfileFlag) ===" -ForegroundColor Cyan
 
 Invoke-CheckedNative 'git submodule update' {
     git -C $ProjectRoot submodule update --init
 }
 
-$cachePath = Join-Path $BuildDir 'CMakeCache.txt'
-if (-not (Test-Path -LiteralPath $cachePath)) {
-    Write-Host 'Configuring CMake...' -ForegroundColor Cyan
-    Invoke-CheckedNative 'cmake configure' {
-        cmake -S $ProjectRoot -B $BuildDir
-    }
+Write-Host 'Configuring CMake...' -ForegroundColor Cyan
+Invoke-CheckedNative 'cmake configure' {
+    cmake -S $ProjectRoot -B $BuildDir "-DRAGE_ENABLE_PROFILING=$ProfileFlag"
 }
 
 Invoke-CheckedNative 'cmake build' {

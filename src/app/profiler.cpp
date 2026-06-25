@@ -25,7 +25,8 @@ namespace RAGE::App {
         std::fprintf(stdout, "[profiler] Tracy client v0.13.1 linked, on-demand. Connect Tracy.exe to attach.\n");
         std::fflush(stdout);
 #else
-        std::fprintf(stdout, "[profiler] disabled (configured with -DRAGE_ENABLE_PROFILING=OFF; default is ON).\n");
+        std::fprintf(stdout, "[profiler] disabled (rebuild with `scripts/build.ps1 -Profile` or "
+                             "`scripts/build.sh --profile`, or pass -DRAGE_ENABLE_PROFILING=ON to cmake).\n");
         std::fflush(stdout);
 #endif
     }
