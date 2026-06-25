@@ -1,14 +1,16 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
 #include <vulkan/vulkan.h>
+#include <memory>
 #include "engine/materials/pipeline_cache.hpp"
 #include "engine/rendering/ambient_light.hpp"
 #include "engine/rendering/frame_context.hpp"
+#include "engine/rendering/pixel_debug.hpp"
 #include "engine/scene/renderable_node3d.hpp"
 #include "gpu/vulkan/vulkan_buffer.hpp"
 #include "gpu/gpu_queue_kind.hpp"
@@ -98,6 +100,22 @@ namespace RAGE {
         void setAmbientLight(AmbientLight ambient) { ambient_ = ambient; }
         AmbientLight ambientLight() const { return ambient_; }
 
+        // Debug-only: pick a single pixel for shader-side introspection. setPickTarget queues
+        // the request for the next render(); tryReadPick consumes the result after that frame
+        // completes. See engine/rendering/pixel_debug.hpp.
+        void setPickTarget(int32_t pixelX, int32_t pixelY);
+        bool tryReadPick(PixelDebug &out);
+
+        // Observer hooks fired during render(). Each is a single-slot std::function; pass a
+        // null/empty value to clear. The engine has no knowledge of what listens — see
+        // src/app/profiler.hpp for the canonical subscriber.
+        using FrameHook = std::function<void()>;
+        using GpuPassHook = std::function<void(const char *passName, VkCommandBuffer cmd)>;
+
+        void onFrameEnd(FrameHook h) { frameEnd_ = std::move(h); }
+        void onBeforeGpuPass(GpuPassHook h) { beforeGpuPass_ = std::move(h); }
+        void onAfterGpuPass(GpuPassHook h) { afterGpuPass_ = std::move(h); }
+
     private:
         using Renderable = RenderableNode3D<VulkanShaderModule>;
 
@@ -123,12 +141,21 @@ namespace RAGE {
         std::optional<VulkanRenderTarget> renderTarget_;
         std::optional<VulkanBuffer> frameUniformBuffer_;
         std::optional<VulkanBuffer> sceneCastersBuffer_;
+        std::optional<VulkanBuffer> pixelDebugBuffer_;
+        int32_t pendingPickX_ = -1;
+        int32_t pendingPickY_ = -1;
+        bool pickResultReady_ = false;
+        PixelDebug pickResult_{};
         std::vector<VulkanSemaphoreHandle> renderDoneByImage_;
         std::optional<VulkanPendingSubmission<queue_kind::Graphics>> inFlight_;
         std::vector<Pass> passes_;
         std::vector<std::shared_ptr<DirectionalLight>> directionalLights_;
         AmbientLight ambient_{};
         std::vector<Voxel3D *> shadowCasters_;
+
+        FrameHook frameEnd_;
+        GpuPassHook beforeGpuPass_;
+        GpuPassHook afterGpuPass_;
 
         FrameExtent lastExtent_{};
         bool needsRecreate_ = true;

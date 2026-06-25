@@ -6,6 +6,7 @@
 #include <utility>
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/frame_uniforms.hpp"
+#include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/scene_casters.hpp"
 #include "engine/scene/camera.hpp"
 #include "engine/scene/directional_light.hpp"
@@ -35,13 +36,27 @@ namespace RAGE {
         vkDeviceWaitIdle(ctx_.vkDevice());
     }
 
-    void Renderer::addLight(std::shared_ptr<DirectionalLight> light) { directionalLights_.push_back(std::move(light)); }
-
     void Renderer::drainInFlight() {
         if (inFlight_.has_value()) {
             std::move(*inFlight_).wait();
             inFlight_.reset();
         }
+    }
+
+    void Renderer::addLight(std::shared_ptr<DirectionalLight> light) { directionalLights_.push_back(std::move(light)); }
+
+    void Renderer::setPickTarget(int32_t pixelX, int32_t pixelY) {
+        pendingPickX_ = pixelX;
+        pendingPickY_ = pixelY;
+    }
+
+    bool Renderer::tryReadPick(PixelDebug &out) {
+        if (!pickResultReady_) {
+            return false;
+        }
+        out = pickResult_;
+        pickResultReady_ = false;
+        return true;
     }
 
     void Renderer::rebuildFrameResources(FrameExtent extent) {
@@ -66,6 +81,15 @@ namespace RAGE {
                 .usage = BufferUsage::Uniform,
                 .memory = MemoryLocation::CpuToGpu,
             }));
+        }
+
+        if (!pixelDebugBuffer_.has_value()) {
+            pixelDebugBuffer_.emplace(allocator_.createBuffer({
+                .size = sizeof(PixelDebug),
+                .usage = BufferUsage::Storage,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+            std::memset(pixelDebugBuffer_->mappedData(), 0, sizeof(PixelDebug));
         }
 
         renderDoneByImage_.clear();
@@ -174,8 +198,8 @@ namespace RAGE {
                 uniforms.dirLightColor[i] = Vec4(c.r, c.g, c.b, 0.0f);
             }
 
-            uniforms.debugPixelX = -1;
-            uniforms.debugPixelY = -1;
+            uniforms.debugPixelX = pendingPickX_;
+            uniforms.debugPixelY = pendingPickY_;
 
             std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
         }
@@ -194,9 +218,23 @@ namespace RAGE {
         inFlight_.emplace(
             ctx_.graphicsQueue().submit(std::move(exe), VulkanSubmitInfo{ .wait = waits, .signal = signals }));
 
+        const bool pickRequested = (pendingPickX_ >= 0 && pendingPickY_ >= 0);
+        if (pickRequested) {
+            std::move(*inFlight_).wait();
+            inFlight_.reset();
+            std::memcpy(&pickResult_, pixelDebugBuffer_->mappedData(), sizeof(PixelDebug));
+            pickResultReady_ = true;
+            pendingPickX_ = -1;
+            pendingPickY_ = -1;
+        }
+
         const bool presentOutOfDate = swapchain_.present(ctx_.graphicsQueue(), renderDone, acq.imageIndex);
         if (presentOutOfDate) {
             needsRecreate_ = true;
+        }
+
+        if (frameEnd_) {
+            frameEnd_();
         }
     }
 
@@ -248,6 +286,7 @@ namespace RAGE {
         writer.writeStorageImage(set, 0, target, ImageLayout::General);
         writer.writeUniformBuffer(set, 2, *frameUniformBuffer_);
         writer.writeUniformBuffer(set, 3, *sceneCastersBuffer_);
+        writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
 
         const VulkanBuffer *fallbackBuffer = shadowCasters_[0]->voxelBuffer();
         for (uint32_t slot = 0; slot < kMaxSceneCasters; ++slot) {
@@ -264,11 +303,17 @@ namespace RAGE {
         const uint32_t gx = (wg[0] > 0) ? ((tgtW + wg[0] - 1) / wg[0]) : 1;
         const uint32_t gy = (wg[1] > 0) ? ((tgtH + wg[1] - 1) / wg[1]) : 1;
 
+        if (beforeGpuPass_) {
+            beforeGpuPass_("voxel_raycast", rec.rawHandle());
+        }
         pipeline.execute(rec, PipelineExecuteContext{ .descriptorSets = sets,
                                                       .pushConstants = {},
                                                       .groupsX = gx,
                                                       .groupsY = gy,
                                                       .groupsZ = 1 });
+        if (afterGpuPass_) {
+            afterGpuPass_("voxel_raycast", rec.rawHandle());
+        }
     }
 
     void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapW,

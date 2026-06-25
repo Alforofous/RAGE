@@ -29,6 +29,40 @@ layout(set = 0, binding = 4, std430) readonly buffer CasterVoxels {
     uint data[];
 } casterVoxels[16];
 
+layout(set = 0, binding = 5, std430) buffer PixelDebug {
+    int hit;
+    int casterIdx;
+    int voxelX;
+    int voxelY;
+    int voxelZ;
+    float tHit;
+    float cameraX;
+    float cameraY;
+    float cameraZ;
+    float rayDirX;
+    float rayDirY;
+    float rayDirZ;
+    float hitWorldX;
+    float hitWorldY;
+    float hitWorldZ;
+    float normalX;
+    float normalY;
+    float normalZ;
+    uint packedColor;
+    float toLightX;
+    float toLightY;
+    float toLightZ;
+    float NdotL;
+    int shadowed;
+    int blockerCasterIdx;
+    int blockerX;
+    int blockerY;
+    int blockerZ;
+    float finalR;
+    float finalG;
+    float finalB;
+} dbg;
+
 const int kMaxSteps = 256;
 const int kMaxShadowSteps = 128;
 
@@ -153,6 +187,76 @@ PrimaryHit traceCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
     return res;
 }
 
+// Returns: x = -1 if not blocked, otherwise casterIdx; yzw = blocker voxel index.
+ivec4 traceShadowInCasterBlocker(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
+    mat4 invModel = scene.entries[casterIdx].invModel;
+    ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
+    float voxelSize = scene.entries[casterIdx].voxelSize_pad.x;
+
+    vec3 origin = (invModel * vec4(worldOrigin, 1.0)).xyz;
+    vec3 dir = (invModel * vec4(worldDir, 0.0)).xyz;
+
+    vec3 gridMin = vec3(0.0);
+    vec3 gridMax = vec3(dims) * voxelSize;
+
+    vec3 invDir = 1.0 / dir;
+    vec3 t0 = (gridMin - origin) * invDir;
+    vec3 t1 = (gridMax - origin) * invDir;
+    vec3 tEnterV = min(t0, t1);
+    vec3 tExitV  = max(t0, t1);
+    float tEnter = max(max(tEnterV.x, tEnterV.y), tEnterV.z);
+    float tExit  = min(min(tExitV.x,  tExitV.y),  tExitV.z);
+    if (tEnter > tExit || tExit < 0.0) {
+        return ivec4(-1, 0, 0, 0);
+    }
+
+    float tStart = max(tEnter, 0.0);
+    vec3 entry = origin + dir * (tStart + 1e-4);
+    vec3 voxelF = entry / voxelSize;
+    ivec3 voxelIdx = clamp(ivec3(floor(voxelF)), ivec3(0), dims - ivec3(1));
+
+    vec3 deltaDist = abs(vec3(voxelSize) * invDir);
+    ivec3 stepDir;
+    vec3 sideDist;
+    for (int i = 0; i < 3; ++i) {
+        if (dir[i] < 0.0) {
+            stepDir[i] = -1;
+            sideDist[i] = (voxelF[i] - float(voxelIdx[i])) * deltaDist[i];
+        } else {
+            stepDir[i] = 1;
+            sideDist[i] = (float(voxelIdx[i] + 1) - voxelF[i]) * deltaDist[i];
+        }
+    }
+
+    for (int step_n = 0; step_n < kMaxShadowSteps; ++step_n) {
+        if (voxelIdx.x < 0 || voxelIdx.y < 0 || voxelIdx.z < 0
+         || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
+            return ivec4(-1, 0, 0, 0);
+        }
+        int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
+        if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
+            return ivec4(casterIdx, voxelIdx.x, voxelIdx.y, voxelIdx.z);
+        }
+
+        if (sideDist.x < sideDist.y) {
+            if (sideDist.x < sideDist.z) {
+                sideDist.x += deltaDist.x;
+                voxelIdx.x += stepDir.x;
+            } else {
+                sideDist.z += deltaDist.z;
+                voxelIdx.z += stepDir.z;
+            }
+        } else if (sideDist.y < sideDist.z) {
+            sideDist.y += deltaDist.y;
+            voxelIdx.y += stepDir.y;
+        } else {
+            sideDist.z += deltaDist.z;
+            voxelIdx.z += stepDir.z;
+        }
+    }
+    return ivec4(-1, 0, 0, 0);
+}
+
 bool traceShadowInCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
     mat4 invModel = scene.entries[casterIdx].invModel;
     ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
@@ -232,12 +336,24 @@ bool sceneShadow(vec3 worldOrigin, vec3 worldDir) {
     return false;
 }
 
+ivec4 sceneShadowBlocker(vec3 worldOrigin, vec3 worldDir) {
+    int n = scene.count_pad.x;
+    for (int c = 0; c < n; ++c) {
+        ivec4 r = traceShadowInCasterBlocker(c, worldOrigin, worldDir);
+        if (r.x >= 0) {
+            return r;
+        }
+    }
+    return ivec4(-1, 0, 0, 0);
+}
+
 void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
     ivec2 imSize = imageSize(outImage);
     if (pixel.x >= imSize.x || pixel.y >= imSize.y) {
         return;
     }
+    bool isDebugPixel = (pixel.x == frame.debugPixel_pad.x && pixel.y == frame.debugPixel_pad.y);
 
     vec3 cameraPos = frame.cameraPos_fovY.xyz;
     float fovY     = frame.cameraPos_fovY.w;
@@ -272,6 +388,23 @@ void main() {
     }
 
     if (!best.hit) {
+        if (isDebugPixel) {
+            dbg.hit = 0;
+            dbg.casterIdx = -1;
+            dbg.voxelX = 0; dbg.voxelY = 0; dbg.voxelZ = 0;
+            dbg.tHit = 0.0;
+            dbg.cameraX = cameraPos.x; dbg.cameraY = cameraPos.y; dbg.cameraZ = cameraPos.z;
+            dbg.rayDirX = rayDirWorld.x; dbg.rayDirY = rayDirWorld.y; dbg.rayDirZ = rayDirWorld.z;
+            dbg.hitWorldX = 0.0; dbg.hitWorldY = 0.0; dbg.hitWorldZ = 0.0;
+            dbg.normalX = 0.0; dbg.normalY = 0.0; dbg.normalZ = 0.0;
+            dbg.packedColor = 0u;
+            dbg.toLightX = 0.0; dbg.toLightY = 0.0; dbg.toLightZ = 0.0;
+            dbg.NdotL = 0.0;
+            dbg.shadowed = 0;
+            dbg.blockerCasterIdx = -1;
+            dbg.blockerX = 0; dbg.blockerY = 0; dbg.blockerZ = 0;
+            dbg.finalR = 0.0; dbg.finalG = 0.0; dbg.finalB = 0.0;
+        }
         return;
     }
 
@@ -298,6 +431,11 @@ void main() {
     vec4 voxelColor = unpackRGBA8(best.packed);
     vec3 lit = frame.ambientColor_intensity.rgb * frame.ambientColor_intensity.w;
 
+    vec3 debugToLight = vec3(0.0);
+    float debugNdotL = 0.0;
+    int debugShadowed = 0;
+    ivec4 debugBlocker = ivec4(-1, 0, 0, 0);
+
     int lightCount = frame.dirLightCount_pad.x;
     for (int i = 0; i < lightCount; ++i) {
         vec3 worldDir = frame.dirLightDir_intensity[i].xyz;
@@ -305,12 +443,24 @@ void main() {
         vec3 lightCol = frame.dirLightColor[i].xyz;
         vec3 worldToLight = -normalize(worldDir);
 
+        if (i == 0) {
+            debugToLight = worldToLight;
+        }
+
         float NdotL = dot(worldNormal, worldToLight);
+        if (i == 0) {
+            debugNdotL = NdotL;
+        }
         if (NdotL <= 0.0) {
             continue;
         }
 
-        if (sceneShadow(shadowOriginWorld, worldToLight)) {
+        ivec4 blocker = sceneShadowBlocker(shadowOriginWorld, worldToLight);
+        if (blocker.x >= 0) {
+            if (i == 0) {
+                debugShadowed = 1;
+                debugBlocker = blocker;
+            }
             continue;
         }
 
@@ -319,4 +469,38 @@ void main() {
 
     vec3 finalColor = voxelColor.rgb * lit;
     imageStore(outImage, pixel, vec4(finalColor, 1.0));
+
+    if (isDebugPixel) {
+        dbg.hit = 1;
+        dbg.casterIdx = bestIdx;
+        dbg.voxelX = best.voxelIdx.x;
+        dbg.voxelY = best.voxelIdx.y;
+        dbg.voxelZ = best.voxelIdx.z;
+        dbg.tHit = best.tHit;
+        dbg.cameraX = cameraPos.x;
+        dbg.cameraY = cameraPos.y;
+        dbg.cameraZ = cameraPos.z;
+        dbg.rayDirX = rayDirWorld.x;
+        dbg.rayDirY = rayDirWorld.y;
+        dbg.rayDirZ = rayDirWorld.z;
+        dbg.hitWorldX = hitPointWorld.x;
+        dbg.hitWorldY = hitPointWorld.y;
+        dbg.hitWorldZ = hitPointWorld.z;
+        dbg.normalX = worldNormal.x;
+        dbg.normalY = worldNormal.y;
+        dbg.normalZ = worldNormal.z;
+        dbg.packedColor = best.packed;
+        dbg.toLightX = debugToLight.x;
+        dbg.toLightY = debugToLight.y;
+        dbg.toLightZ = debugToLight.z;
+        dbg.NdotL = debugNdotL;
+        dbg.shadowed = debugShadowed;
+        dbg.blockerCasterIdx = debugBlocker.x;
+        dbg.blockerX = debugBlocker.y;
+        dbg.blockerY = debugBlocker.z;
+        dbg.blockerZ = debugBlocker.w;
+        dbg.finalR = finalColor.x;
+        dbg.finalG = finalColor.y;
+        dbg.finalB = finalColor.z;
+    }
 }
