@@ -142,6 +142,8 @@ namespace RAGE {
         void copyBufferToImage(const VulkanBuffer &src, VulkanImage &dst, ImageLayout dstLayout,
                                std::span<const BufferImageCopy> regions);
 
+        VkCommandBuffer rawHandle() const { return handle_(); }
+
     private:
         friend class VulkanCommandBuffer<K>;
 

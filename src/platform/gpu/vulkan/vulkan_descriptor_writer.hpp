@@ -42,6 +42,9 @@ namespace RAGE {
                                                    uint64_t offset = 0, uint64_t range = 0);
         VulkanDescriptorWriter &writeStorageBuffer(VkDescriptorSet set, uint32_t binding, const VulkanBuffer &buffer,
                                                    uint64_t offset = 0, uint64_t range = 0);
+        VulkanDescriptorWriter &writeStorageBufferArray(VkDescriptorSet set, uint32_t binding, uint32_t arrayElement,
+                                                        const VulkanBuffer &buffer, uint64_t offset = 0,
+                                                        uint64_t range = 0);
 
         void commit();
 
@@ -56,13 +59,15 @@ namespace RAGE {
         struct Pending {
             VkDescriptorSet set;
             uint32_t binding;
+            uint32_t arrayElement;
             VkDescriptorType type;
             InfoKind kind;
             uint32_t infoIndex;
         };
 
-        VulkanDescriptorWriter &pushBufferWrite(VkDescriptorSet set, uint32_t binding, VkDescriptorType type,
-                                                VkBuffer buffer, uint64_t offset, uint64_t range);
+        VulkanDescriptorWriter &pushBufferWrite(VkDescriptorSet set, uint32_t binding, uint32_t arrayElement,
+                                                VkDescriptorType type, VkBuffer buffer, uint64_t offset,
+                                                uint64_t range);
 
         VkDevice device_ = VK_NULL_HANDLE;
         std::vector<VkDescriptorImageInfo> imageInfos_;

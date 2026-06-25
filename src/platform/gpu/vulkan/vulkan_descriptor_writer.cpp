@@ -23,6 +23,7 @@ namespace RAGE {
         imageInfos_.push_back(info);
         pending_.push_back({ .set = set,
                              .binding = binding,
+                             .arrayElement = 0,
                              .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                              .kind = InfoKind::Image,
                              .infoIndex = static_cast<uint32_t>(imageInfos_.size() - 1) });
@@ -37,8 +38,8 @@ namespace RAGE {
     }
 
     VulkanDescriptorWriter &VulkanDescriptorWriter::pushBufferWrite(VkDescriptorSet set, uint32_t binding,
-                                                                    VkDescriptorType type, VkBuffer buffer,
-                                                                    uint64_t offset, uint64_t range) {
+                                                                    uint32_t arrayElement, VkDescriptorType type,
+                                                                    VkBuffer buffer, uint64_t offset, uint64_t range) {
         VkDescriptorBufferInfo info{};
         info.buffer = buffer;
         info.offset = offset;
@@ -47,6 +48,7 @@ namespace RAGE {
         bufferInfos_.push_back(info);
         pending_.push_back({ .set = set,
                              .binding = binding,
+                             .arrayElement = arrayElement,
                              .type = type,
                              .kind = InfoKind::Buffer,
                              .infoIndex = static_cast<uint32_t>(bufferInfos_.size() - 1) });
@@ -57,13 +59,21 @@ namespace RAGE {
     VulkanDescriptorWriter &VulkanDescriptorWriter::writeUniformBuffer(VkDescriptorSet set, uint32_t binding,
                                                                        const VulkanBuffer &buffer, uint64_t offset,
                                                                        uint64_t range) {
-        return pushBufferWrite(set, binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer.core_.buffer_, offset, range);
+        return pushBufferWrite(set, binding, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer.core_.buffer_, offset, range);
     }
 
     VulkanDescriptorWriter &VulkanDescriptorWriter::writeStorageBuffer(VkDescriptorSet set, uint32_t binding,
                                                                        const VulkanBuffer &buffer, uint64_t offset,
                                                                        uint64_t range) {
-        return pushBufferWrite(set, binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, buffer.core_.buffer_, offset, range);
+        return pushBufferWrite(set, binding, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, buffer.core_.buffer_, offset, range);
+    }
+
+    VulkanDescriptorWriter &VulkanDescriptorWriter::writeStorageBufferArray(VkDescriptorSet set, uint32_t binding,
+                                                                            uint32_t arrayElement,
+                                                                            const VulkanBuffer &buffer, uint64_t offset,
+                                                                            uint64_t range) {
+        return pushBufferWrite(set, binding, arrayElement, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, buffer.core_.buffer_,
+                               offset, range);
     }
 
     void VulkanDescriptorWriter::commit() {
@@ -79,7 +89,7 @@ namespace RAGE {
             w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             w.dstSet = p.set;
             w.dstBinding = p.binding;
-            w.dstArrayElement = 0;
+            w.dstArrayElement = p.arrayElement;
             w.descriptorCount = 1;
             w.descriptorType = p.type;
             if (p.kind == InfoKind::Image) {
