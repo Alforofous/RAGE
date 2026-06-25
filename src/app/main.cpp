@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -7,9 +8,14 @@
 #include <vector>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include "engine/content/vox_loader.hpp"
 #include "engine/materials/material.hpp"
+#include "engine/rendering/ambient_light.hpp"
+#include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/renderer.hpp"
+#include "profiler.hpp"
 #include "engine/scene/camera.hpp"
+#include "engine/scene/directional_light.hpp"
 #include "engine/scene/node3d.hpp"
 #include "engine/scene/voxel3d.hpp"
 #include "free_fly_controller.hpp"
@@ -88,24 +94,29 @@ int main(int /*argc*/, char **argv) {
 
         auto voxelMaterial = std::make_shared<Material<VulkanShaderModule>>(voxelShader);
 
-        constexpr IVec3 kGridDims{ 32, 32, 32 };
         constexpr float kVoxelSize = 0.05f;
-        auto voxels = std::make_unique<Voxel3D>(allocator, kGridDims, kVoxelSize);
-        voxels->fill([](IVec3 c) -> Color {
-            const Vec3 p(static_cast<float>(c.x), static_cast<float>(c.y), static_cast<float>(c.z));
-            const Vec3 centre(15.5f, 15.5f, 15.5f);
-            const float d = (p - centre).length();
-            if (d < 13.0f) {
-                return Color(static_cast<float>(c.x) / 32.0f, static_cast<float>(c.y) / 32.0f,
-                             static_cast<float>(c.z) / 32.0f, 1.0f);
-            }
-            return Color::transparent();
-        });
-        voxels->setMaterial(voxelMaterial);
-        voxels->setPosition(Vec3(-0.8f, -0.8f, -3.0f));
+
+        const std::filesystem::path assetsDir = executableDir(argv[0]) / "assets";
+
+        const auto makeVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
+            const Content::VoxModel m = Content::loadVox(voxPath);
+            auto v = std::make_unique<Voxel3D>(allocator, m.dims, kVoxelSize);
+            v->fill([&m](IVec3 c) -> Color {
+                const size_t idx = (static_cast<size_t>(c.z) * static_cast<size_t>(m.dims.x)
+                                    * static_cast<size_t>(m.dims.y))
+                                   + (static_cast<size_t>(c.y) * static_cast<size_t>(m.dims.x))
+                                   + static_cast<size_t>(c.x);
+                return m.voxels[idx];
+            });
+            v->setMaterial(voxelMaterial);
+            v->setPosition(position);
+            std::fprintf(stdout, "Loaded %s (%dx%dx%d)\n", voxPath.string().c_str(), m.dims.x, m.dims.y, m.dims.z);
+            return v;
+        };
 
         Node3D root;
-        root.add(std::move(voxels));
+        root.add(makeVoxelFromFile(assetsDir / "floor.vox", Vec3(-2.4f, -1.0f, -4.6f)));
+        root.add(makeVoxelFromFile(assetsDir / "sphere.vox", Vec3(-0.6f, -0.2f, -2.8f)));
 
         const auto [initW, initH] = window.framebufferExtent();
         Camera camera(std::numbers::pi_v<float> * 0.4f,
@@ -121,14 +132,42 @@ int main(int /*argc*/, char **argv) {
                                         .vsync = true });
 
             Renderer renderer(ctx, allocator, swapchain);
+
+            App::Profiler profiler;
+            profiler.attach(renderer);
+
+            auto sun = std::make_shared<DirectionalLight>(Vec3(-1.0f, -1.0f, -1.0f),
+                                                          Color(1.0f, 0.95f, 0.85f), 1.2f);
+            renderer.addLight(sun);
+            renderer.setAmbientLight({ .color = Color(0.4f, 0.5f, 0.8f), .intensity = 0.25f });
+
             App::FreeFlyController controller(camera, window);
 
+            bool prevRight = false;
             double lastTime = glfwGetTime();
+            double fpsAccumDt = 0.0;
+            uint32_t fpsAccumFrames = 0;
+            double fpsLastUpdate = lastTime;
             while (!window.shouldClose()) {
                 window.pollEvents();
                 const double now = glfwGetTime();
                 const auto dt = static_cast<float>(now - lastTime);
                 lastTime = now;
+
+                fpsAccumDt += dt;
+                ++fpsAccumFrames;
+                if (now - fpsLastUpdate > 0.25) {
+                    const double avgMs = (fpsAccumDt / static_cast<double>(fpsAccumFrames)) * 1000.0;
+                    const double fps = static_cast<double>(fpsAccumFrames) / (now - fpsLastUpdate);
+                    std::array<char, 128> titleBuf{};
+                    std::snprintf(titleBuf.data(), titleBuf.size(), "RAGE Smoke | FPS %.1f | %.2f ms", fps, avgMs);
+                    window.setTitle(titleBuf.data());
+                    profiler.plot("fps", fps);
+                    profiler.plot("frame_ms", avgMs);
+                    fpsLastUpdate = now;
+                    fpsAccumDt = 0.0;
+                    fpsAccumFrames = 0;
+                }
 
                 controller.update(dt);
 
@@ -137,7 +176,45 @@ int main(int /*argc*/, char **argv) {
                 if (h > 0) {
                     camera.setAspect(static_cast<float>(w) / static_cast<float>(h));
                 }
+
+                GLFWwindow *gw = window.glfwHandle();
+                const bool rightDown = (glfwGetMouseButton(gw, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+                if (rightDown && !prevRight) {
+                    const int cursorMode = glfwGetInputMode(gw, GLFW_CURSOR);
+                    int32_t px = static_cast<int32_t>(w) / 2;
+                    int32_t py = static_cast<int32_t>(h) / 2;
+                    if (cursorMode == GLFW_CURSOR_NORMAL) {
+                        double mx = 0.0;
+                        double my = 0.0;
+                        glfwGetCursorPos(gw, &mx, &my);
+                        px = static_cast<int32_t>(mx);
+                        py = static_cast<int32_t>(my);
+                    }
+                    renderer.setPickTarget(px, py);
+                }
+                prevRight = rightDown;
+
                 renderer.render(root, camera, FrameExtent{ .width = w, .height = h });
+
+                PixelDebug pd;
+                if (renderer.tryReadPick(pd)) {
+                    std::fprintf(stdout,
+                                 "[pick] hit=%d caster=%d voxel=(%d,%d,%d) t=%.4f\n"
+                                 "       camera=(%.4f,%.4f,%.4f) rayDir=(%.4f,%.4f,%.4f)\n"
+                                 "       hitWorld=(%.4f,%.4f,%.4f) normal=(%.3f,%.3f,%.3f)\n"
+                                 "       toLight=(%.3f,%.3f,%.3f) NdotL=%.4f shadowed=%d\n"
+                                 "       blocker: caster=%d voxel=(%d,%d,%d)\n"
+                                 "       finalRGB=(%.3f,%.3f,%.3f) packedRGBA8=0x%08X\n",
+                                 pd.hit, pd.casterIdx, pd.voxelX, pd.voxelY, pd.voxelZ, pd.tHit,
+                                 pd.cameraX, pd.cameraY, pd.cameraZ,
+                                 pd.rayDirX, pd.rayDirY, pd.rayDirZ,
+                                 pd.hitWorldX, pd.hitWorldY, pd.hitWorldZ,
+                                 pd.normalX, pd.normalY, pd.normalZ,
+                                 pd.toLightX, pd.toLightY, pd.toLightZ, pd.NdotL, pd.shadowed,
+                                 pd.blockerCasterIdx, pd.blockerX, pd.blockerY, pd.blockerZ,
+                                 pd.finalR, pd.finalG, pd.finalB, pd.packedColor);
+                    std::fflush(stdout);
+                }
             }
         }
     } catch (const std::exception &e) {

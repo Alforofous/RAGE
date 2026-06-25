@@ -111,15 +111,39 @@ endforeach()
 
 add_custom_target(shaders ALL DEPENDS ${SHADER_OUTPUTS})
 
+# --- Sample asset generation ---
+
+add_executable(make_sample_vox tools/make_sample_vox.cpp)
+set_target_properties(make_sample_vox PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+set(SAMPLE_ASSETS_DIR "${CMAKE_BINARY_DIR}/assets")
+set(SAMPLE_VOX_OUTPUTS
+    "${SAMPLE_ASSETS_DIR}/sphere.vox"
+    "${SAMPLE_ASSETS_DIR}/floor.vox"
+)
+add_custom_command(
+    OUTPUT ${SAMPLE_VOX_OUTPUTS}
+    COMMAND make_sample_vox ${SAMPLE_ASSETS_DIR}
+    DEPENDS make_sample_vox
+    COMMENT "Generating sample voxel assets -> ${SAMPLE_ASSETS_DIR}"
+    VERBATIM
+)
+add_custom_target(sample_assets ALL DEPENDS ${SAMPLE_VOX_OUTPUTS})
+
 # --- App (temporary test executable) ---
 
 add_executable(RAGE
     src/app/free_fly_controller.cpp
     src/app/main.cpp
+    src/app/profiler.cpp
     src/app/window.cpp
 )
 target_link_libraries(RAGE rage_engine)
-add_dependencies(RAGE shaders)
+add_dependencies(RAGE shaders sample_assets)
+
+if(RAGE_ENABLE_PROFILING)
+    target_compile_definitions(RAGE PRIVATE RAGE_PROFILING_TRACY)
+endif()
 
 # --- Tests ---
 
