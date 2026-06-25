@@ -11,3 +11,9 @@ desktop.ini
 .cursor
 .claude
 CLAUDE.md
+
+# Tracy server release archive (extracted binaries committed, archive not needed)
+libraries/tracy-server/*.zip
+
+# Accidental double-clone of the tracy subdir — not part of this project
+libraries/libraries/
