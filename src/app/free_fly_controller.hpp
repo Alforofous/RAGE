@@ -7,33 +7,43 @@ namespace RAGE::App {
     /**
      * A free-fly first-person camera controller.
      *
-     * Polls GLFW key state each tick and applies movement / yaw to a RAGE::Camera. Lives in the
-     * app layer because the engine intentionally knows nothing about input devices.
+     * Polls GLFW key state and mouse motion each tick and applies movement / yaw / pitch to a
+     * RAGE::Camera. Lives in the app layer because the engine intentionally knows nothing about
+     * input devices.
      *
      * Controls:
      *   W / S         — forward / backward (along camera-local -Z)
      *   A / D         — left / right       (along camera-local +X)
-     *   Space / Shift — up / down          (along camera-local +Y)
-     *   Q / E         — yaw left / right   (rotation around world +Y)
+     *   E / Q         — up / down          (along camera-local +Y)
+     *   Left-click    — capture cursor and start mouse-look
+     *   Esc           — release cursor and pause mouse-look
+     *   Mouse         — yaw + pitch (only while captured)
      *
-     * No pitch, no mouse — the minimal feel of Unity's free-fly mode without mouse-look. Pitch
-     * can be added later (mouse delta + local X-axis quaternion), but the WASD/QE/Space/Shift
-     * set already lets you fly around any scene.
+     * Pitch is clamped to roughly ±89° to avoid gimbal flip. Rotation is composed as
+     * yawQuat * pitchQuat so pitch acts around the camera's local X regardless of yaw.
      */
     class FreeFlyController {
     public:
-        FreeFlyController(Camera &camera, const Window &window, float moveSpeed = 2.0f, float turnSpeed = 1.5f);
+        FreeFlyController(Camera &camera, Window &window, float moveSpeed = 2.0f,
+                          float mouseSensitivity = 0.0025f);
 
         void update(float deltaSeconds);
 
         void setMoveSpeed(float v) { moveSpeed_ = v; }
-        void setTurnSpeed(float v) { turnSpeed_ = v; }
+        void setMouseSensitivity(float v) { mouseSensitivity_ = v; }
 
     private:
+        void captureMouse();
+        void releaseMouse();
+
         Camera &camera_;
-        const Window &window_;
+        Window &window_;
         float moveSpeed_ = 2.0f;
-        float turnSpeed_ = 1.5f;
+        float mouseSensitivity_ = 0.0025f;
         float yaw_ = 0.0f;
+        float pitch_ = 0.0f;
+        double lastMouseX_ = 0.0;
+        double lastMouseY_ = 0.0;
+        bool mouseCaptured_ = false;
     };
 }
