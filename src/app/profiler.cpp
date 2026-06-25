@@ -15,9 +15,21 @@
 // =============================================================================================
 
 #ifdef RAGE_PROFILING_TRACY
+    #include <cstring>
+    #include <vector>
     #include <tracy/Tracy.hpp>
+    #include <tracy/TracyC.h>
     #include <tracy/TracyVulkan.hpp>
 #endif
+
+namespace {
+#ifdef RAGE_PROFILING_TRACY
+    // Per-thread nesting stack of Tracy zone contexts. PhaseScope (engine-side) fires paired
+    // begin/end callbacks; we push the Tracy ctx on begin and pop+end on the matching end.
+    // Thread-local because zones nest only within a single thread's call stack.
+    thread_local std::vector<TracyCZoneCtx> g_zoneStack;
+#endif
+}
 
 namespace RAGE::App {
     Profiler::Profiler() {
@@ -70,6 +82,31 @@ namespace RAGE::App {
             (void)rgbaBytes;
             (void)width;
             (void)height;
+#endif
+        });
+
+        renderer.onPhaseBegin([](const char *name) {
+#ifdef RAGE_PROFILING_TRACY
+            const auto nameLen = std::strlen(name);
+            const auto srcloc = ___tracy_alloc_srcloc_name(
+                0,
+                "engine", sizeof("engine") - 1,
+                name, nameLen,
+                name, nameLen,
+                0);
+            g_zoneStack.push_back(___tracy_emit_zone_begin_alloc(srcloc, 1));
+#else
+            (void)name;
+#endif
+        });
+
+        renderer.onPhaseEnd([](const char *name) {
+            (void)name;
+#ifdef RAGE_PROFILING_TRACY
+            if (!g_zoneStack.empty()) {
+                ___tracy_emit_zone_end(g_zoneStack.back());
+                g_zoneStack.pop_back();
+            }
 #endif
         });
     }

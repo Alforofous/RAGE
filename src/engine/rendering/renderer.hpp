@@ -113,11 +113,14 @@ namespace RAGE {
         using GpuPassHook = std::function<void(const char *passName, VkCommandBuffer cmd)>;
         using FrameImageHook =
             std::function<void(const void *rgbaBytes, uint16_t width, uint16_t height)>;
+        using PhaseHook = std::function<void(const char *name)>;
 
         void onFrameEnd(FrameHook h) { frameEnd_ = std::move(h); }
         void onBeforeGpuPass(GpuPassHook h) { beforeGpuPass_ = std::move(h); }
         void onAfterGpuPass(GpuPassHook h) { afterGpuPass_ = std::move(h); }
         void onFrameImage(FrameImageHook h) { frameImage_ = std::move(h); }
+        void onPhaseBegin(PhaseHook h) { phaseBegin_ = std::move(h); }
+        void onPhaseEnd(PhaseHook h) { phaseEnd_ = std::move(h); }
 
     private:
         using Renderable = RenderableNode3D<VulkanShaderModule>;
@@ -163,6 +166,8 @@ namespace RAGE {
         GpuPassHook beforeGpuPass_;
         GpuPassHook afterGpuPass_;
         FrameImageHook frameImage_;
+        PhaseHook phaseBegin_;
+        PhaseHook phaseEnd_;
 
         FrameExtent lastExtent_{};
         bool needsRecreate_ = true;

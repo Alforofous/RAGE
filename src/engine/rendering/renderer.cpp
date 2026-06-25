@@ -19,6 +19,36 @@
 #include "shared/logger.hpp"
 
 namespace RAGE {
+    namespace {
+        // RAII bracket for the engine's phase callbacks: fires `begin(name)` on construction
+        // and `end(name)` on destruction. Lets any return path inside render() leave the
+        // phase balanced without each branch having to remember to call end. Engine has no
+        // profiler library knowledge — this just routes the engine's own callbacks.
+        class PhaseScope {
+        public:
+            PhaseScope(const Renderer::PhaseHook &begin, const Renderer::PhaseHook &end, const char *name)
+                : end_(end)
+                , name_(name) {
+                if (begin) {
+                    begin(name);
+                }
+            }
+            ~PhaseScope() {
+                if (end_) {
+                    end_(name_);
+                }
+            }
+            PhaseScope(const PhaseScope &) = delete;
+            PhaseScope &operator=(const PhaseScope &) = delete;
+            PhaseScope(PhaseScope &&) = delete;
+            PhaseScope &operator=(PhaseScope &&) = delete;
+
+        private:
+            const Renderer::PhaseHook &end_;
+            const char *name_;
+        };
+    }
+
     Renderer::Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain)
         : ctx_(ctx)
         , allocator_(allocator)
@@ -143,6 +173,7 @@ namespace RAGE {
         if (extent.width == 0 || extent.height == 0) {
             return;
         }
+        const PhaseScope renderScope(phaseBegin_, phaseEnd_, "Renderer::render");
 
         const bool extentChanged = (extent != lastExtent_) && (lastExtent_.width != 0);
         if (needsRecreate_ || extentChanged) {
