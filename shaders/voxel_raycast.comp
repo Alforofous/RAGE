@@ -3,20 +3,34 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0, rgba8) uniform writeonly image2D outImage;
-layout(set = 0, binding = 1, std430) readonly buffer VoxelGrid {
-    uint voxels[];
-};
-
-layout(push_constant, std430) uniform PC {
-    mat4 invModel;
+layout(set = 0, binding = 2, std140) uniform FrameUniforms {
     vec4 cameraPos_fovY;
     vec4 cameraForward_aspect;
-    vec4 cameraUp_voxelSize;
-    ivec4 dims;
-} pc;
+    vec4 cameraUp_unused;
+    vec4 ambientColor_intensity;
+    ivec4 dirLightCount_pad;
+    vec4 dirLightDir_intensity[4];
+    vec4 dirLightColor[4];
+    ivec4 debugPixel_pad;
+} frame;
 
-const vec3 kBackground = vec3(0.02, 0.03, 0.06);
+struct CasterEntry {
+    mat4 invModel;
+    ivec4 dims_pad;
+    vec4 voxelSize_pad;
+};
+
+layout(set = 0, binding = 3, std140) uniform SceneCasters {
+    ivec4 count_pad;
+    CasterEntry entries[16];
+} scene;
+
+layout(set = 0, binding = 4, std430) readonly buffer CasterVoxels {
+    uint data[];
+} casterVoxels[16];
+
 const int kMaxSteps = 256;
+const int kMaxShadowSteps = 128;
 
 vec4 unpackRGBA8(uint packed) {
     return vec4(
@@ -27,64 +41,150 @@ vec4 unpackRGBA8(uint packed) {
     );
 }
 
-void main() {
-    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 imSize = imageSize(outImage);
-    if (pixel.x >= imSize.x || pixel.y >= imSize.y) {
-        return;
-    }
+struct PrimaryHit {
+    bool hit;
+    float tHit;
+    int casterIdx;
+    ivec3 voxelIdx;
+    int lastStepAxis;
+    ivec3 stepDir;
+    uint packed;
+};
 
-    vec3 cameraPos = pc.cameraPos_fovY.xyz;
-    float fovY     = pc.cameraPos_fovY.w;
-    vec3 forward   = normalize(pc.cameraForward_aspect.xyz);
-    float aspect   = pc.cameraForward_aspect.w;
-    vec3 upWorld   = normalize(pc.cameraUp_voxelSize.xyz);
-    float voxelSize = pc.cameraUp_voxelSize.w;
-    ivec3 dims     = pc.dims.xyz;
+PrimaryHit traceCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
+    PrimaryHit res;
+    res.hit = false;
+    res.tHit = 1e30;
+    res.casterIdx = casterIdx;
 
-    vec3 right = normalize(cross(forward, upWorld));
-    vec3 up    = cross(right, forward);
+    mat4 invModel = scene.entries[casterIdx].invModel;
+    ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
+    float voxelSize = scene.entries[casterIdx].voxelSize_pad.x;
 
-    vec2 uv = (vec2(pixel) + 0.5) / vec2(imSize);
-    vec2 ndc = uv * 2.0 - 1.0;
-    ndc.y = -ndc.y;
-    float tanHalfFovY = tan(fovY * 0.5);
-    vec3 rayDirWorld = normalize(
-        forward
-      + right * (ndc.x * tanHalfFovY * aspect)
-      + up    * (ndc.y * tanHalfFovY)
-    );
-
-    vec3 localOrigin = (pc.invModel * vec4(cameraPos, 1.0)).xyz;
-    vec3 localDir    = (pc.invModel * vec4(rayDirWorld, 0.0)).xyz;
+    vec3 origin = (invModel * vec4(worldOrigin, 1.0)).xyz;
+    vec3 dir = (invModel * vec4(worldDir, 0.0)).xyz;
 
     vec3 gridMin = vec3(0.0);
     vec3 gridMax = vec3(dims) * voxelSize;
 
-    vec3 invDir = 1.0 / localDir;
-    vec3 t0 = (gridMin - localOrigin) * invDir;
-    vec3 t1 = (gridMax - localOrigin) * invDir;
+    vec3 invDir = 1.0 / dir;
+    vec3 t0 = (gridMin - origin) * invDir;
+    vec3 t1 = (gridMax - origin) * invDir;
     vec3 tEnterV = min(t0, t1);
     vec3 tExitV  = max(t0, t1);
     float tEnter = max(max(tEnterV.x, tEnterV.y), tEnterV.z);
     float tExit  = min(min(tExitV.x,  tExitV.y),  tExitV.z);
-
     if (tEnter > tExit || tExit < 0.0) {
-        imageStore(outImage, pixel, vec4(kBackground, 1.0));
-        return;
+        return res;
+    }
+
+    int lastStepAxis;
+    if (tEnterV.x >= tEnterV.y && tEnterV.x >= tEnterV.z) {
+        lastStepAxis = 0;
+    } else if (tEnterV.y >= tEnterV.z) {
+        lastStepAxis = 1;
+    } else {
+        lastStepAxis = 2;
     }
 
     float tStart = max(tEnter, 0.0);
-    vec3 entry = localOrigin + localDir * (tStart + 1e-4);
-
+    float tHit = tStart;
+    vec3 entry = origin + dir * (tStart + 1e-4);
     vec3 voxelF = entry / voxelSize;
     ivec3 voxelIdx = clamp(ivec3(floor(voxelF)), ivec3(0), dims - ivec3(1));
 
     vec3 deltaDist = abs(vec3(voxelSize) * invDir);
     ivec3 stepDir;
     vec3 sideDist;
-    for (int i = 0; i < 3; i++) {
-        if (localDir[i] < 0.0) {
+    for (int i = 0; i < 3; ++i) {
+        if (dir[i] < 0.0) {
+            stepDir[i] = -1;
+            sideDist[i] = tStart + (voxelF[i] - float(voxelIdx[i])) * deltaDist[i];
+        } else {
+            stepDir[i] = 1;
+            sideDist[i] = tStart + (float(voxelIdx[i] + 1) - voxelF[i]) * deltaDist[i];
+        }
+    }
+
+    for (int step_n = 0; step_n < kMaxSteps; ++step_n) {
+        if (voxelIdx.x < 0 || voxelIdx.y < 0 || voxelIdx.z < 0
+         || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
+            return res;
+        }
+
+        int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
+        uint packed = casterVoxels[casterIdx].data[flatIdx];
+
+        if ((packed >> 24u) > 0u) {
+            res.hit = true;
+            res.tHit = tHit;
+            res.voxelIdx = voxelIdx;
+            res.lastStepAxis = lastStepAxis;
+            res.stepDir = stepDir;
+            res.packed = packed;
+            return res;
+        }
+
+        if (sideDist.x < sideDist.y) {
+            if (sideDist.x < sideDist.z) {
+                tHit = sideDist.x;
+                sideDist.x += deltaDist.x;
+                voxelIdx.x += stepDir.x;
+                lastStepAxis = 0;
+            } else {
+                tHit = sideDist.z;
+                sideDist.z += deltaDist.z;
+                voxelIdx.z += stepDir.z;
+                lastStepAxis = 2;
+            }
+        } else if (sideDist.y < sideDist.z) {
+            tHit = sideDist.y;
+            sideDist.y += deltaDist.y;
+            voxelIdx.y += stepDir.y;
+            lastStepAxis = 1;
+        } else {
+            tHit = sideDist.z;
+            sideDist.z += deltaDist.z;
+            voxelIdx.z += stepDir.z;
+            lastStepAxis = 2;
+        }
+    }
+
+    return res;
+}
+
+bool traceShadowInCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
+    mat4 invModel = scene.entries[casterIdx].invModel;
+    ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
+    float voxelSize = scene.entries[casterIdx].voxelSize_pad.x;
+
+    vec3 origin = (invModel * vec4(worldOrigin, 1.0)).xyz;
+    vec3 dir = (invModel * vec4(worldDir, 0.0)).xyz;
+
+    vec3 gridMin = vec3(0.0);
+    vec3 gridMax = vec3(dims) * voxelSize;
+
+    vec3 invDir = 1.0 / dir;
+    vec3 t0 = (gridMin - origin) * invDir;
+    vec3 t1 = (gridMax - origin) * invDir;
+    vec3 tEnterV = min(t0, t1);
+    vec3 tExitV  = max(t0, t1);
+    float tEnter = max(max(tEnterV.x, tEnterV.y), tEnterV.z);
+    float tExit  = min(min(tExitV.x,  tExitV.y),  tExitV.z);
+    if (tEnter > tExit || tExit < 0.0) {
+        return false;
+    }
+
+    float tStart = max(tEnter, 0.0);
+    vec3 entry = origin + dir * (tStart + 1e-4);
+    vec3 voxelF = entry / voxelSize;
+    ivec3 voxelIdx = clamp(ivec3(floor(voxelF)), ivec3(0), dims - ivec3(1));
+
+    vec3 deltaDist = abs(vec3(voxelSize) * invDir);
+    ivec3 stepDir;
+    vec3 sideDist;
+    for (int i = 0; i < 3; ++i) {
+        if (dir[i] < 0.0) {
             stepDir[i] = -1;
             sideDist[i] = (voxelF[i] - float(voxelIdx[i])) * deltaDist[i];
         } else {
@@ -93,19 +193,14 @@ void main() {
         }
     }
 
-    for (int step_n = 0; step_n < kMaxSteps; ++step_n) {
+    for (int step_n = 0; step_n < kMaxShadowSteps; ++step_n) {
         if (voxelIdx.x < 0 || voxelIdx.y < 0 || voxelIdx.z < 0
          || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
-            break;
+            return false;
         }
-
         int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
-        uint packed = voxels[flatIdx];
-
-        if ((packed >> 24u) > 0u) {
-            vec4 color = unpackRGBA8(packed);
-            imageStore(outImage, pixel, color);
-            return;
+        if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
+            return true;
         }
 
         if (sideDist.x < sideDist.y) {
@@ -124,6 +219,104 @@ void main() {
             voxelIdx.z += stepDir.z;
         }
     }
+    return false;
+}
 
-    imageStore(outImage, pixel, vec4(kBackground, 1.0));
+bool sceneShadow(vec3 worldOrigin, vec3 worldDir) {
+    int n = scene.count_pad.x;
+    for (int c = 0; c < n; ++c) {
+        if (traceShadowInCaster(c, worldOrigin, worldDir)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imSize = imageSize(outImage);
+    if (pixel.x >= imSize.x || pixel.y >= imSize.y) {
+        return;
+    }
+
+    vec3 cameraPos = frame.cameraPos_fovY.xyz;
+    float fovY     = frame.cameraPos_fovY.w;
+    vec3 forward   = normalize(frame.cameraForward_aspect.xyz);
+    float aspect   = frame.cameraForward_aspect.w;
+    vec3 upWorld   = normalize(frame.cameraUp_unused.xyz);
+
+    vec3 right = normalize(cross(forward, upWorld));
+    vec3 up    = cross(right, forward);
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(imSize);
+    vec2 ndc = uv * 2.0 - 1.0;
+    ndc.y = -ndc.y;
+    float tanHalfFovY = tan(fovY * 0.5);
+    vec3 rayDirWorld = normalize(
+        forward
+      + right * (ndc.x * tanHalfFovY * aspect)
+      + up    * (ndc.y * tanHalfFovY)
+    );
+
+    PrimaryHit best;
+    best.hit = false;
+    best.tHit = 1e30;
+    best.casterIdx = -1;
+
+    int n = scene.count_pad.x;
+    for (int c = 0; c < n; ++c) {
+        PrimaryHit h = traceCaster(c, cameraPos, rayDirWorld);
+        if (h.hit && h.tHit < best.tHit) {
+            best = h;
+        }
+    }
+
+    if (!best.hit) {
+        return;
+    }
+
+    int bestIdx = best.casterIdx;
+    mat4 invModel = scene.entries[bestIdx].invModel;
+    float voxelSize = scene.entries[bestIdx].voxelSize_pad.x;
+    vec3 localOrigin = (invModel * vec4(cameraPos, 1.0)).xyz;
+    vec3 localDir    = (invModel * vec4(rayDirWorld, 0.0)).xyz;
+
+    vec3 localNormal = vec3(0.0);
+    localNormal[best.lastStepAxis] = float(-best.stepDir[best.lastStepAxis]);
+
+    vec3 hitPointLocal = localOrigin + localDir * best.tHit;
+    vec3 voxelMin = vec3(best.voxelIdx) * voxelSize;
+    vec3 voxelMax = voxelMin + vec3(voxelSize);
+    vec3 clampedHitLocal = clamp(hitPointLocal, voxelMin + 1e-4, voxelMax - 1e-4);
+    vec3 localDelta = (clampedHitLocal - hitPointLocal) + localNormal * (voxelSize * 0.5 + 1e-3);
+
+    mat3 modelRot = transpose(mat3(invModel));
+    vec3 hitPointWorld = cameraPos + rayDirWorld * best.tHit;
+    vec3 shadowOriginWorld = hitPointWorld + modelRot * localDelta;
+    vec3 worldNormal = normalize(modelRot * localNormal);
+
+    vec4 voxelColor = unpackRGBA8(best.packed);
+    vec3 lit = frame.ambientColor_intensity.rgb * frame.ambientColor_intensity.w;
+
+    int lightCount = frame.dirLightCount_pad.x;
+    for (int i = 0; i < lightCount; ++i) {
+        vec3 worldDir = frame.dirLightDir_intensity[i].xyz;
+        float intensity = frame.dirLightDir_intensity[i].w;
+        vec3 lightCol = frame.dirLightColor[i].xyz;
+        vec3 worldToLight = -normalize(worldDir);
+
+        float NdotL = dot(worldNormal, worldToLight);
+        if (NdotL <= 0.0) {
+            continue;
+        }
+
+        if (sceneShadow(shadowOriginWorld, worldToLight)) {
+            continue;
+        }
+
+        lit += lightCol * intensity * NdotL;
+    }
+
+    vec3 finalColor = voxelColor.rgb * lit;
+    imageStore(outImage, pixel, vec4(finalColor, 1.0));
 }

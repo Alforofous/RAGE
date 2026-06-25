@@ -17,25 +17,6 @@
 
 namespace RAGE {
     /**
-     * Push-constant block consumed by the voxel raycast compute shader.
-     *
-     * Layout matches GLSL std430 (vec3+float pack via Vec4-with-scalar-in-w). Total 128 bytes —
-     * the Vulkan spec-minimum push-constant size, so this struct is portable across all
-     * conformant hardware.
-     */
-    struct VoxelPushConstants {
-        Mat4 invModel;
-        Vec4 cameraPos_fovY;
-        Vec4 cameraForward_aspect;
-        Vec4 cameraUp_voxelSize;
-        int32_t dimsX = 0;
-        int32_t dimsY = 0;
-        int32_t dimsZ = 0;
-        int32_t _pad = 0;
-    };
-    static_assert(sizeof(VoxelPushConstants) == 128, "VoxelPushConstants must fit Vulkan's 128-byte push-constant min");
-
-    /**
      * A grid of coloured voxels rendered via a compute raycaster.
      *
      * Owns a dense RGBA8 storage buffer (one uint32 per voxel, linear xyz layout) plus the
@@ -64,6 +45,7 @@ namespace RAGE {
 
         IVec3 dimensions() const { return dims_; }
         float voxelSize() const { return voxelSize_; }
+        const VulkanBuffer *voxelBuffer() const { return buffer_.has_value() ? &*buffer_ : nullptr; }
 
         void prepareFrame(VulkanDescriptorWriter &writer, VkDescriptorSet set, PushConstantBuilder &pc,
                           const FrameContext &frame) override;

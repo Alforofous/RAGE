@@ -1,13 +1,16 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
 #include <vulkan/vulkan.h>
 #include "engine/materials/pipeline_cache.hpp"
+#include "engine/rendering/ambient_light.hpp"
 #include "engine/rendering/frame_context.hpp"
 #include "engine/scene/renderable_node3d.hpp"
+#include "gpu/vulkan/vulkan_buffer.hpp"
 #include "gpu/gpu_queue_kind.hpp"
 #include "gpu/vulkan/vulkan_allocator.hpp"
 #include "gpu/vulkan/vulkan_command_buffer.hpp"
@@ -21,7 +24,9 @@
 
 namespace RAGE {
     class Camera;
+    class DirectionalLight;
     class Node3D;
+    class Voxel3D;
 
     struct FrameExtent {
         uint32_t width = 0;
@@ -86,11 +91,19 @@ namespace RAGE {
         void clearPasses() { passes_.clear(); }
         std::span<const Pass> passes() const { return passes_; }
 
+        void addLight(std::shared_ptr<DirectionalLight> light);
+        void clearLights() { directionalLights_.clear(); }
+        std::span<const std::shared_ptr<DirectionalLight>> lights() const { return directionalLights_; }
+
+        void setAmbientLight(AmbientLight ambient) { ambient_ = ambient; }
+        AmbientLight ambientLight() const { return ambient_; }
+
     private:
         using Renderable = RenderableNode3D<VulkanShaderModule>;
 
         void rebuildFrameResources(FrameExtent extent);
         void collectVisible(Node3D &node, std::vector<Renderable *> &out);
+        void collectShadowCasters(Node3D &node);
         void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapW, uint32_t swapH,
                          std::span<Renderable *const> renderables, const FrameContext &frame);
         void recordPass(VulkanRecorder<queue_kind::Graphics> &rec, VulkanRenderTarget &target,
@@ -108,9 +121,14 @@ namespace RAGE {
         PipelineCache pipelineCache_;
 
         std::optional<VulkanRenderTarget> renderTarget_;
+        std::optional<VulkanBuffer> frameUniformBuffer_;
+        std::optional<VulkanBuffer> sceneCastersBuffer_;
         std::vector<VulkanSemaphoreHandle> renderDoneByImage_;
         std::optional<VulkanPendingSubmission<queue_kind::Graphics>> inFlight_;
         std::vector<Pass> passes_;
+        std::vector<std::shared_ptr<DirectionalLight>> directionalLights_;
+        AmbientLight ambient_{};
+        std::vector<Voxel3D *> shadowCasters_;
 
         FrameExtent lastExtent_{};
         bool needsRecreate_ = true;

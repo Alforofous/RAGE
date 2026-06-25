@@ -1,10 +1,16 @@
 #include "renderer.hpp"
+#include <algorithm>
 #include <array>
+#include <cstring>
 #include <exception>
 #include <utility>
 #include "engine/rendering/frame_context.hpp"
+#include "engine/rendering/frame_uniforms.hpp"
+#include "engine/rendering/scene_casters.hpp"
 #include "engine/scene/camera.hpp"
+#include "engine/scene/directional_light.hpp"
 #include "engine/scene/node3d.hpp"
+#include "engine/scene/voxel3d.hpp"
 #include "gpu/gpu_types.hpp"
 #include "gpu/vulkan/vulkan_descriptor_writer.hpp"
 #include "gpu/vulkan/vulkan_pipeline.hpp"
@@ -29,6 +35,8 @@ namespace RAGE {
         vkDeviceWaitIdle(ctx_.vkDevice());
     }
 
+    void Renderer::addLight(std::shared_ptr<DirectionalLight> light) { directionalLights_.push_back(std::move(light)); }
+
     void Renderer::drainInFlight() {
         if (inFlight_.has_value()) {
             std::move(*inFlight_).wait();
@@ -37,16 +45,46 @@ namespace RAGE {
     }
 
     void Renderer::rebuildFrameResources(FrameExtent extent) {
-        renderTarget_.emplace(allocator_,
-                              VulkanRenderTargetCreateInfo{ .width = extent.width,
-                                                            .height = extent.height,
-                                                            .format = ImageFormat::RGBA8_UNORM,
-                                                            .usage = ImageUsage::Storage | ImageUsage::TransferSrc });
+        renderTarget_.emplace(
+            allocator_,
+            VulkanRenderTargetCreateInfo{ .width = extent.width,
+                                          .height = extent.height,
+                                          .format = ImageFormat::RGBA8_UNORM,
+                                          .usage = ImageUsage::Storage | ImageUsage::TransferSrc | ImageUsage::TransferDst });
+
+        if (!frameUniformBuffer_.has_value()) {
+            frameUniformBuffer_.emplace(allocator_.createBuffer({
+                .size = sizeof(FrameUniforms),
+                .usage = BufferUsage::Uniform,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+        }
+
+        if (!sceneCastersBuffer_.has_value()) {
+            sceneCastersBuffer_.emplace(allocator_.createBuffer({
+                .size = sizeof(SceneCasters),
+                .usage = BufferUsage::Uniform,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+        }
 
         renderDoneByImage_.clear();
         renderDoneByImage_.reserve(swapchain_.imageCount());
         for (uint32_t i = 0; i < swapchain_.imageCount(); ++i) {
             renderDoneByImage_.push_back(ctx_.semaphores().acquire());
+        }
+    }
+
+    void Renderer::collectShadowCasters(Node3D &node) {
+        if (shadowCasters_.size() >= kMaxSceneCasters) {
+            return;
+        }
+        auto *v = dynamic_cast<Voxel3D *>(&node);
+        if (v != nullptr && v->voxelBuffer() != nullptr) {
+            shadowCasters_.push_back(v);
+        }
+        for (const auto &child : node.children()) {
+            collectShadowCasters(*child);
         }
     }
 
@@ -93,6 +131,55 @@ namespace RAGE {
         std::vector<Renderable *> visible;
         collectVisible(root, visible);
 
+        shadowCasters_.clear();
+        collectShadowCasters(root);
+
+        {
+            SceneCasters scene{};
+            scene.count = static_cast<int32_t>(shadowCasters_.size());
+            for (size_t i = 0; i < shadowCasters_.size(); ++i) {
+                Voxel3D *v = shadowCasters_[i];
+                SceneCasterEntry &e = scene.entries[i];
+                e.invModel = v->worldMatrix().inverted();
+                const IVec3 dims = v->dimensions();
+                e.dimsX = dims.x;
+                e.dimsY = dims.y;
+                e.dimsZ = dims.z;
+                e.voxelSize = v->voxelSize();
+            }
+            std::memcpy(sceneCastersBuffer_->mappedData(), &scene, sizeof(scene));
+        }
+
+        {
+            FrameUniforms uniforms{};
+            const Mat4 camWorld = camera.worldMatrix();
+            const Vec3 cameraPos = camWorld.transformPoint(Vec3::zero());
+            const Vec3 cameraForward = camWorld.transformDirection(Vec3(0.0f, 0.0f, -1.0f));
+            const Vec3 cameraUp = camWorld.transformDirection(Vec3::unitY());
+            uniforms.cameraPos_fovY = Vec4(cameraPos, camera.fov());
+            uniforms.cameraForward_aspect = Vec4(cameraForward, camera.aspect());
+            uniforms.cameraUp_unused = Vec4(cameraUp, 0.0f);
+
+            uniforms.ambientColor_intensity =
+                Vec4(ambient_.color.r, ambient_.color.g, ambient_.color.b, ambient_.intensity);
+
+            const int32_t lightCount = std::min(static_cast<int32_t>(directionalLights_.size()),
+                                                static_cast<int32_t>(kMaxDirectionalLights));
+            uniforms.dirLightCount = lightCount;
+            for (int32_t i = 0; i < lightCount; ++i) {
+                const DirectionalLight &light = *directionalLights_[i];
+                const Vec3 dir = light.worldDirection();
+                uniforms.dirLightDir_intensity[i] = Vec4(dir, light.intensity());
+                const Color c = light.color();
+                uniforms.dirLightColor[i] = Vec4(c.r, c.g, c.b, 0.0f);
+            }
+
+            uniforms.debugPixelX = -1;
+            uniforms.debugPixelY = -1;
+
+            std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
+        }
+
         VulkanCommandBuffer<queue_kind::Graphics> cmd = cmdPool_.allocate();
         VulkanRecorder<queue_kind::Graphics> rec = std::move(cmd).begin();
         const auto [swW, swH] = swapchain_.extent();
@@ -118,8 +205,8 @@ namespace RAGE {
     }
 
     void Renderer::recordPass(VulkanRecorder<queue_kind::Graphics> &rec, VulkanRenderTarget &target,
-                              std::span<Renderable *const> renderables, const FrameContext &frame, bool /*isFirstPass*/,
-                              bool /*isLastPass*/) {
+                              std::span<Renderable *const> /*renderables*/, const FrameContext & /*frame*/,
+                              bool /*isFirstPass*/, bool /*isLastPass*/) {
         VkImage targetImage = target.image().handle();
         const uint32_t tgtW = target.width();
         const uint32_t tgtH = target.height();
@@ -129,47 +216,59 @@ namespace RAGE {
                                                                .oldLayout = ImageLayout::Undefined,
                                                                .newLayout = ImageLayout::General,
                                                                .srcStage = PipelineStage::TopOfPipe,
-                                                               .dstStage = PipelineStage::ComputeShader,
+                                                               .dstStage = PipelineStage::Transfer,
                                                                .srcAccess = AccessFlags::None,
-                                                               .dstAccess = AccessFlags::ShaderWrite } } };
+                                                               .dstAccess = AccessFlags::TransferWrite } } };
         rec.pipelineBarrier(toGeneral);
 
-        for (size_t i = 0; i < renderables.size(); ++i) {
-            Renderable *r = renderables[i];
-            VulkanPipeline &pipeline = pipelineCache_.getOrCreate(*r->material());
+        rec.clearColorImage(targetImage, ImageLayout::General, 0.02f, 0.03f, 0.06f, 1.0f);
 
-            VkDescriptorSet set = descPool_.allocate(pipeline.descriptorSetLayouts()[0]);
-            VulkanDescriptorWriter writer(ctx_.vkDevice());
-            writer.writeStorageImage(set, 0, target, ImageLayout::General);
+        const std::array<VulkanImageBarrier, 1> clearToCompute{ { { .image = targetImage,
+                                                                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                    .oldLayout = ImageLayout::General,
+                                                                    .newLayout = ImageLayout::General,
+                                                                    .srcStage = PipelineStage::Transfer,
+                                                                    .dstStage = PipelineStage::ComputeShader,
+                                                                    .srcAccess = AccessFlags::TransferWrite,
+                                                                    .dstAccess = AccessFlags::ShaderWrite } } };
+        rec.pipelineBarrier(clearToCompute);
 
-            PushConstantBuilder pcBuilder;
-            r->prepareFrame(writer, set, pcBuilder, frame);
-
-            writer.commit();
-
-            const std::array<VkDescriptorSet, 1> sets{ set };
-            const auto wg = r->material()->shader()->localWorkgroupSize();
-            const uint32_t gx = (wg[0] > 0) ? ((tgtW + wg[0] - 1) / wg[0]) : 1;
-            const uint32_t gy = (wg[1] > 0) ? ((tgtH + wg[1] - 1) / wg[1]) : 1;
-
-            pipeline.execute(rec, PipelineExecuteContext{ .descriptorSets = sets,
-                                                          .pushConstants = pcBuilder.bytes(),
-                                                          .groupsX = gx,
-                                                          .groupsY = gy,
-                                                          .groupsZ = 1 });
-
-            if (i + 1 < renderables.size()) {
-                const std::array<VulkanImageBarrier, 1> between{ { { .image = targetImage,
-                                                                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                     .oldLayout = ImageLayout::General,
-                                                                     .newLayout = ImageLayout::General,
-                                                                     .srcStage = PipelineStage::ComputeShader,
-                                                                     .dstStage = PipelineStage::ComputeShader,
-                                                                     .srcAccess = AccessFlags::ShaderWrite,
-                                                                     .dstAccess = AccessFlags::ShaderWrite } } };
-                rec.pipelineBarrier(between);
-            }
+        if (shadowCasters_.empty()) {
+            return;
         }
+
+        Voxel3D *anyCaster = shadowCasters_[0];
+        if (!anyCaster->hasMaterial()) {
+            return;
+        }
+        VulkanPipeline &pipeline = pipelineCache_.getOrCreate(*anyCaster->material());
+
+        VkDescriptorSet set = descPool_.allocate(pipeline.descriptorSetLayouts()[0]);
+        VulkanDescriptorWriter writer(ctx_.vkDevice());
+        writer.writeStorageImage(set, 0, target, ImageLayout::General);
+        writer.writeUniformBuffer(set, 2, *frameUniformBuffer_);
+        writer.writeUniformBuffer(set, 3, *sceneCastersBuffer_);
+
+        const VulkanBuffer *fallbackBuffer = shadowCasters_[0]->voxelBuffer();
+        for (uint32_t slot = 0; slot < kMaxSceneCasters; ++slot) {
+            const VulkanBuffer *buf = (slot < shadowCasters_.size())
+                                          ? shadowCasters_[slot]->voxelBuffer()
+                                          : fallbackBuffer;
+            writer.writeStorageBufferArray(set, 4, slot, *buf);
+        }
+
+        writer.commit();
+
+        const std::array<VkDescriptorSet, 1> sets{ set };
+        const auto wg = anyCaster->material()->shader()->localWorkgroupSize();
+        const uint32_t gx = (wg[0] > 0) ? ((tgtW + wg[0] - 1) / wg[0]) : 1;
+        const uint32_t gy = (wg[1] > 0) ? ((tgtH + wg[1] - 1) / wg[1]) : 1;
+
+        pipeline.execute(rec, PipelineExecuteContext{ .descriptorSets = sets,
+                                                      .pushConstants = {},
+                                                      .groupsX = gx,
+                                                      .groupsY = gy,
+                                                      .groupsZ = 1 });
     }
 
     void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapW,

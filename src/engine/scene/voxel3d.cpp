@@ -1,7 +1,6 @@
 #include "voxel3d.hpp"
 #include <cstring>
 #include <stdexcept>
-#include "engine/scene/camera.hpp"
 
 namespace RAGE {
     Voxel3D::Voxel3D(VulkanAllocator &allocator, IVec3 dims, float voxelSize)
@@ -69,31 +68,10 @@ namespace RAGE {
     void Voxel3D::prepareFrame(VulkanDescriptorWriter &writer, VkDescriptorSet set, PushConstantBuilder &pc,
                                const FrameContext &frame) {
         uploadDirty();
-
-        if (buffer_.has_value()) {
-            writer.writeStorageBuffer(set, 1, *buffer_);
-        }
-
-        if (frame.camera == nullptr) {
-            return;
-        }
-
-        const Camera *cam = frame.camera;
-        const Mat4 camWorld = cam->worldMatrix();
-        const Vec3 cameraPos = camWorld.transformPoint(Vec3::zero());
-        const Vec3 cameraForward = camWorld.transformDirection(Vec3(0.0f, 0.0f, -1.0f));
-        const Vec3 cameraUp = camWorld.transformDirection(Vec3::unitY());
-
-        VoxelPushConstants data;
-        data.invModel = worldMatrix().inverted();
-        data.cameraPos_fovY = Vec4(cameraPos, cam->fov());
-        data.cameraForward_aspect = Vec4(cameraForward, cam->aspect());
-        data.cameraUp_voxelSize = Vec4(cameraUp, voxelSize_);
-        data.dimsX = dims_.x;
-        data.dimsY = dims_.y;
-        data.dimsZ = dims_.z;
-
-        pc.write(data);
+        (void)writer;
+        (void)set;
+        (void)pc;
+        (void)frame;
     }
 
     void Voxel3D::writeVoxelCpu(IVec3 c, Color rgba) {
