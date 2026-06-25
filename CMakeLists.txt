@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.16...3.28)
 
-# Use Clang compiler instead of MinGW
-set(CMAKE_C_COMPILER "C:/Program Files/LLVM/bin/clang.exe")
-set(CMAKE_CXX_COMPILER "C:/Program Files/LLVM/bin/clang++.exe")
+# Prefer LLVM/Clang on Windows when installed at the canonical location (avoids MinGW being
+# picked up via PATH). Skipped silently when the path doesn't exist (Linux / WSL / Mac) or
+# when the user has already pinned the compiler via -DCMAKE_*_COMPILER or env CC/CXX.
+if(NOT DEFINED CMAKE_CXX_COMPILER AND EXISTS "C:/Program Files/LLVM/bin/clang++.exe")
+    set(CMAKE_C_COMPILER "C:/Program Files/LLVM/bin/clang.exe")
+    set(CMAKE_CXX_COMPILER "C:/Program Files/LLVM/bin/clang++.exe")
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 project(RAGE CXX C)
