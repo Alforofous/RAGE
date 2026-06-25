@@ -50,6 +50,7 @@ set(ENGINE_SOURCES
     src/engine/materials/pipeline_cache.cpp
     src/engine/rendering/renderer.cpp
     src/engine/scene/camera.cpp
+    src/engine/scene/directional_light.cpp
     src/engine/scene/node3d.cpp
     src/engine/scene/renderable_node3d.cpp
     src/engine/scene/voxel3d.cpp
