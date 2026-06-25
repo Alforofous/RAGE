@@ -111,10 +111,13 @@ namespace RAGE {
         // src/app/profiler.hpp for the canonical subscriber.
         using FrameHook = std::function<void()>;
         using GpuPassHook = std::function<void(const char *passName, VkCommandBuffer cmd)>;
+        using FrameImageHook =
+            std::function<void(const void *rgbaBytes, uint16_t width, uint16_t height)>;
 
         void onFrameEnd(FrameHook h) { frameEnd_ = std::move(h); }
         void onBeforeGpuPass(GpuPassHook h) { beforeGpuPass_ = std::move(h); }
         void onAfterGpuPass(GpuPassHook h) { afterGpuPass_ = std::move(h); }
+        void onFrameImage(FrameImageHook h) { frameImage_ = std::move(h); }
 
     private:
         using Renderable = RenderableNode3D<VulkanShaderModule>;
@@ -139,9 +142,12 @@ namespace RAGE {
         PipelineCache pipelineCache_;
 
         std::optional<VulkanRenderTarget> renderTarget_;
+        std::optional<VulkanRenderTarget> thumbnailTarget_;
         std::optional<VulkanBuffer> frameUniformBuffer_;
         std::optional<VulkanBuffer> sceneCastersBuffer_;
         std::optional<VulkanBuffer> pixelDebugBuffer_;
+        std::optional<VulkanBuffer> thumbnailStaging_;
+        bool thumbnailQueued_ = false;
         int32_t pendingPickX_ = -1;
         int32_t pendingPickY_ = -1;
         bool pickResultReady_ = false;
@@ -156,6 +162,7 @@ namespace RAGE {
         FrameHook frameEnd_;
         GpuPassHook beforeGpuPass_;
         GpuPassHook afterGpuPass_;
+        FrameImageHook frameImage_;
 
         FrameExtent lastExtent_{};
         bool needsRecreate_ = true;

@@ -336,6 +336,34 @@ namespace RAGE {
                                static_cast<uint32_t>(vkRegions.size()), vkRegions.data());
     }
 
+    template <QueueKind K>
+    void VulkanRecorder<K>::copyImageToBuffer(VkImage src, ImageLayout srcLayout, VulkanBuffer &dst,
+                                              std::span<const BufferImageCopy> regions) {
+        if (regions.empty()) {
+            return;
+        }
+
+        Core::SmallVector<VkBufferImageCopy, 4> vkRegions;
+        vkRegions.reserve(regions.size());
+
+        for (const BufferImageCopy &r : regions) {
+            VkBufferImageCopy vr{};
+            vr.bufferOffset = r.bufferOffset;
+            vr.bufferRowLength = r.bufferRowLength;
+            vr.bufferImageHeight = r.bufferImageHeight;
+            vr.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            vr.imageSubresource.mipLevel = r.mipLevel;
+            vr.imageSubresource.baseArrayLayer = r.baseArrayLayer;
+            vr.imageSubresource.layerCount = r.layerCount;
+            vr.imageOffset = { .x = r.imageOffsetX, .y = r.imageOffsetY, .z = r.imageOffsetZ };
+            vr.imageExtent = { .width = r.imageWidth, .height = r.imageHeight, .depth = r.imageDepth };
+            vkRegions.push_back(vr);
+        }
+
+        vkCmdCopyImageToBuffer(handle_(), src, toVkImageLayout(srcLayout), dst.core_.buffer_,
+                               static_cast<uint32_t>(vkRegions.size()), vkRegions.data());
+    }
+
     template <QueueKind K> VulkanExecutable<K> VulkanRecorder<K>::end() && {
         VkCommandBuffer handle = pool_->slotHandle(slotIndex_, generation_);
 

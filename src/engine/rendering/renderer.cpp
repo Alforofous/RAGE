@@ -92,6 +92,23 @@ namespace RAGE {
             std::memset(pixelDebugBuffer_->mappedData(), 0, sizeof(PixelDebug));
         }
 
+        if (!thumbnailTarget_.has_value()) {
+            thumbnailTarget_.emplace(
+                allocator_,
+                VulkanRenderTargetCreateInfo{ .width = 320,
+                                              .height = 180,
+                                              .format = ImageFormat::RGBA8_UNORM,
+                                              .usage = ImageUsage::TransferSrc | ImageUsage::TransferDst });
+        }
+        if (!thumbnailStaging_.has_value()) {
+            constexpr uint64_t kThumbnailBytes = static_cast<uint64_t>(320) * 180 * 4;
+            thumbnailStaging_.emplace(allocator_.createBuffer({
+                .size = kThumbnailBytes,
+                .usage = BufferUsage::TransferDst,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+        }
+
         renderDoneByImage_.clear();
         renderDoneByImage_.reserve(swapchain_.imageCount());
         for (uint32_t i = 0; i < swapchain_.imageCount(); ++i) {
@@ -140,6 +157,13 @@ namespace RAGE {
         }
 
         drainInFlight();
+
+        if (thumbnailQueued_ && frameImage_ && thumbnailStaging_.has_value()) {
+            const auto width = static_cast<uint16_t>(thumbnailTarget_->width());
+            const auto height = static_cast<uint16_t>(thumbnailTarget_->height());
+            frameImage_(thumbnailStaging_->mappedData(), width, height);
+            thumbnailQueued_ = false;
+        }
 
         descPool_.reset();
 
@@ -345,6 +369,48 @@ namespace RAGE {
 
         rec.blitImage(mainTargetImage, ImageLayout::TransferSrcOptimal, rtW, rtH, swapImage,
                       ImageLayout::TransferDstOptimal, swapW, swapH);
+
+        if (frameImage_ && thumbnailTarget_.has_value() && thumbnailStaging_.has_value()) {
+            VkImage thumbImage = thumbnailTarget_->image().handle();
+            const std::array<VulkanImageBarrier, 1> thumbToDst{ { { .image = thumbImage,
+                                                                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                    .oldLayout = ImageLayout::Undefined,
+                                                                    .newLayout = ImageLayout::TransferDstOptimal,
+                                                                    .srcStage = PipelineStage::TopOfPipe,
+                                                                    .dstStage = PipelineStage::Transfer,
+                                                                    .srcAccess = AccessFlags::None,
+                                                                    .dstAccess = AccessFlags::TransferWrite } } };
+            rec.pipelineBarrier(thumbToDst);
+
+            rec.blitImage(mainTargetImage, ImageLayout::TransferSrcOptimal, rtW, rtH, thumbImage,
+                          ImageLayout::TransferDstOptimal, thumbnailTarget_->width(), thumbnailTarget_->height());
+
+            const std::array<VulkanImageBarrier, 1> thumbToSrc{ { { .image = thumbImage,
+                                                                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                    .oldLayout = ImageLayout::TransferDstOptimal,
+                                                                    .newLayout = ImageLayout::TransferSrcOptimal,
+                                                                    .srcStage = PipelineStage::Transfer,
+                                                                    .dstStage = PipelineStage::Transfer,
+                                                                    .srcAccess = AccessFlags::TransferWrite,
+                                                                    .dstAccess = AccessFlags::TransferRead } } };
+            rec.pipelineBarrier(thumbToSrc);
+
+            const std::array<BufferImageCopy, 1> regions{ { { .bufferOffset = 0,
+                                                              .bufferRowLength = 0,
+                                                              .bufferImageHeight = 0,
+                                                              .mipLevel = 0,
+                                                              .baseArrayLayer = 0,
+                                                              .layerCount = 1,
+                                                              .imageOffsetX = 0,
+                                                              .imageOffsetY = 0,
+                                                              .imageOffsetZ = 0,
+                                                              .imageWidth = thumbnailTarget_->width(),
+                                                              .imageHeight = thumbnailTarget_->height(),
+                                                              .imageDepth = 1 } } };
+            rec.copyImageToBuffer(thumbImage, ImageLayout::TransferSrcOptimal, *thumbnailStaging_, regions);
+
+            thumbnailQueued_ = true;
+        }
 
         const std::array<VulkanImageBarrier, 1> toPresent{ { { .image = swapImage,
                                                                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,

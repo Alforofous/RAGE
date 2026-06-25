@@ -57,6 +57,16 @@ namespace RAGE::App {
             (void)passName;
             (void)cmd;
         });
+
+        renderer.onFrameImage([](const void *rgbaBytes, uint16_t width, uint16_t height) {
+#ifdef RAGE_PROFILING_TRACY
+            FrameImage(rgbaBytes, width, height, 1, false);
+#else
+            (void)rgbaBytes;
+            (void)width;
+            (void)height;
+#endif
+        });
     }
 
     void Profiler::frameMark() {
