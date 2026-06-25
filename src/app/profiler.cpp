@@ -60,7 +60,11 @@ namespace RAGE::App {
 
         renderer.onFrameImage([](const void *rgbaBytes, uint16_t width, uint16_t height) {
 #ifdef RAGE_PROFILING_TRACY
-            FrameImage(rgbaBytes, width, height, 1, false);
+            // offset = 0: the image is for the most recently signaled frame (the one whose
+            // FrameMark just fired at the end of the previous render() call). The pixels come
+            // from that frame's render — we waited for its GPU completion via drainInFlight
+            // before reading the staging buffer.
+            FrameImage(rgbaBytes, width, height, 0, false);
 #else
             (void)rgbaBytes;
             (void)width;

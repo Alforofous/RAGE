@@ -34,23 +34,34 @@ if(RAGE_ENABLE_PROFILING)
 
     # Download the prebuilt Tracy profiler GUI on Windows so users don't have to fetch it
     # manually. Skipped on non-Windows platforms — build Tracy's profiler/ from source there.
+    #
+    # Uses curl rather than CMake's file(DOWNLOAD) because the latter relies on libcurl's
+    # bundled CA store, which fails the GitHub CDN TLS handshake on some Windows toolchains
+    # (clang+MSVC stdlib observed). The system curl (Windows 10/11 builtin / Git Bash) uses
+    # the platform certificate store and works reliably.
     if(WIN32)
         set(TRACY_SERVER_VERSION "0.13.1")
         set(TRACY_SERVER_DIR  "${CMAKE_CURRENT_SOURCE_DIR}/tracy-server")
         set(TRACY_SERVER_EXE  "${TRACY_SERVER_DIR}/tracy-profiler.exe")
         if(NOT EXISTS "${TRACY_SERVER_EXE}")
+            find_program(CURL_EXECUTABLE curl)
+            if(NOT CURL_EXECUTABLE)
+                message(FATAL_ERROR
+                    "curl not found on PATH. Install curl, or set RAGE_ENABLE_PROFILING=OFF "
+                    "and download Tracy manually from "
+                    "https://github.com/wolfpld/tracy/releases/tag/v${TRACY_SERVER_VERSION}")
+            endif()
             set(_zip "${TRACY_SERVER_DIR}/windows-${TRACY_SERVER_VERSION}.zip")
             file(MAKE_DIRECTORY "${TRACY_SERVER_DIR}")
-            message(STATUS "Downloading Tracy server v${TRACY_SERVER_VERSION} (~12 MB)...")
-            file(DOWNLOAD
-                "https://github.com/wolfpld/tracy/releases/download/v${TRACY_SERVER_VERSION}/windows-${TRACY_SERVER_VERSION}.zip"
-                "${_zip}"
-                STATUS  _dlStatus
-                SHOW_PROGRESS
+            message(STATUS "Downloading Tracy server v${TRACY_SERVER_VERSION} (~12 MB) via curl...")
+            execute_process(
+                COMMAND "${CURL_EXECUTABLE}" -fsSL
+                    --output "${_zip}"
+                    "https://github.com/wolfpld/tracy/releases/download/v${TRACY_SERVER_VERSION}/windows-${TRACY_SERVER_VERSION}.zip"
+                RESULT_VARIABLE _dlCode
             )
-            list(GET _dlStatus 0 _dlCode)
             if(NOT _dlCode EQUAL 0)
-                message(FATAL_ERROR "Tracy server download failed: ${_dlStatus}")
+                message(FATAL_ERROR "Tracy server download failed (curl exit ${_dlCode})")
             endif()
             file(ARCHIVE_EXTRACT INPUT "${_zip}" DESTINATION "${TRACY_SERVER_DIR}")
             file(REMOVE "${_zip}")
