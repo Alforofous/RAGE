@@ -33,6 +33,7 @@ namespace RAGE::App {
 
         void pollEvents();
         bool shouldClose() const;
+        void setTitle(const std::string &title);
 
         std::pair<uint32_t, uint32_t> framebufferExtent() const;
 

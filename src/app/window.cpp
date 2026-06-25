@@ -84,6 +84,12 @@ namespace RAGE::App {
         return glfwWindowShouldClose(window_) != 0;
     }
 
+    void Window::setTitle(const std::string &title) {
+        if (window_ != nullptr) {
+            glfwSetWindowTitle(window_, title.c_str());
+        }
+    }
+
     std::pair<uint32_t, uint32_t> Window::framebufferExtent() const {
         int w = 0;
         int h = 0;
