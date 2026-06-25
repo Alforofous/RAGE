@@ -31,6 +31,33 @@ if(RAGE_ENABLE_PROFILING)
     set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
     set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)
     add_subdirectory(tracy)
+
+    # Download the prebuilt Tracy profiler GUI on Windows so users don't have to fetch it
+    # manually. Skipped on non-Windows platforms — build Tracy's profiler/ from source there.
+    if(WIN32)
+        set(TRACY_SERVER_VERSION "0.13.1")
+        set(TRACY_SERVER_DIR  "${CMAKE_CURRENT_SOURCE_DIR}/tracy-server")
+        set(TRACY_SERVER_EXE  "${TRACY_SERVER_DIR}/tracy-profiler.exe")
+        if(NOT EXISTS "${TRACY_SERVER_EXE}")
+            set(_zip "${TRACY_SERVER_DIR}/windows-${TRACY_SERVER_VERSION}.zip")
+            file(MAKE_DIRECTORY "${TRACY_SERVER_DIR}")
+            message(STATUS "Downloading Tracy server v${TRACY_SERVER_VERSION} (~12 MB)...")
+            file(DOWNLOAD
+                "https://github.com/wolfpld/tracy/releases/download/v${TRACY_SERVER_VERSION}/windows-${TRACY_SERVER_VERSION}.zip"
+                "${_zip}"
+                STATUS  _dlStatus
+                SHOW_PROGRESS
+            )
+            list(GET _dlStatus 0 _dlCode)
+            if(NOT _dlCode EQUAL 0)
+                message(FATAL_ERROR "Tracy server download failed: ${_dlStatus}")
+            endif()
+            file(ARCHIVE_EXTRACT INPUT "${_zip}" DESTINATION "${TRACY_SERVER_DIR}")
+            file(REMOVE "${_zip}")
+        endif()
+        # Expose the resolved path to dependents (e.g. the RAGE executable) for runtime use.
+        set(RAGE_TRACY_SERVER_EXE "${TRACY_SERVER_EXE}" CACHE INTERNAL "Path to tracy-profiler.exe")
+    endif()
 endif()
 
 # Create a project_libraries target that includes all our libraries

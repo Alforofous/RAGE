@@ -145,6 +145,13 @@ if(RAGE_ENABLE_PROFILING)
     target_compile_definitions(RAGE PRIVATE RAGE_PROFILING_TRACY)
 endif()
 
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/app/build_paths.hpp.in"
+    "${CMAKE_BINARY_DIR}/generated/app/build_paths.hpp"
+    @ONLY
+)
+target_include_directories(RAGE PRIVATE "${CMAKE_BINARY_DIR}/generated")
+
 # --- Tests ---
 
 add_subdirectory(tests/)

@@ -1,0 +1,8 @@
+#pragma once
+
+namespace RAGE::App {
+    // Absolute path to tracy-profiler.exe as resolved at CMake configure time. Empty when
+    // RAGE_ENABLE_PROFILING was OFF or the platform isn't supported. main.cpp uses this for
+    // the --profile launch flag.
+    inline constexpr const char *kTracyServerExePath = "@RAGE_TRACY_SERVER_EXE@";
+}

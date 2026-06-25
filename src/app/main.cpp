@@ -1,13 +1,17 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <string>
 #include <memory>
 #include <numbers>
 #include <stdexcept>
 #include <vector>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include "app/build_paths.hpp"
 #include "engine/content/vox_loader.hpp"
 #include "engine/materials/material.hpp"
 #include "engine/rendering/ambient_light.hpp"
@@ -80,7 +84,30 @@ namespace {
     }
 }
 
-int main(int /*argc*/, char **argv) {
+int main(int argc, char **argv) {
+    bool launchProfiler = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--profile") == 0) {
+            launchProfiler = true;
+        }
+    }
+
+    if (launchProfiler) {
+        const char *tracyExe = RAGE::App::kTracyServerExePath;
+        if (tracyExe == nullptr || tracyExe[0] == '\0') {
+            std::fprintf(stderr,
+                         "--profile: profiling support not built. Reconfigure with "
+                         "-DRAGE_ENABLE_PROFILING=ON.\n");
+        } else {
+            std::string spawn = "start \"\" \"";
+            spawn += tracyExe;
+            spawn += "\" -a 127.0.0.1";
+            std::fprintf(stdout, "--profile: launching %s\n", tracyExe);
+            std::fflush(stdout);
+            std::system(spawn.c_str());
+        }
+    }
+
     try {
         App::Window window(1280, 720, "RAGE Smoke");
 

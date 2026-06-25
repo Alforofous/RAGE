@@ -12,8 +12,9 @@ desktop.ini
 .claude
 CLAUDE.md
 
-# Tracy server release archive (extracted binaries committed, archive not needed)
-libraries/tracy-server/*.zip
+# Tracy server binaries — downloaded by CMake at configure time when
+# RAGE_ENABLE_PROFILING=ON. Not committed; regenerated from the upstream release.
+libraries/tracy-server/
 
 # Accidental double-clone of the tracy subdir — not part of this project
 libraries/libraries/

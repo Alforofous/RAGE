@@ -55,6 +55,18 @@ namespace RAGE::App {
      *     // Tracy server connects, flame chart appears. Or, if RAGE_PROFILING_TRACY is
      *     // unset at build time, attach() is a no-op and there's zero runtime cost.
      *
+     * Running it
+     * ==========
+     * 1. Configure with profiling: `cmake -B build -DRAGE_ENABLE_PROFILING=ON`
+     *    (CMake auto-downloads the Tracy server GUI binary under libraries/tracy-server/
+     *    on Windows; ~12 MB one-time fetch from the upstream release.)
+     * 2. Build: `cmake --build build`
+     * 3. Launch the engine *and* the profiler GUI in one step:
+     *        ./build/RAGE.exe --profile
+     *    This spawns tracy-profiler.exe (-a 127.0.0.1) as a detached child and continues to
+     *    start the engine. Tracy auto-connects when the engine comes up.
+     * 4. To launch them separately, run tracy-profiler.exe yourself, then ./build/RAGE.exe.
+     *
      * Swapping the library
      * ====================
      * Replace this file's implementation. The header API (attach, plot, frameMark) is what
