@@ -95,15 +95,17 @@ namespace {
         out.write(reinterpret_cast<const char *>(file.data()), static_cast<std::streamsize>(file.size()));
     }
 
-    // Sphere: 24^3 grid, radius 10 voxels centred on (11.5, 11.5, 11.5). Coloured with an
+    // Sphere: 256^3 grid, hollow shell of radius ~120 voxels (3 voxels thick) centred on the
+    // grid centre. Mostly empty interior stresses intra-chunk mip-skipping. Coloured with an
     // (x, y, z) gradient binned into 6 levels per axis (6^3 = 216 palette entries) so the
     // gradient is preserved while staying inside MagicaVoxel's 256-color palette budget.
     void writeSphereVox(const std::filesystem::path &outDir) {
-        constexpr int32_t kDim = 24;
+        constexpr int32_t kDim = 256;
         constexpr int kBins = 6;
         constexpr int kVoxelsPerBin = kDim / kBins;
-        constexpr float kCentre = 11.5f;
-        constexpr float kRadius = 10.0f;
+        constexpr float kCentre = 127.5f;
+        constexpr float kOuterRadius = 120.0f;
+        constexpr float kInnerRadius = 117.0f;
 
         std::vector<Voxel> voxels;
         voxels.reserve(static_cast<size_t>(kDim) * kDim * kDim);
@@ -113,7 +115,8 @@ namespace {
                     const float dx = static_cast<float>(x) - kCentre;
                     const float dy = static_cast<float>(y) - kCentre;
                     const float dz = static_cast<float>(z) - kCentre;
-                    if (std::sqrt((dx * dx) + (dy * dy) + (dz * dz)) >= kRadius) {
+                    const float r = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+                    if (r >= kOuterRadius || r < kInnerRadius) {
                         continue;
                     }
                     const int bx = x / kVoxelsPerBin;
@@ -145,9 +148,9 @@ namespace {
         writeVoxFile(outDir / "sphere.vox", kDim, kDim, kDim, voxels, palette);
     }
 
-    // Floor: 96 x 1 x 96 solid grey slab.
+    // Floor: 256 x 1 x 256 solid grey slab.
     void writeFloorVox(const std::filesystem::path &outDir) {
-        constexpr int32_t kDimXZ = 96;
+        constexpr int32_t kDimXZ = 256;
         constexpr int32_t kDimY = 1;
 
         std::vector<Voxel> voxels;

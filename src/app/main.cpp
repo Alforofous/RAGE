@@ -1,4 +1,5 @@
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -8,13 +9,13 @@
 #include <memory>
 #include <numbers>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include "app/build_paths.hpp"
 #include "engine/content/vox_loader.hpp"
 #include "engine/materials/material.hpp"
-#include "engine/rendering/ambient_light.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/renderer.hpp"
 #include "profiler.hpp"
@@ -125,25 +126,49 @@ int main(int argc, char **argv) {
 
         const std::filesystem::path assetsDir = executableDir(argv[0]) / "assets";
 
-        const auto makeVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
-            const Content::VoxModel m = Content::loadVox(voxPath);
-            auto v = std::make_unique<Voxel3D>(allocator, m.dims, kVoxelSize);
-            v->fill([&m](IVec3 c) -> Color {
-                const size_t idx = (static_cast<size_t>(c.z) * static_cast<size_t>(m.dims.x)
-                                    * static_cast<size_t>(m.dims.y))
-                                   + (static_cast<size_t>(c.y) * static_cast<size_t>(m.dims.x))
-                                   + static_cast<size_t>(c.x);
-                return m.voxels[idx];
-            });
+        struct VoxelLoadJob {
+            std::string label;
+            Content::VoxModel model;
+            Voxel3D *target = nullptr;
+            std::atomic<float> mipProgress{ 0.0f };
+        };
+        std::vector<std::unique_ptr<VoxelLoadJob>> loadJobs;
+
+        const auto stageVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
+            auto job = std::make_unique<VoxelLoadJob>();
+            job->label = voxPath.filename().string();
+            job->model = Content::loadVox(voxPath);
+            auto v = std::make_unique<Voxel3D>(allocator, job->model.dims, kVoxelSize);
+            job->target = v.get();
             v->setMaterial(voxelMaterial);
             v->setPosition(position);
-            std::fprintf(stdout, "Loaded %s (%dx%dx%d)\n", voxPath.string().c_str(), m.dims.x, m.dims.y, m.dims.z);
+            v->onMipBuildProgress([&jobRef = *job](float p) { jobRef.mipProgress.store(p); });
+            std::fprintf(stdout, "Staged %s (%dx%dx%d)\n", voxPath.string().c_str(), job->model.dims.x,
+                         job->model.dims.y, job->model.dims.z);
+            loadJobs.push_back(std::move(job));
             return v;
         };
 
         Node3D root;
-        root.add(makeVoxelFromFile(assetsDir / "floor.vox", Vec3(-2.4f, -1.0f, -4.6f)));
-        root.add(makeVoxelFromFile(assetsDir / "sphere.vox", Vec3(-0.6f, -0.2f, -2.8f)));
+        root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
+        root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
+
+        std::atomic<bool> loaderDone{ false };
+        std::atomic<bool> loaderCancel{ false };
+        for (const auto &job : loadJobs) {
+            job->target->onMipBuildShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
+        }
+        std::thread loaderThread([&]() {
+            for (const auto &job : loadJobs) {
+                if (loaderCancel.load()) {
+                    break;
+                }
+                job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
+                job->model.voxels.clear();
+                job->model.voxels.shrink_to_fit();
+            }
+            loaderDone.store(true);
+        });
 
         const auto [initW, initH] = window.framebufferExtent();
         Camera camera(std::numbers::pi_v<float> * 0.4f,
@@ -242,6 +267,10 @@ int main(int argc, char **argv) {
                                  pd.finalR, pd.finalG, pd.finalB, pd.packedColor);
                     std::fflush(stdout);
                 }
+            }
+            loaderCancel.store(true);
+            if (loaderThread.joinable()) {
+                loaderThread.join();
             }
         }
     } catch (const std::exception &e) {

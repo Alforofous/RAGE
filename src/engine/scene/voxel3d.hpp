@@ -40,6 +40,18 @@ namespace RAGE {
         void fillSolid(Color rgba);
         void clear();
 
+        /**
+         * Bulk-copy packed RGBA8 voxels straight into the buffer. `src` must point to
+         * `srcDims.x * srcDims.y * srcDims.z` uint32 values in the same linear layout as the
+         * GPU buffer (z-major, y-mid, x-fastest). When `srcDims == dimensions()` this is a
+         * single memcpy. Mismatched dims throws — call `resize()` first to match.
+         *
+         * Use this for content imports (vox loader, etc.) instead of `fill(lambda)` — the
+         * lambda path was ~700ns/cell on a 256³ scene (~12s total) due to `std::function`
+         * dispatch and per-cell Color round-trips; this path is one memcpy.
+         */
+        void fillFromPackedRGBA8(const uint32_t *src, IVec3 srcDims);
+
         void resize(IVec3 newDims);
 
         IVec3 dimensions() const { return dims_; }

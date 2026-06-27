@@ -1,17 +1,19 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <vector>
-#include "math/color.hpp"
 #include "math/ivec.hpp"
 
 namespace RAGE::Content {
     /**
      * Parsed MagicaVoxel .vox file as a dense color grid.
      *
-     * `voxels` is sized `dims.x * dims.y * dims.z`. Cells that are empty in the source file
-     * are `Color::transparent()`. Linear index for grid coordinate (x, y, z) follows the
-     * Voxel3D convention: `z * dims.x * dims.y + y * dims.x + x`.
+     * `voxels` is sized `dims.x * dims.y * dims.z` and stores **packed RGBA8 (one uint32 per
+     * cell)** — the same encoding the GPU voxel buffer uses, so `Voxel3D::fillFromPackedRGBA8`
+     * can `memcpy` straight in without per-cell conversion. Cells that are empty in the
+     * source file are `0u` (alpha = 0). Linear index for grid coordinate (x, y, z) follows
+     * the Voxel3D convention: `z * dims.x * dims.y + y * dims.x + x`.
      *
      * Axis convention mirrors the .vox file: +X right, +Y forward, +Z up. RAGE conventionally
      * uses +Y up; rotate the owning Node3D (e.g. −90° around X) when you want the model
@@ -19,7 +21,7 @@ namespace RAGE::Content {
      */
     struct VoxModel {
         IVec3 dims{};
-        std::vector<Color> voxels;
+        std::vector<uint32_t> voxels;
     };
 
     /**

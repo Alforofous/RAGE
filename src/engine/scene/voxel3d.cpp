@@ -58,6 +58,19 @@ namespace RAGE {
         fillSolid(Color::transparent());
     }
 
+    void Voxel3D::fillFromPackedRGBA8(const uint32_t *src, IVec3 srcDims) {
+        if (src == nullptr) {
+            throw std::runtime_error("Voxel3D::fillFromPackedRGBA8: src is null");
+        }
+        if (srcDims != dims_) {
+            throw std::runtime_error("Voxel3D::fillFromPackedRGBA8: srcDims must match dimensions()");
+        }
+        const size_t bytes = static_cast<size_t>(dims_.volume()) * sizeof(uint32_t);
+        std::memcpy(mappedVoxels(), src, bytes);
+        dirty_ = true;
+        rebuildOccupancyMip();
+    }
+
     void Voxel3D::resize(IVec3 newDims) {
         if (newDims == dims_) {
             return;

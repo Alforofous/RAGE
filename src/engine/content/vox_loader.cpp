@@ -161,7 +161,7 @@ namespace RAGE::Content {
         model.dims = parsed.dims;
         const size_t voxelCount = static_cast<size_t>(parsed.dims.x) * static_cast<size_t>(parsed.dims.y)
                                   * static_cast<size_t>(parsed.dims.z);
-        model.voxels.assign(voxelCount, Color::transparent());
+        model.voxels.assign(voxelCount, 0u);
 
         for (const auto &v : parsed.rawVoxels) {
             const IVec3 coord{ v[0], v[1], v[2] };
@@ -174,7 +174,7 @@ namespace RAGE::Content {
             if (parsed.havePalette && colorIdx != 0u) {
                 rgba = parsed.filePalette[(colorIdx - 1u) & 0xFFu];
             }
-            model.voxels[voxelIndex(coord, parsed.dims)] = Color::fromRGBA8(rgba);
+            model.voxels[voxelIndex(coord, parsed.dims)] = rgba;
         }
 
         return model;

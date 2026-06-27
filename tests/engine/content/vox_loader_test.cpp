@@ -7,7 +7,6 @@
 #include <stdexcept>
 #include <vector>
 #include "engine/content/vox_loader.hpp"
-#include "math/color.hpp"
 #include "math/ivec.hpp"
 
 using namespace RAGE;
@@ -122,10 +121,7 @@ TEST(VoxLoader, LoadsMinimalSingleVoxelWithoutPalette) {
     const VoxModel m = loadVox(path);
     EXPECT_EQ(m.dims, IVec3(1, 1, 1));
     ASSERT_EQ(m.voxels.size(), 1u);
-    EXPECT_EQ(m.voxels[0].r, 1.0f);
-    EXPECT_EQ(m.voxels[0].g, 1.0f);
-    EXPECT_EQ(m.voxels[0].b, 1.0f);
-    EXPECT_EQ(m.voxels[0].a, 1.0f);
+    EXPECT_EQ(m.voxels[0], 0xFFFFFFFFu);
     std::filesystem::remove(path);
 }
 
@@ -141,12 +137,8 @@ TEST(VoxLoader, AppliesRGBAPaletteWithOneBasedRotation) {
 
     const VoxModel m = loadVox(path);
     ASSERT_EQ(m.voxels.size(), 2u);
-    EXPECT_FLOAT_EQ(m.voxels[0].r, 1.0f);
-    EXPECT_FLOAT_EQ(m.voxels[0].g, 0.0f);
-    EXPECT_FLOAT_EQ(m.voxels[0].b, 0.0f);
-    EXPECT_FLOAT_EQ(m.voxels[1].r, 0.0f);
-    EXPECT_FLOAT_EQ(m.voxels[1].g, 1.0f);
-    EXPECT_FLOAT_EQ(m.voxels[1].b, 0.0f);
+    EXPECT_EQ(m.voxels[0], 0xFF0000FFu);
+    EXPECT_EQ(m.voxels[1], 0xFF00FF00u);
     std::filesystem::remove(path);
 }
 
@@ -159,10 +151,10 @@ TEST(VoxLoader, LinearIndexingMatchesVoxel3DConvention) {
     const VoxModel m = loadVox(path);
     const size_t idx = (1u * 4u * 3u) + (2u * 4u) + 1u;
     ASSERT_LT(idx, m.voxels.size());
-    EXPECT_GT(m.voxels[idx].a, 0.0f);
+    EXPECT_GT((m.voxels[idx] >> 24u) & 0xFFu, 0u);
     for (size_t i = 0; i < m.voxels.size(); ++i) {
         if (i != idx) {
-            EXPECT_FLOAT_EQ(m.voxels[i].a, 0.0f);
+            EXPECT_EQ((m.voxels[i] >> 24u) & 0xFFu, 0u);
         }
     }
     std::filesystem::remove(path);
@@ -177,8 +169,8 @@ TEST(VoxLoader, EmptyCellsAreTransparent) {
     const VoxModel m = loadVox(path);
     EXPECT_EQ(m.voxels.size(), 8u);
     int filled = 0;
-    for (const Color &c : m.voxels) {
-        if (c.a > 0.0f) {
+    for (uint32_t v : m.voxels) {
+        if (((v >> 24u) & 0xFFu) > 0u) {
             ++filled;
         }
     }
@@ -241,8 +233,8 @@ TEST(VoxLoader, SkipsOutOfBoundsVoxels) {
     const auto path = writeTempVox(buildVox(b), "rage_vox_test_oob.vox");
     const VoxModel m = loadVox(path);
     int filled = 0;
-    for (const Color &c : m.voxels) {
-        if (c.a > 0.0f) {
+    for (uint32_t v : m.voxels) {
+        if (((v >> 24u) & 0xFFu) > 0u) {
             ++filled;
         }
     }
