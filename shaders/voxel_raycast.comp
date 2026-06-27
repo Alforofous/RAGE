@@ -15,35 +15,18 @@ layout(set = 0, binding = 2, std140) uniform FrameUniforms {
     ivec4 debugFlags;
 } frame;
 
-struct CasterEntry {
-    mat4 invModel;
-    ivec4 dims_pad;
-    vec4 voxelSize_pad;
-    ivec4 mipLevelCount_pad;
-    uvec4 mipLevels[4];
-};
+layout(set = 0, binding = 3, std430) readonly buffer BrickPool {
+    uint voxels[];
+} brickPool;
 
-layout(set = 0, binding = 3, std140) uniform SceneCasters {
-    ivec4 count_pad;
-    CasterEntry entries[16];
-} scene;
+layout(set = 0, binding = 4, std430) readonly buffer WorldBrickGridHandles {
+    uint handles[];
+} worldHandles;
 
-layout(set = 0, binding = 4, std430) readonly buffer CasterVoxels {
-    uint data[];
-} casterVoxels[16];
-
-layout(set = 0, binding = 6, std430) readonly buffer CasterMips {
-    uint data[];
-} casterMips[16];
-
-layout(set = 0, binding = 7, std140) uniform WorldGridParams {
-    vec4 origin_cellSize;
-    ivec4 dims_pad;
+layout(set = 0, binding = 6, std140) uniform WorldBrickGridParams {
+    vec4 origin_cellSize;       // .xyz = world coords of grid (0,0,0), .w = cellSize
+    ivec4 dims_voxelDim;        // .xyz = grid dims (bricks), .w = brick edge in voxels (8)
 } worldGrid;
-
-layout(set = 0, binding = 8, std430) readonly buffer WorldGridBits {
-    uint data[];
-} worldBits;
 
 layout(set = 0, binding = 5, std430) buffer PixelDebug {
     int hit;
@@ -79,9 +62,9 @@ layout(set = 0, binding = 5, std430) buffer PixelDebug {
     float finalB;
 } dbg;
 
-const int kMaxSteps = 1024;
-const int kMaxShadowSteps = 1024;
-const int kMaxWorldSteps = 512;
+const int kVoxelsPerBrick = 8 * 8 * 8;    // 512
+const int kMaxOuterSteps = 512;
+const int kMaxInnerSteps = 24;            // 3D diagonal of an 8³ brick
 
 vec4 unpackRGBA8(uint packed) {
     return vec4(
@@ -92,428 +75,228 @@ vec4 unpackRGBA8(uint packed) {
     );
 }
 
-// World-grid bit test. Returns false (= empty) when the cell is outside the grid bounds.
-bool worldCellOccupied(ivec3 cell) {
-    ivec3 dims = worldGrid.dims_pad.xyz;
+uint brickHandleAt(ivec3 cell) {
+    ivec3 dims = worldGrid.dims_voxelDim.xyz;
     if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) {
-        return false;
+        return 0u;
     }
-    uint bitIdx = (uint(cell.z) * uint(dims.x) * uint(dims.y))
-                + (uint(cell.y) * uint(dims.x))
-                + uint(cell.x);
-    uint wordIdx = bitIdx >> 5u;
-    uint bitInWord = bitIdx & 31u;
-    return (worldBits.data[wordIdx] & (1u << bitInWord)) != 0u;
+    uint idx = (uint(cell.z) * uint(dims.x) * uint(dims.y))
+             + (uint(cell.y) * uint(dims.x))
+             + uint(cell.x);
+    return worldHandles.handles[idx];
 }
 
-// Walks the ray through the world grid. Returns true if any cell along the ray is occupied,
-// false if the ray crosses the entire grid without finding one (or misses the grid). When
-// the grid has dims.x == 0 (no casters this frame) returns true so the inner caster loop
-// still runs — keeps the renderer correct during scene-empty edge cases.
-bool worldRayHitsOccupiedCell(vec3 origin, vec3 dir) {
-    ivec3 dims = worldGrid.dims_pad.xyz;
-    if (dims.x <= 0) return true;
+uint brickVoxel(uint handle, ivec3 lc) {
+    uint local = (uint(lc.z) * 8u * 8u) + (uint(lc.y) * 8u) + uint(lc.x);
+    return brickPool.voxels[handle * uint(kVoxelsPerBrick) + local];
+}
+
+struct InnerHit {
+    bool hit;
+    float tHit;          // world-space t along the primary ray
+    ivec3 lastStepAxis;  // axis of the final cell-boundary cross (for normal)
+    ivec3 stepDir;
+    uint packed;
+    int stepCount;
+    vec3 voxelWorldMin;  // world-space corner of the hit voxel (size voxelSize on each axis)
+};
+
+// DDA inside one 8³ brick. `origin`/`dir` are world-space; the function recomputes the
+// local-brick coordinates internally. `tEnter` is the world-t at which the primary ray
+// enters the brick (used to seed sideDist correctly). Returns the first non-empty voxel.
+InnerHit innerTraceBrick(uint handle, vec3 worldOrigin, vec3 worldDir, vec3 brickWorldOrigin,
+                          float voxelSize, float tEnter, int entryAxis) {
+    InnerHit res;
+    res.hit = false;
+    res.tHit = 1e30;
+    res.stepCount = 0;
+
+    vec3 hitPoint = (worldOrigin + worldDir * (tEnter + 1e-5)) - brickWorldOrigin;
+    vec3 cellF = hitPoint / voxelSize;
+    ivec3 cell = clamp(ivec3(floor(cellF)), ivec3(0), ivec3(7));
+
+    vec3 invDir = 1.0 / worldDir;
+    vec3 deltaDist = abs(vec3(voxelSize) * invDir);
+    ivec3 stepDir;
+    vec3 sideDist;
+    for (int i = 0; i < 3; ++i) {
+        if (worldDir[i] < 0.0) {
+            stepDir[i] = -1;
+            sideDist[i] = tEnter + (cellF[i] - float(cell[i])) * deltaDist[i];
+        } else {
+            stepDir[i] = 1;
+            sideDist[i] = tEnter + (float(cell[i] + 1) - cellF[i]) * deltaDist[i];
+        }
+    }
+    // Seed lastAxis with the brick-entry face so a first-iteration hit (entry cell already
+    // occupied) reports the right normal. Subsequent cell-crossing steps inside the brick
+    // update this as they happen.
+    int lastAxis = entryAxis;
+    float tHit = tEnter;
+
+    for (int s = 0; s < kMaxInnerSteps; ++s) {
+        res.stepCount = s + 1;
+        if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, ivec3(8)))) {
+            return res;
+        }
+        uint packed = brickVoxel(handle, cell);
+        if ((packed >> 24u) > 0u) {
+            res.hit = true;
+            res.tHit = tHit;
+            res.lastStepAxis = ivec3(0);
+            res.lastStepAxis[lastAxis] = 1;
+            res.stepDir = stepDir;
+            res.packed = packed;
+            res.voxelWorldMin = brickWorldOrigin + vec3(cell) * voxelSize;
+            return res;
+        }
+        if (sideDist.x < sideDist.y) {
+            if (sideDist.x < sideDist.z) {
+                tHit = sideDist.x;
+                sideDist.x += deltaDist.x;
+                cell.x += stepDir.x;
+                lastAxis = 0;
+            } else {
+                tHit = sideDist.z;
+                sideDist.z += deltaDist.z;
+                cell.z += stepDir.z;
+                lastAxis = 2;
+            }
+        } else if (sideDist.y < sideDist.z) {
+            tHit = sideDist.y;
+            sideDist.y += deltaDist.y;
+            cell.y += stepDir.y;
+            lastAxis = 1;
+        } else {
+            tHit = sideDist.z;
+            sideDist.z += deltaDist.z;
+            cell.z += stepDir.z;
+            lastAxis = 2;
+        }
+    }
+    return res;
+}
+
+struct OuterTrace {
+    bool hit;
+    float tHit;
+    int lastStepAxis;    // 0/1/2 — the axis of the final voxel-cell step
+    ivec3 stepDir;
+    uint packed;
+    int totalSteps;      // outer + sum of inner; for heatmap
+    vec3 voxelWorldMin;  // world-space corner of the hit voxel
+    float voxelSize;
+};
+
+OuterTrace tracePrimary(vec3 worldOrigin, vec3 worldDir) {
+    OuterTrace out_;
+    out_.hit = false;
+    out_.tHit = 1e30;
+    out_.totalSteps = 0;
+
+    ivec3 dims = worldGrid.dims_voxelDim.xyz;
+    if (dims.x <= 0) return out_;
 
     vec3 gridOrigin = worldGrid.origin_cellSize.xyz;
     float cs = worldGrid.origin_cellSize.w;
+    float voxelSize = cs / float(worldGrid.dims_voxelDim.w);
     vec3 gridMin = gridOrigin;
     vec3 gridMax = gridOrigin + vec3(dims) * cs;
 
-    vec3 invDir = 1.0 / dir;
-    vec3 t0 = (gridMin - origin) * invDir;
-    vec3 t1 = (gridMax - origin) * invDir;
+    vec3 invDir = 1.0 / worldDir;
+    vec3 t0 = (gridMin - worldOrigin) * invDir;
+    vec3 t1 = (gridMax - worldOrigin) * invDir;
     vec3 tlo = min(t0, t1);
     vec3 thi = max(t0, t1);
     float tEnter = max(max(tlo.x, tlo.y), tlo.z);
-    float tExit  = min(min(thi.x, thi.y), thi.z);
-    if (tEnter > tExit || tExit < 0.0) return false;
+    float tExit  = min(min(thi.x,  thi.y),  thi.z);
+    if (tEnter > tExit || tExit < 0.0) return out_;
 
     float tStart = max(tEnter, 0.0);
-    vec3 entry = (origin + dir * (tStart + 1e-4)) - gridOrigin;
-    vec3 cellF = entry / cs;
+    vec3 entryWorld = worldOrigin + worldDir * (tStart + 1e-4);
+    vec3 cellF = (entryWorld - gridOrigin) / cs;
     ivec3 cell = clamp(ivec3(floor(cellF)), ivec3(0), dims - ivec3(1));
 
     vec3 deltaDist = abs(vec3(cs) * invDir);
     ivec3 stepDir;
     vec3 sideDist;
     for (int i = 0; i < 3; ++i) {
-        if (dir[i] < 0.0) {
+        if (worldDir[i] < 0.0) {
             stepDir[i] = -1;
-            sideDist[i] = (cellF[i] - float(cell[i])) * deltaDist[i];
+            sideDist[i] = tStart + (cellF[i] - float(cell[i])) * deltaDist[i];
         } else {
             stepDir[i] = 1;
-            sideDist[i] = (float(cell[i] + 1) - cellF[i]) * deltaDist[i];
+            sideDist[i] = tStart + (float(cell[i] + 1) - cellF[i]) * deltaDist[i];
         }
     }
+    float tCellEnter = tStart;
 
-    for (int s = 0; s < kMaxWorldSteps; ++s) {
-        if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) return false;
-        if (worldCellOccupied(cell)) return true;
+    // Determine which face of the grid the ray crossed to enter (= axis whose tlo equals
+    // tEnter). Used as the first-cell "entry axis" so a hit on the very first inner cell
+    // reports the correct normal.
+    int entryAxis = 0;
+    if (tlo.y >= tlo.x && tlo.y >= tlo.z) {
+        entryAxis = 1;
+    } else if (tlo.z >= tlo.x) {
+        entryAxis = 2;
+    }
+
+    for (int s = 0; s < kMaxOuterSteps; ++s) {
+        out_.totalSteps += 1;
+        if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) {
+            return out_;
+        }
+        uint handle = brickHandleAt(cell);
+        bool skipEmpty = (frame.debugFlags.x != 0);
+        if (!skipEmpty || handle != 0u) {
+            vec3 brickOrigin = gridOrigin + vec3(cell) * cs;
+            InnerHit inner = innerTraceBrick(handle, worldOrigin, worldDir, brickOrigin, voxelSize, tCellEnter, entryAxis);
+            out_.totalSteps += inner.stepCount;
+            if (inner.hit) {
+                out_.hit = true;
+                out_.tHit = inner.tHit;
+                out_.packed = inner.packed;
+                out_.stepDir = inner.stepDir;
+                out_.voxelWorldMin = inner.voxelWorldMin;
+                out_.voxelSize = voxelSize;
+                for (int a = 0; a < 3; ++a) {
+                    if (inner.lastStepAxis[a] != 0) {
+                        out_.lastStepAxis = a;
+                    }
+                }
+                return out_;
+            }
+        }
         if (sideDist.x < sideDist.y) {
             if (sideDist.x < sideDist.z) {
+                tCellEnter = sideDist.x;
                 sideDist.x += deltaDist.x;
                 cell.x += stepDir.x;
+                entryAxis = 0;
             } else {
+                tCellEnter = sideDist.z;
                 sideDist.z += deltaDist.z;
                 cell.z += stepDir.z;
+                entryAxis = 2;
             }
         } else if (sideDist.y < sideDist.z) {
+            tCellEnter = sideDist.y;
             sideDist.y += deltaDist.y;
             cell.y += stepDir.y;
+            entryAxis = 1;
         } else {
+            tCellEnter = sideDist.z;
             sideDist.z += deltaDist.z;
             cell.z += stepDir.z;
+            entryAxis = 2;
         }
     }
-    return true;
-}
-
-// Read one occupancy-mip bit at the given level and cell in a caster's mip SSBO.
-bool mipBitOccupied(int casterIdx, int level, ivec3 cell, uvec4 levelInfo) {
-    uvec3 lvlDim = levelInfo.xyz;
-    if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, ivec3(lvlDim)))) {
-        return true;  // out-of-bounds = treat as occupied (conservative)
-    }
-    uint bitIdx = (uint(cell.z) * lvlDim.x * lvlDim.y) + (uint(cell.y) * lvlDim.x) + uint(cell.x);
-    uint byteOffset = levelInfo.w + (bitIdx >> 3u);
-    uint wordIdx = byteOffset >> 2u;
-    uint byteInWord = byteOffset & 3u;
-    uint word = casterMips[casterIdx].data[wordIdx];
-    uint byteVal = (word >> (byteInWord * 8u)) & 0xFFu;
-    return (byteVal & (1u << (bitIdx & 7u))) != 0u;
-}
-
-// Returns the highest mip level L (1..mipLevelCount) where the 2^(L+1) block containing
-// voxelIdx is reported empty. Returns 0 if even the finest mip says "occupied" (caller
-// must do a leaf voxel test). Stepping by 2^level cells is safe along the ray's path.
-int coarsestEmptyMipLevel(int casterIdx, ivec3 voxelIdx) {
-    int levelCount = scene.entries[casterIdx].mipLevelCount_pad.x;
-    int chosen = 0;
-    for (int L = 0; L < levelCount; ++L) {
-        uvec4 info = scene.entries[casterIdx].mipLevels[L];
-        ivec3 lvlCell = voxelIdx >> (L + 1);
-        if (mipBitOccupied(casterIdx, L, lvlCell, info)) {
-            break;
-        }
-        chosen = L + 1;
-    }
-    return chosen;
-}
-
-struct PrimaryHit {
-    bool hit;
-    float tHit;
-    int casterIdx;
-    ivec3 voxelIdx;
-    int lastStepAxis;
-    ivec3 stepDir;
-    uint packed;
-    int stepCount;
-};
-
-PrimaryHit traceCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
-    PrimaryHit res;
-    res.hit = false;
-    res.tHit = 1e30;
-    res.casterIdx = casterIdx;
-    res.stepCount = 0;
-
-    mat4 invModel = scene.entries[casterIdx].invModel;
-    ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
-    float voxelSize = scene.entries[casterIdx].voxelSize_pad.x;
-
-    vec3 origin = (invModel * vec4(worldOrigin, 1.0)).xyz;
-    vec3 dir = (invModel * vec4(worldDir, 0.0)).xyz;
-
-    vec3 gridMin = vec3(0.0);
-    vec3 gridMax = vec3(dims) * voxelSize;
-
-    vec3 invDir = 1.0 / dir;
-    vec3 t0 = (gridMin - origin) * invDir;
-    vec3 t1 = (gridMax - origin) * invDir;
-    vec3 tEnterV = min(t0, t1);
-    vec3 tExitV  = max(t0, t1);
-    float tEnter = max(max(tEnterV.x, tEnterV.y), tEnterV.z);
-    float tExit  = min(min(tExitV.x,  tExitV.y),  tExitV.z);
-    if (tEnter > tExit || tExit < 0.0) {
-        return res;
-    }
-
-    int lastStepAxis;
-    if (tEnterV.x >= tEnterV.y && tEnterV.x >= tEnterV.z) {
-        lastStepAxis = 0;
-    } else if (tEnterV.y >= tEnterV.z) {
-        lastStepAxis = 1;
-    } else {
-        lastStepAxis = 2;
-    }
-
-    float tStart = max(tEnter, 0.0);
-    float tHit = tStart;
-    vec3 entry = origin + dir * (tStart + 1e-4);
-    vec3 voxelF = entry / voxelSize;
-    ivec3 voxelIdx = clamp(ivec3(floor(voxelF)), ivec3(0), dims - ivec3(1));
-
-    vec3 deltaDist = abs(vec3(voxelSize) * invDir);
-    ivec3 stepDir;
-    vec3 sideDist;
-    for (int i = 0; i < 3; ++i) {
-        if (dir[i] < 0.0) {
-            stepDir[i] = -1;
-            sideDist[i] = tStart + (voxelF[i] - float(voxelIdx[i])) * deltaDist[i];
-        } else {
-            stepDir[i] = 1;
-            sideDist[i] = tStart + (float(voxelIdx[i] + 1) - voxelF[i]) * deltaDist[i];
-        }
-    }
-
-    for (int step_n = 0; step_n < kMaxSteps; ++step_n) {
-        res.stepCount = step_n + 1;
-        if (voxelIdx.x < 0 || voxelIdx.y < 0 || voxelIdx.z < 0
-         || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
-            return res;
-        }
-
-        int mipLevel = (frame.debugFlags.x != 0) ? coarsestEmptyMipLevel(casterIdx, voxelIdx) : 0;
-        if (mipLevel == 0) {
-            int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
-            uint packed = casterVoxels[casterIdx].data[flatIdx];
-
-            if ((packed >> 24u) > 0u) {
-                res.hit = true;
-                res.tHit = tHit;
-                res.voxelIdx = voxelIdx;
-                res.lastStepAxis = lastStepAxis;
-                res.stepDir = stepDir;
-                res.packed = packed;
-                return res;
-            }
-        }
-
-        int axis = 0;
-        if (sideDist.x < sideDist.y) {
-            axis = (sideDist.x < sideDist.z) ? 0 : 2;
-        } else {
-            axis = (sideDist.y < sideDist.z) ? 1 : 2;
-        }
-
-        int stride = 1;
-        if (mipLevel > 0) {
-            int blockSize = 1 << mipLevel;
-            int base = (voxelIdx[axis] >> mipLevel) << mipLevel;
-            stride = (stepDir[axis] > 0) ? (base + blockSize - voxelIdx[axis])
-                                         : (voxelIdx[axis] - base + 1);
-            float sdMain = sideDist[axis];
-            float ddMain = deltaDist[axis];
-            for (int i = 0; i < 3; ++i) {
-                if (i == axis) continue;
-                int maxK = int(floor((sideDist[i] - sdMain) / ddMain)) + 1;
-                stride = min(stride, max(1, maxK));
-            }
-        }
-
-        float s = float(stride);
-        tHit = sideDist[axis] + (s - 1.0) * deltaDist[axis];
-        sideDist[axis] += s * deltaDist[axis];
-        voxelIdx[axis] += stepDir[axis] * stride;
-        lastStepAxis = axis;
-    }
-
-    return res;
-}
-
-// Returns: x = -1 if not blocked, otherwise casterIdx; yzw = blocker voxel index.
-ivec4 traceShadowInCasterBlocker(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
-    mat4 invModel = scene.entries[casterIdx].invModel;
-    ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
-    float voxelSize = scene.entries[casterIdx].voxelSize_pad.x;
-
-    vec3 origin = (invModel * vec4(worldOrigin, 1.0)).xyz;
-    vec3 dir = (invModel * vec4(worldDir, 0.0)).xyz;
-
-    vec3 gridMin = vec3(0.0);
-    vec3 gridMax = vec3(dims) * voxelSize;
-
-    vec3 invDir = 1.0 / dir;
-    vec3 t0 = (gridMin - origin) * invDir;
-    vec3 t1 = (gridMax - origin) * invDir;
-    vec3 tEnterV = min(t0, t1);
-    vec3 tExitV  = max(t0, t1);
-    float tEnter = max(max(tEnterV.x, tEnterV.y), tEnterV.z);
-    float tExit  = min(min(tExitV.x,  tExitV.y),  tExitV.z);
-    if (tEnter > tExit || tExit < 0.0) {
-        return ivec4(-1, 0, 0, 0);
-    }
-
-    float tStart = max(tEnter, 0.0);
-    vec3 entry = origin + dir * (tStart + 1e-4);
-    vec3 voxelF = entry / voxelSize;
-    ivec3 voxelIdx = clamp(ivec3(floor(voxelF)), ivec3(0), dims - ivec3(1));
-
-    vec3 deltaDist = abs(vec3(voxelSize) * invDir);
-    ivec3 stepDir;
-    vec3 sideDist;
-    for (int i = 0; i < 3; ++i) {
-        if (dir[i] < 0.0) {
-            stepDir[i] = -1;
-            sideDist[i] = (voxelF[i] - float(voxelIdx[i])) * deltaDist[i];
-        } else {
-            stepDir[i] = 1;
-            sideDist[i] = (float(voxelIdx[i] + 1) - voxelF[i]) * deltaDist[i];
-        }
-    }
-
-    for (int step_n = 0; step_n < kMaxShadowSteps; ++step_n) {
-        if (voxelIdx.x < 0 || voxelIdx.y < 0 || voxelIdx.z < 0
-         || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
-            return ivec4(-1, 0, 0, 0);
-        }
-
-        int mipLevel = (frame.debugFlags.x != 0) ? coarsestEmptyMipLevel(casterIdx, voxelIdx) : 0;
-        if (mipLevel == 0) {
-            int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
-            if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
-                return ivec4(casterIdx, voxelIdx.x, voxelIdx.y, voxelIdx.z);
-            }
-        }
-
-        int axis = 0;
-        if (sideDist.x < sideDist.y) {
-            axis = (sideDist.x < sideDist.z) ? 0 : 2;
-        } else {
-            axis = (sideDist.y < sideDist.z) ? 1 : 2;
-        }
-
-        int stride = 1;
-        if (mipLevel > 0) {
-            int blockSize = 1 << mipLevel;
-            int base = (voxelIdx[axis] >> mipLevel) << mipLevel;
-            stride = (stepDir[axis] > 0) ? (base + blockSize - voxelIdx[axis])
-                                         : (voxelIdx[axis] - base + 1);
-            float sdMain = sideDist[axis];
-            float ddMain = deltaDist[axis];
-            for (int i = 0; i < 3; ++i) {
-                if (i == axis) continue;
-                int maxK = int(floor((sideDist[i] - sdMain) / ddMain)) + 1;
-                stride = min(stride, max(1, maxK));
-            }
-        }
-
-        float s = float(stride);
-        sideDist[axis] += s * deltaDist[axis];
-        voxelIdx[axis] += stepDir[axis] * stride;
-    }
-    return ivec4(-1, 0, 0, 0);
-}
-
-bool traceShadowInCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
-    mat4 invModel = scene.entries[casterIdx].invModel;
-    ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
-    float voxelSize = scene.entries[casterIdx].voxelSize_pad.x;
-
-    vec3 origin = (invModel * vec4(worldOrigin, 1.0)).xyz;
-    vec3 dir = (invModel * vec4(worldDir, 0.0)).xyz;
-
-    vec3 gridMin = vec3(0.0);
-    vec3 gridMax = vec3(dims) * voxelSize;
-
-    vec3 invDir = 1.0 / dir;
-    vec3 t0 = (gridMin - origin) * invDir;
-    vec3 t1 = (gridMax - origin) * invDir;
-    vec3 tEnterV = min(t0, t1);
-    vec3 tExitV  = max(t0, t1);
-    float tEnter = max(max(tEnterV.x, tEnterV.y), tEnterV.z);
-    float tExit  = min(min(tExitV.x,  tExitV.y),  tExitV.z);
-    if (tEnter > tExit || tExit < 0.0) {
-        return false;
-    }
-
-    float tStart = max(tEnter, 0.0);
-    vec3 entry = origin + dir * (tStart + 1e-4);
-    vec3 voxelF = entry / voxelSize;
-    ivec3 voxelIdx = clamp(ivec3(floor(voxelF)), ivec3(0), dims - ivec3(1));
-
-    vec3 deltaDist = abs(vec3(voxelSize) * invDir);
-    ivec3 stepDir;
-    vec3 sideDist;
-    for (int i = 0; i < 3; ++i) {
-        if (dir[i] < 0.0) {
-            stepDir[i] = -1;
-            sideDist[i] = (voxelF[i] - float(voxelIdx[i])) * deltaDist[i];
-        } else {
-            stepDir[i] = 1;
-            sideDist[i] = (float(voxelIdx[i] + 1) - voxelF[i]) * deltaDist[i];
-        }
-    }
-
-    for (int step_n = 0; step_n < kMaxShadowSteps; ++step_n) {
-        if (voxelIdx.x < 0 || voxelIdx.y < 0 || voxelIdx.z < 0
-         || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
-            return false;
-        }
-
-        int mipLevel = (frame.debugFlags.x != 0) ? coarsestEmptyMipLevel(casterIdx, voxelIdx) : 0;
-        if (mipLevel == 0) {
-            int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
-            if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
-                return true;
-            }
-        }
-
-        int axis = 0;
-        if (sideDist.x < sideDist.y) {
-            axis = (sideDist.x < sideDist.z) ? 0 : 2;
-        } else {
-            axis = (sideDist.y < sideDist.z) ? 1 : 2;
-        }
-
-        int stride = 1;
-        if (mipLevel > 0) {
-            int blockSize = 1 << mipLevel;
-            int base = (voxelIdx[axis] >> mipLevel) << mipLevel;
-            stride = (stepDir[axis] > 0) ? (base + blockSize - voxelIdx[axis])
-                                         : (voxelIdx[axis] - base + 1);
-            float sdMain = sideDist[axis];
-            float ddMain = deltaDist[axis];
-            for (int i = 0; i < 3; ++i) {
-                if (i == axis) continue;
-                int maxK = int(floor((sideDist[i] - sdMain) / ddMain)) + 1;
-                stride = min(stride, max(1, maxK));
-            }
-        }
-
-        float s = float(stride);
-        sideDist[axis] += s * deltaDist[axis];
-        voxelIdx[axis] += stepDir[axis] * stride;
-    }
-    return false;
+    return out_;
 }
 
 bool sceneShadow(vec3 worldOrigin, vec3 worldDir) {
-    if (!worldRayHitsOccupiedCell(worldOrigin, worldDir)) {
-        return false;
-    }
-    int n = scene.count_pad.x;
-    for (int c = 0; c < n; ++c) {
-        if (traceShadowInCaster(c, worldOrigin, worldDir)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-ivec4 sceneShadowBlocker(vec3 worldOrigin, vec3 worldDir) {
-    if (!worldRayHitsOccupiedCell(worldOrigin, worldDir)) {
-        return ivec4(-1, 0, 0, 0);
-    }
-    int n = scene.count_pad.x;
-    for (int c = 0; c < n; ++c) {
-        ivec4 r = traceShadowInCasterBlocker(c, worldOrigin, worldDir);
-        if (r.x >= 0) {
-            return r;
-        }
-    }
-    return ivec4(-1, 0, 0, 0);
+    OuterTrace t = tracePrimary(worldOrigin, worldDir);
+    return t.hit;
 }
 
 void main() {
@@ -543,22 +326,25 @@ void main() {
       + up    * (ndc.y * tanHalfFovY)
     );
 
-    PrimaryHit best;
-    best.hit = false;
-    best.tHit = 1e30;
-    best.casterIdx = -1;
+    OuterTrace prim = tracePrimary(cameraPos, rayDirWorld);
 
-    if (worldRayHitsOccupiedCell(cameraPos, rayDirWorld)) {
-        int n = scene.count_pad.x;
-        for (int c = 0; c < n; ++c) {
-            PrimaryHit h = traceCaster(c, cameraPos, rayDirWorld);
-            if (h.hit && h.tHit < best.tHit) {
-                best = h;
-            }
+    int heatmapMode = frame.debugFlags.y;
+    if (heatmapMode != 0) {
+        float maxSteps = float(max(frame.debugFlags.z, 1));
+        float t = clamp(float(prim.totalSteps) / maxSteps, 0.0, 1.0);
+        vec3 heat;
+        if (t < 0.33) {
+            heat = mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0), t / 0.33);
+        } else if (t < 0.66) {
+            heat = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), (t - 0.33) / 0.33);
+        } else {
+            heat = mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 1.0, 1.0), (t - 0.66) / 0.34);
         }
+        imageStore(outImage, pixel, vec4(heat, 1.0));
+        return;
     }
 
-    if (!best.hit) {
+    if (!prim.hit) {
         if (isDebugPixel) {
             dbg.hit = 0;
             dbg.casterIdx = -1;
@@ -579,33 +365,26 @@ void main() {
         return;
     }
 
-    int bestIdx = best.casterIdx;
-    mat4 invModel = scene.entries[bestIdx].invModel;
-    float voxelSize = scene.entries[bestIdx].voxelSize_pad.x;
-    vec3 localOrigin = (invModel * vec4(cameraPos, 1.0)).xyz;
-    vec3 localDir    = (invModel * vec4(rayDirWorld, 0.0)).xyz;
+    vec3 worldNormal = vec3(0.0);
+    worldNormal[prim.lastStepAxis] = float(-prim.stepDir[prim.lastStepAxis]);
 
-    vec3 localNormal = vec3(0.0);
-    localNormal[best.lastStepAxis] = float(-best.stepDir[best.lastStepAxis]);
+    vec3 hitPointWorld = cameraPos + rayDirWorld * prim.tHit;
+    // Build a robust shadow ray origin: clamp the hit point into the voxel's interior
+    // (avoid edge / corner cases where the shadow ray re-enters the voxel) then push along
+    // the outward normal by half a voxel plus an epsilon. This is what the pre-M3 shader
+    // did and it eliminates the "concentric dotted rings" shadow acne.
+    vec3 voxelMin = prim.voxelWorldMin;
+    vec3 voxelMax = voxelMin + vec3(prim.voxelSize);
+    float interiorEps = prim.voxelSize * 1e-3;
+    vec3 clampedHit = clamp(hitPointWorld, voxelMin + vec3(interiorEps), voxelMax - vec3(interiorEps));
+    vec3 shadowOriginWorld = clampedHit + worldNormal * (prim.voxelSize * 0.5 + 1e-3);
 
-    vec3 hitPointLocal = localOrigin + localDir * best.tHit;
-    vec3 voxelMin = vec3(best.voxelIdx) * voxelSize;
-    vec3 voxelMax = voxelMin + vec3(voxelSize);
-    vec3 clampedHitLocal = clamp(hitPointLocal, voxelMin + 1e-4, voxelMax - 1e-4);
-    vec3 localDelta = (clampedHitLocal - hitPointLocal) + localNormal * (voxelSize * 0.5 + 1e-3);
-
-    mat3 modelRot = transpose(mat3(invModel));
-    vec3 hitPointWorld = cameraPos + rayDirWorld * best.tHit;
-    vec3 shadowOriginWorld = hitPointWorld + modelRot * localDelta;
-    vec3 worldNormal = normalize(modelRot * localNormal);
-
-    vec4 voxelColor = unpackRGBA8(best.packed);
+    vec4 voxelColor = unpackRGBA8(prim.packed);
     vec3 lit = frame.ambientColor_intensity.rgb * frame.ambientColor_intensity.w;
 
     vec3 debugToLight = vec3(0.0);
     float debugNdotL = 0.0;
     int debugShadowed = 0;
-    ivec4 debugBlocker = ivec4(-1, 0, 0, 0);
 
     int lightCount = frame.dirLightCount_pad.x;
     for (int i = 0; i < lightCount; ++i) {
@@ -617,7 +396,6 @@ void main() {
         if (i == 0) {
             debugToLight = worldToLight;
         }
-
         float NdotL = dot(worldNormal, worldToLight);
         if (i == 0) {
             debugNdotL = NdotL;
@@ -625,16 +403,12 @@ void main() {
         if (NdotL <= 0.0) {
             continue;
         }
-
-        ivec4 blocker = sceneShadowBlocker(shadowOriginWorld, worldToLight);
-        if (blocker.x >= 0) {
+        if (sceneShadow(shadowOriginWorld, worldToLight)) {
             if (i == 0) {
                 debugShadowed = 1;
-                debugBlocker = blocker;
             }
             continue;
         }
-
         lit += lightCol * intensity * NdotL;
     }
 
@@ -643,35 +417,19 @@ void main() {
 
     if (isDebugPixel) {
         dbg.hit = 1;
-        dbg.casterIdx = bestIdx;
-        dbg.voxelX = best.voxelIdx.x;
-        dbg.voxelY = best.voxelIdx.y;
-        dbg.voxelZ = best.voxelIdx.z;
-        dbg.tHit = best.tHit;
-        dbg.cameraX = cameraPos.x;
-        dbg.cameraY = cameraPos.y;
-        dbg.cameraZ = cameraPos.z;
-        dbg.rayDirX = rayDirWorld.x;
-        dbg.rayDirY = rayDirWorld.y;
-        dbg.rayDirZ = rayDirWorld.z;
-        dbg.hitWorldX = hitPointWorld.x;
-        dbg.hitWorldY = hitPointWorld.y;
-        dbg.hitWorldZ = hitPointWorld.z;
-        dbg.normalX = worldNormal.x;
-        dbg.normalY = worldNormal.y;
-        dbg.normalZ = worldNormal.z;
-        dbg.packedColor = best.packed;
-        dbg.toLightX = debugToLight.x;
-        dbg.toLightY = debugToLight.y;
-        dbg.toLightZ = debugToLight.z;
+        dbg.casterIdx = 0;
+        dbg.voxelX = 0; dbg.voxelY = 0; dbg.voxelZ = 0;
+        dbg.tHit = prim.tHit;
+        dbg.cameraX = cameraPos.x; dbg.cameraY = cameraPos.y; dbg.cameraZ = cameraPos.z;
+        dbg.rayDirX = rayDirWorld.x; dbg.rayDirY = rayDirWorld.y; dbg.rayDirZ = rayDirWorld.z;
+        dbg.hitWorldX = hitPointWorld.x; dbg.hitWorldY = hitPointWorld.y; dbg.hitWorldZ = hitPointWorld.z;
+        dbg.normalX = worldNormal.x; dbg.normalY = worldNormal.y; dbg.normalZ = worldNormal.z;
+        dbg.packedColor = prim.packed;
+        dbg.toLightX = debugToLight.x; dbg.toLightY = debugToLight.y; dbg.toLightZ = debugToLight.z;
         dbg.NdotL = debugNdotL;
         dbg.shadowed = debugShadowed;
-        dbg.blockerCasterIdx = debugBlocker.x;
-        dbg.blockerX = debugBlocker.y;
-        dbg.blockerY = debugBlocker.z;
-        dbg.blockerZ = debugBlocker.w;
-        dbg.finalR = finalColor.x;
-        dbg.finalG = finalColor.y;
-        dbg.finalB = finalColor.z;
+        dbg.blockerCasterIdx = -1;
+        dbg.blockerX = 0; dbg.blockerY = 0; dbg.blockerZ = 0;
+        dbg.finalR = finalColor.r; dbg.finalG = finalColor.g; dbg.finalB = finalColor.b;
     }
 }
