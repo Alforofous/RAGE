@@ -57,22 +57,22 @@ namespace RAGE::App {
      *
      * Running it
      * ==========
-     * Profiling is opt-in at build time — default builds are lean, no Tracy linked. To enable:
+     * Production is the default build. Profiling is linked only when the `-Dev` / `--dev`
+     * flag is passed to the build scripts (or `-DRAGE_DEV_BUILD=ON` direct to CMake):
      *
-     *     scripts/build.ps1 -Profile         # PowerShell
-     *     scripts/build.sh   --profile       # Bash
-     *     cmake -B build -DRAGE_ENABLE_PROFILING=ON   # direct cmake
+     *     ./scripts/build.ps1 -Dev       # PowerShell
+     *     ./scripts/build.sh --dev       # Bash
+     *     cmake -B build -DRAGE_DEV_BUILD=ON
      *
-     * CMake auto-downloads the Tracy server GUI binary under libraries/tracy-server/ on
-     * Windows (~12 MB one-time fetch from the upstream release).
+     * Dev build implies Tracy client + the dev-only UI. Production builds (no flag) drop
+     * both — clean binary, no Tracy threads, no debug panels.
      *
-     * Then launch the engine and Tracy GUI together:
+     * CMake auto-downloads `tracy-profiler.exe` under `libraries/tracy-server/` on Windows
+     * (~12 MB one-time fetch from the upstream release).
      *
-     *     ./build/RAGE.exe --profile
-     *
-     * This spawns tracy-profiler.exe (-a 127.0.0.1) as a detached child and continues to
-     * start the engine. Tracy auto-connects when the engine comes up. To launch them
-     * separately, run tracy-profiler.exe yourself, then ./build/RAGE.exe.
+     * To attach a profiler GUI at runtime: click the **"Launch Tracy"** button in the in-app
+     * debug panel. The button is only rendered in dev builds where `Profiler::isLinked()`
+     * is true.
      *
      * Swapping the library
      * ====================
@@ -106,8 +106,31 @@ namespace RAGE::App {
         // tagging events like "scene-changed", "shader-recompiled".
         void message(const std::string &text);
 
+        /**
+         * True when this build links the profiler client (i.e. configured with
+         * -DRAGE_ENABLE_PROFILING=ON). Production builds return false; the app uses this to
+         * decide whether to show a "Launch Tracy" button or other dev-only UI. No runtime
+         * profiler initialisation is required — this is a build-config probe.
+         */
+        static bool isLinked();
+
+        /**
+         * Spawn the external Tracy profiler GUI as a detached child process, connecting it
+         * to this app's profiler client on 127.0.0.1. No-op + warning to stderr when the
+         * build isn't linked against Tracy or when a child is already running (use
+         * `isProfilerGuiRunning()` to gate UI). The handle is closed automatically when the
+         * child exits, so calling this again after the user closes Tracy spawns a fresh one.
+         */
+        void launchProfilerGui();
+
+        /** True if a previously-spawned Tracy GUI child is still alive. */
+        bool isProfilerGuiRunning();
+
     private:
         // GPU-context handle owned by the wrapper. Kept opaque so we don't leak Tracy types.
         void *gpuContext_ = nullptr;
+        // Spawned tracy-profiler.exe child handle (HANDLE on Windows). Opaque void* so this
+        // header stays Win32-free. nullptr when no child is alive.
+        void *profilerGuiProcess_ = nullptr;
     };
 }

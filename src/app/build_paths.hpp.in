@@ -2,7 +2,19 @@
 
 namespace RAGE::App {
     // Absolute path to tracy-profiler.exe as resolved at CMake configure time. Empty when
-    // RAGE_ENABLE_PROFILING was OFF or the platform isn't supported. main.cpp uses this for
-    // the --profile launch flag.
+    // RAGE_ENABLE_PROFILING was OFF or the platform isn't supported. `App::Profiler` reads
+    // this when spawning the GUI from the in-app "Launch Tracy" button.
     inline constexpr const char *kTracyServerExePath = "@RAGE_TRACY_SERVER_EXE@";
+
+    // True when this binary was compiled with `-DRAGE_DEV_BUILD=ON` (the default). Single
+    // truth source for "show dev-only UI / behaviour" decisions in app code:
+    //
+    //     if (App::kIsDevBuild) {
+    //         debugUi.button("...dev only feature...");
+    //     }
+    //
+    // For features that need code to actually link (Tracy, validation layers), keep using
+    // the feature-specific probe (e.g. `Profiler::isLinked()`) — `kIsDevBuild` is for the
+    // umbrella case and for cheap UI gating.
+    inline constexpr bool kIsDevBuild = static_cast<bool>(@RAGE_DEV_BUILD_BOOL@);
 }

@@ -1,16 +1,16 @@
 # PowerShell counterpart of build.sh — configure and build RAGE on Windows from PowerShell.
 #
 # Usage (from the project root):
-#   .\scripts\build.ps1                  # lean build, no profiling
-#   .\scripts\build.ps1 -Profile         # build with Tracy profiling enabled
+#   .\scripts\build.ps1                  # production build (default): no Tracy, no dev-only UI
+#   .\scripts\build.ps1 -Dev             # dev build: Tracy linked + debug UI dev features
 #
 # Or, if your execution policy blocks unsigned scripts:
-#   powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1 [-Profile]
+#   powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1 [-Dev]
 #
-# Native Windows tooling only — no bash, no WSL. CMake is always re-invoked so toggling
-# -Profile between runs correctly updates the cache.
+# Native Windows tooling only — no bash, no WSL. CMake is always re-invoked so flipping
+# -Dev between runs correctly updates the cache.
 
-param([switch] $Profile)
+param([switch] $Dev)
 
 $ErrorActionPreference = 'Stop'
 
@@ -24,9 +24,10 @@ function Invoke-CheckedNative {
 
 $ProjectRoot = (Get-Item $PSScriptRoot).Parent.FullName
 $BuildDir = Join-Path $ProjectRoot 'build'
-$ProfileFlag = if ($Profile) { 'ON' } else { 'OFF' }
+$DevFlag = if ($Dev) { 'ON' } else { 'OFF' }
+$ProfileLabel = if ($Dev) { 'dev' } else { 'production' }
 
-Write-Host "=== Building RAGE (profiling=$ProfileFlag) ===" -ForegroundColor Cyan
+Write-Host "=== Building RAGE ($ProfileLabel) ===" -ForegroundColor Cyan
 
 Invoke-CheckedNative 'git submodule update' {
     git -C $ProjectRoot submodule update --init
@@ -34,7 +35,7 @@ Invoke-CheckedNative 'git submodule update' {
 
 Write-Host 'Configuring CMake...' -ForegroundColor Cyan
 Invoke-CheckedNative 'cmake configure' {
-    cmake -S $ProjectRoot -B $BuildDir "-DRAGE_ENABLE_PROFILING=$ProfileFlag"
+    cmake -S $ProjectRoot -B $BuildDir "-DRAGE_DEV_BUILD=$DevFlag"
 }
 
 Invoke-CheckedNative 'cmake build' {

@@ -1,6 +1,16 @@
 #include "profiler.hpp"
 #include <cstdio>
+#include <cstdlib>
+#include <string>
+#include "app/build_paths.hpp"
 #include "engine/rendering/renderer.hpp"
+
+#ifdef _WIN32
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <windows.h>
+#endif
 
 // =============================================================================================
 // Tracy integration lives entirely inside this translation unit. To enable Tracy:
@@ -37,8 +47,8 @@ namespace RAGE::App {
         std::fprintf(stdout, "[profiler] Tracy client v0.13.1 linked, on-demand. Connect Tracy.exe to attach.\n");
         std::fflush(stdout);
 #else
-        std::fprintf(stdout, "[profiler] disabled (rebuild with `scripts/build.ps1 -Profile` or "
-                             "`scripts/build.sh --profile`, or pass -DRAGE_ENABLE_PROFILING=ON to cmake).\n");
+        std::fprintf(stdout, "[profiler] disabled (rebuild with `-Dev` / `--dev`, "
+                             "or pass -DRAGE_DEV_BUILD=ON to cmake).\n");
         std::fflush(stdout);
 #endif
     }
@@ -48,6 +58,12 @@ namespace RAGE::App {
         if (gpuContext_ != nullptr) {
             TracyVkDestroy(static_cast<TracyVkCtx>(gpuContext_));
             gpuContext_ = nullptr;
+        }
+#endif
+#ifdef _WIN32
+        if (profilerGuiProcess_ != nullptr) {
+            CloseHandle(static_cast<HANDLE>(profilerGuiProcess_));
+            profilerGuiProcess_ = nullptr;
         }
 #endif
     }
@@ -131,6 +147,62 @@ namespace RAGE::App {
         TracyMessage(text.c_str(), text.size());
 #else
         (void)text;
+#endif
+    }
+
+    bool Profiler::isLinked() {
+#ifdef RAGE_PROFILING_TRACY
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    void Profiler::launchProfilerGui() {
+#if defined(RAGE_PROFILING_TRACY) && defined(_WIN32)
+        if (isProfilerGuiRunning()) {
+            return;
+        }
+        const char *tracyExe = RAGE::App::kTracyServerExePath;
+        if (tracyExe == nullptr || tracyExe[0] == '\0') {
+            std::fprintf(stderr, "[profiler] tracy-profiler.exe path not configured.\n");
+            return;
+        }
+        std::string cmd = "\"";
+        cmd += tracyExe;
+        cmd += "\" -a 127.0.0.1";
+
+        STARTUPINFOA si{};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi{};
+        if (!CreateProcessA(nullptr, cmd.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS, nullptr,
+                            nullptr, &si, &pi)) {
+            std::fprintf(stderr, "[profiler] CreateProcess failed for %s (err=%lu)\n", tracyExe, GetLastError());
+            return;
+        }
+        CloseHandle(pi.hThread);
+        profilerGuiProcess_ = pi.hProcess;
+        std::fprintf(stdout, "[profiler] launched %s (pid %lu)\n", tracyExe, pi.dwProcessId);
+        std::fflush(stdout);
+#else
+        std::fprintf(stderr, "[profiler] launchProfilerGui: not supported on this build/platform.\n");
+#endif
+    }
+
+    bool Profiler::isProfilerGuiRunning() {
+#if defined(RAGE_PROFILING_TRACY) && defined(_WIN32)
+        if (profilerGuiProcess_ == nullptr) {
+            return false;
+        }
+        const DWORD wait = WaitForSingleObject(static_cast<HANDLE>(profilerGuiProcess_), 0);
+        if (wait == WAIT_TIMEOUT) {
+            return true;
+        }
+        CloseHandle(static_cast<HANDLE>(profilerGuiProcess_));
+        profilerGuiProcess_ = nullptr;
+        return false;
+#else
+        return false;
 #endif
     }
 }

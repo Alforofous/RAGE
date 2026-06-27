@@ -19,6 +19,13 @@ set(CMAKE_BUILD_TYPE Debug)
 # Generate compile_commands.json for IDE support
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# --- Build profile ---
+# Single switch for "dev vs production". Dev = profiling client linked + dev-only UI compiled in.
+# Production = lean binary, no Tracy, no dev panels. Sub-flags (RAGE_ENABLE_PROFILING, ...) default
+# to follow RAGE_DEV_BUILD so a normal user only needs to flip this one option.
+option(RAGE_DEV_BUILD "Compile as dev build (profiling, debug UI features). Default OFF (production); -DRAGE_DEV_BUILD=ON for dev." OFF)
+set(RAGE_ENABLE_PROFILING ${RAGE_DEV_BUILD})
+
 # --- Libraries ---
 
 set(SPIRV_REFLECT_STATIC_LIB ON CACHE BOOL "Build SPIRV-Reflect static library" FORCE)
@@ -149,6 +156,15 @@ add_dependencies(RAGE shaders sample_assets)
 
 if(RAGE_ENABLE_PROFILING)
     target_compile_definitions(RAGE PRIVATE RAGE_PROFILING_TRACY)
+endif()
+if(RAGE_DEV_BUILD)
+    target_compile_definitions(RAGE PRIVATE RAGE_DEV)
+endif()
+
+if(RAGE_DEV_BUILD)
+    set(RAGE_DEV_BUILD_BOOL "true")
+else()
+    set(RAGE_DEV_BUILD_BOOL "false")
 endif()
 
 configure_file(

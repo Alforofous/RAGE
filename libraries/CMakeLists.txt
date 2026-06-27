@@ -24,9 +24,8 @@ target_include_directories(imgui PUBLIC imgui)
 # Add GLM as a subdirectory
 add_subdirectory(glm)
 
-# Tracy profiler: opt-in client library. Off by default so non-profiling builds don't carry
-# its threads or symbols. Enable with -DRAGE_ENABLE_PROFILING=ON at configure time.
-option(RAGE_ENABLE_PROFILING "Build and link the Tracy profiler client" OFF)
+# Tracy profiler: linked iff RAGE_ENABLE_PROFILING is ON. The umbrella `RAGE_DEV_BUILD` flag
+# sets that for us in the root CMakeLists before this subdir is added — see there.
 if(RAGE_ENABLE_PROFILING)
     set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
     set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)
