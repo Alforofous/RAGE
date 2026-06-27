@@ -11,6 +11,7 @@
 #include "engine/rendering/ambient_light.hpp"
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/pixel_debug.hpp"
+#include "engine/rendering/world_grid.hpp"
 #include "engine/scene/renderable_node3d.hpp"
 #include "gpu/vulkan/vulkan_buffer.hpp"
 #include "gpu/gpu_queue_kind.hpp"
@@ -148,6 +149,10 @@ namespace RAGE {
         std::optional<VulkanRenderTarget> thumbnailTarget_;
         std::optional<VulkanBuffer> frameUniformBuffer_;
         std::optional<VulkanBuffer> sceneCastersBuffer_;
+        std::optional<VulkanBuffer> worldGridParamsBuffer_;
+        std::optional<VulkanBuffer> worldGridBitsBuffer_;
+        std::vector<CasterAabb> casterAabbsScratch_;
+        std::vector<uint8_t> worldGridBitsScratch_;
         std::optional<VulkanBuffer> pixelDebugBuffer_;
         std::optional<VulkanBuffer> thumbnailStaging_;
         bool thumbnailQueued_ = false;

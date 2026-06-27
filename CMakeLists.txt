@@ -60,6 +60,7 @@ set(ENGINE_SOURCES
     src/engine/scene/renderable_node3d.cpp
     src/engine/scene/voxel3d.cpp
     src/engine/scene/voxel_occupancy_mip.cpp
+    src/engine/rendering/world_grid.cpp
 )
 
 add_library(rage_engine STATIC ${ENGINE_SOURCES})

@@ -5,6 +5,7 @@ add_executable(rage_tests
     engine/content/vox_loader_test.cpp
     engine/materials/material_test.cpp
     engine/rendering/frame_context_test.cpp
+    engine/rendering/world_grid_test.cpp
     engine/scene/camera_test.cpp
     engine/scene/voxel_occupancy_mip_test.cpp
     engine/scene/node3d_test.cpp

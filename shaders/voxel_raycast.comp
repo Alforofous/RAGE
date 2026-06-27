@@ -36,6 +36,15 @@ layout(set = 0, binding = 6, std430) readonly buffer CasterMips {
     uint data[];
 } casterMips[16];
 
+layout(set = 0, binding = 7, std140) uniform WorldGridParams {
+    vec4 origin_cellSize;
+    ivec4 dims_pad;
+} worldGrid;
+
+layout(set = 0, binding = 8, std430) readonly buffer WorldGridBits {
+    uint data[];
+} worldBits;
+
 layout(set = 0, binding = 5, std430) buffer PixelDebug {
     int hit;
     int casterIdx;
@@ -72,6 +81,7 @@ layout(set = 0, binding = 5, std430) buffer PixelDebug {
 
 const int kMaxSteps = 1024;
 const int kMaxShadowSteps = 1024;
+const int kMaxWorldSteps = 512;
 
 vec4 unpackRGBA8(uint packed) {
     return vec4(
@@ -80,6 +90,82 @@ vec4 unpackRGBA8(uint packed) {
         float((packed >> 16u) & 0xFFu) / 255.0,
         float((packed >> 24u) & 0xFFu) / 255.0
     );
+}
+
+// World-grid bit test. Returns false (= empty) when the cell is outside the grid bounds.
+bool worldCellOccupied(ivec3 cell) {
+    ivec3 dims = worldGrid.dims_pad.xyz;
+    if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) {
+        return false;
+    }
+    uint bitIdx = (uint(cell.z) * uint(dims.x) * uint(dims.y))
+                + (uint(cell.y) * uint(dims.x))
+                + uint(cell.x);
+    uint wordIdx = bitIdx >> 5u;
+    uint bitInWord = bitIdx & 31u;
+    return (worldBits.data[wordIdx] & (1u << bitInWord)) != 0u;
+}
+
+// Walks the ray through the world grid. Returns true if any cell along the ray is occupied,
+// false if the ray crosses the entire grid without finding one (or misses the grid). When
+// the grid has dims.x == 0 (no casters this frame) returns true so the inner caster loop
+// still runs — keeps the renderer correct during scene-empty edge cases.
+bool worldRayHitsOccupiedCell(vec3 origin, vec3 dir) {
+    ivec3 dims = worldGrid.dims_pad.xyz;
+    if (dims.x <= 0) return true;
+
+    vec3 gridOrigin = worldGrid.origin_cellSize.xyz;
+    float cs = worldGrid.origin_cellSize.w;
+    vec3 gridMin = gridOrigin;
+    vec3 gridMax = gridOrigin + vec3(dims) * cs;
+
+    vec3 invDir = 1.0 / dir;
+    vec3 t0 = (gridMin - origin) * invDir;
+    vec3 t1 = (gridMax - origin) * invDir;
+    vec3 tlo = min(t0, t1);
+    vec3 thi = max(t0, t1);
+    float tEnter = max(max(tlo.x, tlo.y), tlo.z);
+    float tExit  = min(min(thi.x, thi.y), thi.z);
+    if (tEnter > tExit || tExit < 0.0) return false;
+
+    float tStart = max(tEnter, 0.0);
+    vec3 entry = (origin + dir * (tStart + 1e-4)) - gridOrigin;
+    vec3 cellF = entry / cs;
+    ivec3 cell = clamp(ivec3(floor(cellF)), ivec3(0), dims - ivec3(1));
+
+    vec3 deltaDist = abs(vec3(cs) * invDir);
+    ivec3 stepDir;
+    vec3 sideDist;
+    for (int i = 0; i < 3; ++i) {
+        if (dir[i] < 0.0) {
+            stepDir[i] = -1;
+            sideDist[i] = (cellF[i] - float(cell[i])) * deltaDist[i];
+        } else {
+            stepDir[i] = 1;
+            sideDist[i] = (float(cell[i] + 1) - cellF[i]) * deltaDist[i];
+        }
+    }
+
+    for (int s = 0; s < kMaxWorldSteps; ++s) {
+        if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) return false;
+        if (worldCellOccupied(cell)) return true;
+        if (sideDist.x < sideDist.y) {
+            if (sideDist.x < sideDist.z) {
+                sideDist.x += deltaDist.x;
+                cell.x += stepDir.x;
+            } else {
+                sideDist.z += deltaDist.z;
+                cell.z += stepDir.z;
+            }
+        } else if (sideDist.y < sideDist.z) {
+            sideDist.y += deltaDist.y;
+            cell.y += stepDir.y;
+        } else {
+            sideDist.z += deltaDist.z;
+            cell.z += stepDir.z;
+        }
+    }
+    return true;
 }
 
 // Read one occupancy-mip bit at the given level and cell in a caster's mip SSBO.
@@ -404,6 +490,9 @@ bool traceShadowInCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
 }
 
 bool sceneShadow(vec3 worldOrigin, vec3 worldDir) {
+    if (!worldRayHitsOccupiedCell(worldOrigin, worldDir)) {
+        return false;
+    }
     int n = scene.count_pad.x;
     for (int c = 0; c < n; ++c) {
         if (traceShadowInCaster(c, worldOrigin, worldDir)) {
@@ -414,6 +503,9 @@ bool sceneShadow(vec3 worldOrigin, vec3 worldDir) {
 }
 
 ivec4 sceneShadowBlocker(vec3 worldOrigin, vec3 worldDir) {
+    if (!worldRayHitsOccupiedCell(worldOrigin, worldDir)) {
+        return ivec4(-1, 0, 0, 0);
+    }
     int n = scene.count_pad.x;
     for (int c = 0; c < n; ++c) {
         ivec4 r = traceShadowInCasterBlocker(c, worldOrigin, worldDir);
@@ -456,11 +548,13 @@ void main() {
     best.tHit = 1e30;
     best.casterIdx = -1;
 
-    int n = scene.count_pad.x;
-    for (int c = 0; c < n; ++c) {
-        PrimaryHit h = traceCaster(c, cameraPos, rayDirWorld);
-        if (h.hit && h.tHit < best.tHit) {
-            best = h;
+    if (worldRayHitsOccupiedCell(cameraPos, rayDirWorld)) {
+        int n = scene.count_pad.x;
+        for (int c = 0; c < n; ++c) {
+            PrimaryHit h = traceCaster(c, cameraPos, rayDirWorld);
+            if (h.hit && h.tHit < best.tHit) {
+                best = h;
+            }
         }
     }
 

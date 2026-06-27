@@ -3,8 +3,10 @@
 #include <array>
 #include <cstring>
 #include <exception>
+#include <limits>
 #include <utility>
 #include "engine/rendering/frame_context.hpp"
+#include "engine/rendering/world_grid.hpp"
 #include "engine/rendering/frame_uniforms.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/scene_casters.hpp"
@@ -20,6 +22,36 @@
 
 namespace RAGE {
     namespace {
+        CasterAabb computeWorldAabb(const Voxel3D &v) {
+            const Mat4 m = v.worldMatrix();
+            const IVec3 dims = v.dimensions();
+            const float voxelSize = v.voxelSize();
+            const Vec3 localMax{ static_cast<float>(dims.x) * voxelSize,
+                                  static_cast<float>(dims.y) * voxelSize,
+                                  static_cast<float>(dims.z) * voxelSize };
+            const Vec3 corners[8] = { { 0.0f, 0.0f, 0.0f },           { localMax.x, 0.0f, 0.0f },
+                                       { 0.0f, localMax.y, 0.0f },     { localMax.x, localMax.y, 0.0f },
+                                       { 0.0f, 0.0f, localMax.z },     { localMax.x, 0.0f, localMax.z },
+                                       { 0.0f, localMax.y, localMax.z }, { localMax.x, localMax.y, localMax.z } };
+            CasterAabb out{};
+            Vec3 mn{ std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
+                      std::numeric_limits<float>::infinity() };
+            Vec3 mx{ -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+                      -std::numeric_limits<float>::infinity() };
+            for (const Vec3 &c : corners) {
+                const Vec3 w = m.transformPoint(c);
+                mn.x = std::min(mn.x, w.x);
+                mn.y = std::min(mn.y, w.y);
+                mn.z = std::min(mn.z, w.z);
+                mx.x = std::max(mx.x, w.x);
+                mx.y = std::max(mx.y, w.y);
+                mx.z = std::max(mx.z, w.z);
+            }
+            out.worldMin = mn;
+            out.worldMax = mx;
+            return out;
+        }
+
         // RAII bracket for the engine's phase callbacks: fires `begin(name)` on construction
         // and `end(name)` on destruction. Lets any return path inside render() leave the
         // phase balanced without each branch having to remember to call end. Engine has no
@@ -111,6 +143,23 @@ namespace RAGE {
                 .usage = BufferUsage::Uniform,
                 .memory = MemoryLocation::CpuToGpu,
             }));
+        }
+
+        if (!worldGridParamsBuffer_.has_value()) {
+            worldGridParamsBuffer_.emplace(allocator_.createBuffer({
+                .size = sizeof(WorldGridParams),
+                .usage = BufferUsage::Uniform,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+        }
+        if (!worldGridBitsBuffer_.has_value()) {
+            constexpr uint64_t kWorldGridBitsMax = 64u * 1024u;
+            worldGridBitsBuffer_.emplace(allocator_.createBuffer({
+                .size = kWorldGridBitsMax,
+                .usage = BufferUsage::Storage,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+            std::memset(worldGridBitsBuffer_->mappedData(), 0, kWorldGridBitsMax);
         }
 
         if (!pixelDebugBuffer_.has_value()) {
@@ -240,6 +289,33 @@ namespace RAGE {
         }
 
         {
+            casterAabbsScratch_.clear();
+            casterAabbsScratch_.reserve(shadowCasters_.size());
+            for (const Voxel3D *v : shadowCasters_) {
+                casterAabbsScratch_.push_back(computeWorldAabb(*v));
+            }
+            constexpr float kWorldGridCellSize = 1.0f;
+            const WorldGridLayout layout =
+                computeWorldGridLayout(casterAabbsScratch_, kWorldGridCellSize, /*paddingCells=*/1);
+            constexpr size_t kWorldGridBitsMax = 64u * 1024u;
+            const size_t usableBytes = std::min<size_t>(layout.byteSize, kWorldGridBitsMax);
+            worldGridBitsScratch_.assign(kWorldGridBitsMax, 0u);
+            if (usableBytes > 0) {
+                buildWorldGrid(casterAabbsScratch_, layout, worldGridBitsScratch_.data());
+            }
+            std::memcpy(worldGridBitsBuffer_->mappedData(), worldGridBitsScratch_.data(), kWorldGridBitsMax);
+
+            WorldGridParams params{};
+            params.origin_cellSize = Vec4(layout.origin, layout.cellSize);
+            if (layout.byteSize <= kWorldGridBitsMax) {
+                params.dimsX = layout.dims.x;
+                params.dimsY = layout.dims.y;
+                params.dimsZ = layout.dims.z;
+            }
+            std::memcpy(worldGridParamsBuffer_->mappedData(), &params, sizeof(params));
+        }
+
+        {
             FrameUniforms uniforms{};
             const Mat4 camWorld = camera.worldMatrix();
             const Vec3 cameraPos = camWorld.transformPoint(Vec3::zero());
@@ -352,6 +428,8 @@ namespace RAGE {
         writer.writeUniformBuffer(set, 2, *frameUniformBuffer_);
         writer.writeUniformBuffer(set, 3, *sceneCastersBuffer_);
         writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
+        writer.writeUniformBuffer(set, 7, *worldGridParamsBuffer_);
+        writer.writeStorageBuffer(set, 8, *worldGridBitsBuffer_);
 
         const VulkanBuffer *fallbackBuffer = shadowCasters_[0]->voxelBuffer();
         const VulkanBuffer *fallbackMipBuffer = shadowCasters_[0]->occupancyMipBuffer();
