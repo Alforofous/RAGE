@@ -6,7 +6,9 @@ add_executable(rage_tests
     engine/materials/material_test.cpp
     engine/rendering/frame_context_test.cpp
     engine/rendering/world_grid_test.cpp
+    engine/scene/brick_pool_test.cpp
     engine/scene/camera_test.cpp
+    engine/scene/voxel_data_test.cpp
     engine/scene/voxel_occupancy_mip_test.cpp
     engine/scene/node3d_test.cpp
     engine/scene/renderable_node3d_test.cpp
