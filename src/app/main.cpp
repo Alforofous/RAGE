@@ -1,7 +1,9 @@
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <string>
 #include <memory>
@@ -85,8 +87,13 @@ namespace {
 }
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    bool autoLaunchTracy = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--profile") == 0) {
+            autoLaunchTracy = true;
+        }
+    }
+
     try {
         App::Window window(1280, 720, "RAGE Smoke");
 
@@ -147,24 +154,37 @@ int main(int argc, char **argv) {
             root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
 
             std::atomic<bool> loaderDone{ false };
+            App::Profiler profiler;
+            profiler.attach(renderer);
+            if (autoLaunchTracy && App::Profiler::isLinked()) {
+                profiler.launchProfilerGui();
+                // Wait for Tracy's on-demand connection so early app work (asset load,
+                // first-frame setup) lands on the timeline instead of being dropped.
+                // Timeout-bounded so a missing/broken Tracy install never hangs startup.
+                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                while (!profiler.isConnected() && std::chrono::steady_clock::now() < deadline) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                }
+            }
+
             std::atomic<bool> loaderCancel{ false };
             for (const auto &job : loadJobs) {
                 job->target->onLoadShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
             }
             std::thread loaderThread([&]() {
+                profiler.setThreadName("AssetLoader");
+                App::Profiler::Zone outerZone(profiler, "LoaderThread");
                 for (const auto &job : loadJobs) {
                     if (loaderCancel.load()) {
                         break;
                     }
+                    App::Profiler::Zone perFileZone(profiler, "VoxelData::fillFromPackedRGBA8");
                     job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
                     job->model.voxels.clear();
                     job->model.voxels.shrink_to_fit();
                 }
                 loaderDone.store(true);
             });
-
-            App::Profiler profiler;
-            profiler.attach(renderer);
 
             App::DebugUi debugUi(ctx, window.glfwHandle());
             debugUi.attach(renderer);
