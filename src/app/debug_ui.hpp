@@ -79,6 +79,7 @@ namespace RAGE::App {
         bool sliderInt(const char *label, int *value, int min, int max);
         bool sliderFloat(const char *label, float *value, float min, float max);
         void separatorText(const char *label);
+        void separator();
         void text(const char *fmt, ...);
 
         /**

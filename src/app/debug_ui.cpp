@@ -312,6 +312,8 @@ namespace RAGE::App {
 
     void DebugUi::separatorText(const char *label) { ImGui::SeparatorText(label); }
 
+    void DebugUi::separator() { ImGui::Separator(); }
+
     float DebugUi::scrollDelta() const {
         return impl_->lastScrollDelta;
     }

@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -89,12 +91,15 @@ namespace {
 
 int main(int argc, char **argv) {
     bool autoLaunchTracy = false;
-    bool sceneCubes = false;
+    enum class SceneKind { Sphere, Cubes, Terrain };
+    SceneKind scene = SceneKind::Sphere;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--profile") == 0) {
             autoLaunchTracy = true;
         } else if (std::strcmp(argv[i], "--scene=cubes") == 0) {
-            sceneCubes = true;
+            scene = SceneKind::Cubes;
+        } else if (std::strcmp(argv[i], "--scene=terrain") == 0) {
+            scene = SceneKind::Terrain;
         }
     }
 
@@ -154,7 +159,7 @@ int main(int argc, char **argv) {
             };
 
             Node3D root;
-            if (sceneCubes) {
+            if (scene == SceneKind::Cubes) {
                 // Procedural cube-grid scene — hundreds of identical solid cubes, every brick
                 // bit-identical. Designed to demonstrate brick dedup (M4): no-dedup gives
                 // worst-case unique storage; dedup-on collapses the whole grid to ~1 brick.
@@ -182,6 +187,50 @@ int main(int argc, char **argv) {
                 }
                 std::fprintf(stdout, "Built procedural cube scene: %d×%d = %d cubes\n", kGridN,
                              kGridN, kGridN * kGridN);
+            } else if (scene == SceneKind::Terrain) {
+                // Procedural heightmap terrain — stone underground, dirt near surface, grass
+                // on top, empty above. The deep bricks are uniform stone (heavy dedup), the
+                // surface bricks vary with the heightmap (low dedup), and the air above
+                // doesn't allocate at all (sparsity). Realistic mix for M4 measurement.
+                constexpr int32_t kW = 256;
+                constexpr int32_t kH = 64;
+                constexpr int32_t kD = 256;
+                const auto pack = [](int r, int g, int b) -> uint32_t {
+                    return static_cast<uint32_t>(r) | (static_cast<uint32_t>(g) << 8u)
+                           | (static_cast<uint32_t>(b) << 16u) | 0xFF000000u;
+                };
+                const uint32_t kStone = pack(0x70, 0x70, 0x70);
+                const uint32_t kDirt  = pack(0x6E, 0x4E, 0x35);
+                const uint32_t kGrass = pack(0x4A, 0x8A, 0x3D);
+                std::vector<uint32_t> src(static_cast<size_t>(kW) * kH * kD, 0u);
+                for (int32_t z = 0; z < kD; ++z) {
+                    for (int32_t x = 0; x < kW; ++x) {
+                        const float fx = static_cast<float>(x);
+                        const float fz = static_cast<float>(z);
+                        const float h = (std::sin(fx * 0.10f) * 4.0f) + (std::sin(fz * 0.08f) * 3.0f)
+                                        + 28.0f;
+                        const int32_t height = std::clamp(static_cast<int32_t>(h), 1, kH - 1);
+                        for (int32_t y = 0; y <= height; ++y) {
+                            const int32_t depth = height - y;
+                            uint32_t color = kStone;
+                            if (depth == 0) {
+                                color = kGrass;
+                            } else if (depth <= 3) {
+                                color = kDirt;
+                            }
+                            const size_t idx = (static_cast<size_t>(z) * kH * kW)
+                                               + (static_cast<size_t>(y) * kW) + static_cast<size_t>(x);
+                            src[idx] = color;
+                        }
+                    }
+                }
+                auto terrain = std::make_unique<Voxel3D>(renderer.brickPool(), IVec3(kW, kH, kD),
+                                                         kVoxelSize);
+                terrain->fillFromPackedRGBA8(src.data(), IVec3(kW, kH, kD));
+                terrain->setMaterial(voxelMaterial);
+                terrain->setPosition(Vec3(-6.4f, -3.2f, -16.0f));
+                root.add(std::move(terrain));
+                std::fprintf(stdout, "Built procedural terrain scene: %d×%d×%d voxels\n", kW, kH, kD);
             } else {
                 root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
                 root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
@@ -307,16 +356,15 @@ int main(int argc, char **argv) {
                 const double dedupRatio =
                     bricksUnique > 0 ? static_cast<double>(bricksLogical) / static_cast<double>(bricksUnique) : 1.0;
 
-                debugUi.text("Brickmap (sparse)");
-                debugUi.text("  Bricks unique:  %zu / %zu", bricksUnique, BrickPool::kMaxBricks);
-                debugUi.text("  Bricks logical: %zu", bricksLogical);
-                debugUi.text("  Dedup ratio:    %.2fx", dedupRatio);
-                debugUi.text("  Pool:           %.2f MB", poolMB);
-                debugUi.text("  Handle grids:   %.2f KB", handleGridKB);
-                debugUi.text("  Total:          %.2f MB", brickmapTotalMB);
-                debugUi.text("If dense (per-Voxel3D)");
-                debugUi.text("  Total:          %.2f MB", denseMB);
-                debugUi.text("Sparsity saved: %.2f MB (%.1f%%)", savingsMB, savingsPct);
+                debugUi.text("Pool:           %.2f MB", poolMB);
+                debugUi.text("Handle grids:   %.2f KB", handleGridKB);
+                debugUi.text("Bricks unique:  %zu / %zu", bricksUnique, BrickPool::kMaxBricks);
+                debugUi.text("Bricks logical: %zu", bricksLogical);
+                debugUi.text("Dedup ratio:    %.2fx", dedupRatio);
+                debugUi.text("Dense:          %.2f MB", denseMB);
+                debugUi.separator();
+                debugUi.text("Total:          %.2f MB  (saved %.2f MB / %.0f%%)",
+                             brickmapTotalMB, savingsMB, savingsPct);
 
                 debugUi.endPanel();
             });
