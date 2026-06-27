@@ -8,6 +8,7 @@ add_executable(rage_tests
     engine/rendering/world_brick_grid_test.cpp
     engine/scene/brick_pool_test.cpp
     engine/scene/camera_test.cpp
+    engine/scene/svdag_test.cpp
     engine/scene/voxel_data_test.cpp
     engine/scene/node3d_test.cpp
     engine/scene/renderable_node3d_test.cpp

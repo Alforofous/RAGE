@@ -66,6 +66,7 @@ set(ENGINE_SOURCES
     src/engine/scene/node3d.cpp
     src/engine/scene/renderable_node3d.cpp
     src/engine/scene/brick_pool.cpp
+    src/engine/scene/svdag.cpp
     src/engine/scene/voxel3d.cpp
     src/engine/scene/voxel_data.cpp
     src/engine/rendering/world_brick_grid.cpp
