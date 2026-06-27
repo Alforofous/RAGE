@@ -108,45 +108,9 @@ int main(int argc, char **argv) {
             std::string label;
             Content::VoxModel model;
             Voxel3D *target = nullptr;
-            std::atomic<float> mipProgress{ 0.0f };
+            std::atomic<float> loadProgress{ 0.0f };
         };
         std::vector<std::unique_ptr<VoxelLoadJob>> loadJobs;
-
-        const auto stageVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
-            auto job = std::make_unique<VoxelLoadJob>();
-            job->label = voxPath.filename().string();
-            job->model = Content::loadVox(voxPath);
-            auto v = std::make_unique<Voxel3D>(allocator, job->model.dims, kVoxelSize);
-            job->target = v.get();
-            v->setMaterial(voxelMaterial);
-            v->setPosition(position);
-            v->onMipBuildProgress([&jobRef = *job](float p) { jobRef.mipProgress.store(p); });
-            std::fprintf(stdout, "Staged %s (%dx%dx%d)\n", voxPath.string().c_str(), job->model.dims.x,
-                         job->model.dims.y, job->model.dims.z);
-            loadJobs.push_back(std::move(job));
-            return v;
-        };
-
-        Node3D root;
-        root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
-        root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
-
-        std::atomic<bool> loaderDone{ false };
-        std::atomic<bool> loaderCancel{ false };
-        for (const auto &job : loadJobs) {
-            job->target->onMipBuildShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
-        }
-        std::thread loaderThread([&]() {
-            for (const auto &job : loadJobs) {
-                if (loaderCancel.load()) {
-                    break;
-                }
-                job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
-                job->model.voxels.clear();
-                job->model.voxels.shrink_to_fit();
-            }
-            loaderDone.store(true);
-        });
 
         const auto [initW, initH] = window.framebufferExtent();
         Camera camera(std::numbers::pi_v<float> * 0.4f,
@@ -162,6 +126,42 @@ int main(int argc, char **argv) {
                                         .vsync = true });
 
             Renderer renderer(ctx, allocator, swapchain);
+
+            const auto stageVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
+                auto job = std::make_unique<VoxelLoadJob>();
+                job->label = voxPath.filename().string();
+                job->model = Content::loadVox(voxPath);
+                auto v = std::make_unique<Voxel3D>(renderer.brickPool(), job->model.dims, kVoxelSize);
+                job->target = v.get();
+                v->setMaterial(voxelMaterial);
+                v->setPosition(position);
+                v->onLoadProgress([&jobRef = *job](float p) { jobRef.loadProgress.store(p); });
+                std::fprintf(stdout, "Staged %s (%dx%dx%d)\n", voxPath.string().c_str(), job->model.dims.x,
+                             job->model.dims.y, job->model.dims.z);
+                loadJobs.push_back(std::move(job));
+                return v;
+            };
+
+            Node3D root;
+            root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
+            root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
+
+            std::atomic<bool> loaderDone{ false };
+            std::atomic<bool> loaderCancel{ false };
+            for (const auto &job : loadJobs) {
+                job->target->onLoadShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
+            }
+            std::thread loaderThread([&]() {
+                for (const auto &job : loadJobs) {
+                    if (loaderCancel.load()) {
+                        break;
+                    }
+                    job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
+                    job->model.voxels.clear();
+                    job->model.voxels.shrink_to_fit();
+                }
+                loaderDone.store(true);
+            });
 
             App::Profiler profiler;
             profiler.attach(renderer);
@@ -181,8 +181,8 @@ int main(int argc, char **argv) {
                 if (!loaderDone.load()) {
                     debugUi.text("Loading assets...");
                     for (const auto &job : loadJobs) {
-                        debugUi.text("  %s: mip %.0f%%", job->label.c_str(),
-                                     job->mipProgress.load() * 100.0f);
+                        debugUi.text("  %s: load %.0f%%", job->label.c_str(),
+                                     job->loadProgress.load() * 100.0f);
                     }
                 }
                 if constexpr (App::kIsDevBuild) {

@@ -22,35 +22,6 @@
 
 namespace RAGE {
     namespace {
-        CasterAabb computeWorldAabb(const Voxel3D &v) {
-            const Mat4 m = v.worldMatrix();
-            const IVec3 dims = v.dimensions();
-            const float voxelSize = v.voxelSize();
-            const Vec3 localMax{ static_cast<float>(dims.x) * voxelSize,
-                                  static_cast<float>(dims.y) * voxelSize,
-                                  static_cast<float>(dims.z) * voxelSize };
-            const Vec3 corners[8] = { { 0.0f, 0.0f, 0.0f },           { localMax.x, 0.0f, 0.0f },
-                                       { 0.0f, localMax.y, 0.0f },     { localMax.x, localMax.y, 0.0f },
-                                       { 0.0f, 0.0f, localMax.z },     { localMax.x, 0.0f, localMax.z },
-                                       { 0.0f, localMax.y, localMax.z }, { localMax.x, localMax.y, localMax.z } };
-            CasterAabb out{};
-            Vec3 mn{ std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                      std::numeric_limits<float>::infinity() };
-            Vec3 mx{ -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                      -std::numeric_limits<float>::infinity() };
-            for (const Vec3 &c : corners) {
-                const Vec3 w = m.transformPoint(c);
-                mn.x = std::min(mn.x, w.x);
-                mn.y = std::min(mn.y, w.y);
-                mn.z = std::min(mn.z, w.z);
-                mx.x = std::max(mx.x, w.x);
-                mx.y = std::max(mx.y, w.y);
-                mx.z = std::max(mx.z, w.z);
-            }
-            out.worldMin = mn;
-            out.worldMax = mx;
-            return out;
-        }
         // RAII bracket for the engine's phase callbacks: fires `begin(name)` on construction
         // and `end(name)` on destruction. Lets any return path inside render() leave the
         // phase balanced without each branch having to remember to call end. Engine has no
@@ -136,29 +107,38 @@ namespace RAGE {
             }));
         }
 
-        if (!sceneCastersBuffer_.has_value()) {
-            sceneCastersBuffer_.emplace(allocator_.createBuffer({
-                .size = sizeof(SceneCasters),
-                .usage = BufferUsage::Uniform,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-        }
-
-        if (!worldGridParamsBuffer_.has_value()) {
-            worldGridParamsBuffer_.emplace(allocator_.createBuffer({
-                .size = sizeof(WorldGridParams),
-                .usage = BufferUsage::Uniform,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-        }
-        if (!worldGridBitsBuffer_.has_value()) {
-            constexpr uint64_t kWorldGridBitsMax = 64u * 1024u;
-            worldGridBitsBuffer_.emplace(allocator_.createBuffer({
-                .size = kWorldGridBitsMax,
+        if (!brickPoolBuffer_.has_value()) {
+            // Capacity for ~16K bricks (32 MB). Sufficient for the test scene's ~3K
+            // bricks; M5 streaming will replace this with dynamic growth.
+            constexpr uint64_t kBricks = 16384;
+            constexpr uint64_t kBrickPoolBytes = kBricks * sizeof(Brick);
+            brickPoolBuffer_.emplace(allocator_.createBuffer({
+                .size = kBrickPoolBytes,
                 .usage = BufferUsage::Storage,
                 .memory = MemoryLocation::CpuToGpu,
             }));
-            std::memset(worldGridBitsBuffer_->mappedData(), 0, kWorldGridBitsMax);
+            std::memset(brickPoolBuffer_->mappedData(), 0, kBrickPoolBytes);
+        }
+
+        if (!worldBrickGridHandlesBuffer_.has_value()) {
+            // Capacity for 256K handles = 64³ brick cells (~25 m³ at voxelSize=0.05).
+            constexpr uint64_t kHandleCount = 256u * 1024u;
+            constexpr uint64_t kBytes = kHandleCount * sizeof(BrickHandle);
+            worldBrickGridHandlesBuffer_.emplace(allocator_.createBuffer({
+                .size = kBytes,
+                .usage = BufferUsage::Storage,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+            std::memset(worldBrickGridHandlesBuffer_->mappedData(), 0, kBytes);
+        }
+
+        if (!worldBrickGridParamsBuffer_.has_value()) {
+            worldBrickGridParamsBuffer_.emplace(allocator_.createBuffer({
+                .size = 32,                  // 2 × vec4 in std140
+                .usage = BufferUsage::Uniform,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+            std::memset(worldBrickGridParamsBuffer_->mappedData(), 0, 32);
         }
 
         if (!pixelDebugBuffer_.has_value()) {
@@ -240,7 +220,7 @@ namespace RAGE {
             return;
         }
         auto *v = dynamic_cast<Voxel3D *>(&node);
-        if (v != nullptr && v->voxelBuffer() != nullptr) {
+        if (v != nullptr && v->voxelData() != nullptr) {
             shadowCasters_.push_back(v);
         }
         for (const auto &child : node.children()) {
@@ -309,58 +289,63 @@ namespace RAGE {
         }
 
         {
-            const PhaseScope writeScene(phaseBegin_, phaseEnd_, "Render.SceneCastersWrite");
-            SceneCasters scene{};
-            scene.count = static_cast<int32_t>(shadowCasters_.size());
-            for (size_t i = 0; i < shadowCasters_.size(); ++i) {
-                Voxel3D *v = shadowCasters_[i];
-                SceneCasterEntry &e = scene.entries[i];
-                e.invModel = v->worldMatrix().inverted();
-                const IVec3 dims = v->dimensions();
-                e.dimsX = dims.x;
-                e.dimsY = dims.y;
-                e.dimsZ = dims.z;
-                e.voxelSize = v->voxelSize();
-
-                const OccupancyMipLayout &mip = v->occupancyMipLayout();
-                const auto levels = std::min<uint32_t>(static_cast<uint32_t>(mip.levelDims.size()), kMaxMipLevels);
-                e.mipLevelCount = static_cast<int32_t>(levels);
-                for (uint32_t L = 0; L < levels; ++L) {
-                    e.mipLevels[L][0] = static_cast<uint32_t>(mip.levelDims[L].x);
-                    e.mipLevels[L][1] = static_cast<uint32_t>(mip.levelDims[L].y);
-                    e.mipLevels[L][2] = static_cast<uint32_t>(mip.levelDims[L].z);
-                    e.mipLevels[L][3] = mip.levelByteOffsets[L];
-                }
-            }
-            std::memcpy(sceneCastersBuffer_->mappedData(), &scene, sizeof(scene));
-        }
-
-        {
-            const PhaseScope writeGrid(phaseBegin_, phaseEnd_, "Render.WorldGridBuildWrite");
-            casterAabbsScratch_.clear();
-            casterAabbsScratch_.reserve(shadowCasters_.size());
+            const PhaseScope brickRebuild(phaseBegin_, phaseEnd_, "Render.WorldBrickGridRebuild");
+            brickPlacementsScratch_.clear();
+            brickPlacementsScratch_.reserve(shadowCasters_.size());
+            float brickWorldSize = 0.0f;
             for (const Voxel3D *v : shadowCasters_) {
-                casterAabbsScratch_.push_back(computeWorldAabb(*v));
+                if (brickWorldSize == 0.0f) {
+                    brickWorldSize = v->voxelSize() * static_cast<float>(Brick::kDim);
+                }
+                const Vec3 p = v->worldMatrix().transformPoint(Vec3::zero());
+                const IVec3 worldBrickOrigin{
+                    static_cast<int32_t>(std::floor(p.x / brickWorldSize)),
+                    static_cast<int32_t>(std::floor(p.y / brickWorldSize)),
+                    static_cast<int32_t>(std::floor(p.z / brickWorldSize)),
+                };
+                brickPlacementsScratch_.push_back(
+                    VoxelDataWorldPlacement{ .data = v->voxelData(), .worldBrickOrigin = worldBrickOrigin });
             }
-            constexpr float kWorldGridCellSize = 1.0f;
-            const WorldGridLayout layout =
-                computeWorldGridLayout(casterAabbsScratch_, kWorldGridCellSize, /*paddingCells=*/1);
-            constexpr size_t kWorldGridBitsMax = 64u * 1024u;
-            const size_t usableBytes = std::min<size_t>(layout.byteSize, kWorldGridBitsMax);
-            worldGridBitsScratch_.assign(kWorldGridBitsMax, 0u);
-            if (usableBytes > 0) {
-                buildWorldGrid(casterAabbsScratch_, layout, worldGridBitsScratch_.data());
-            }
-            std::memcpy(worldGridBitsBuffer_->mappedData(), worldGridBitsScratch_.data(), kWorldGridBitsMax);
+            worldBrickGrid_.rebuild(brickPlacementsScratch_);
 
-            WorldGridParams params{};
-            params.origin_cellSize = Vec4(layout.origin, layout.cellSize);
-            if (layout.byteSize <= kWorldGridBitsMax) {
-                params.dimsX = layout.dims.x;
-                params.dimsY = layout.dims.y;
-                params.dimsZ = layout.dims.z;
+            // Upload params UBO: vec4(origin_xyz, cellSize), ivec4(dims_xyz, _).
+            const IVec3 dims = worldBrickGrid_.dims();
+            const IVec3 origBrick = worldBrickGrid_.worldBrickOrigin();
+            struct WorldBrickGridParamsLayout {
+                float originX;
+                float originY;
+                float originZ;
+                float cellSize;
+                int32_t dimsX;
+                int32_t dimsY;
+                int32_t dimsZ;
+                int32_t voxelDim;
+            };
+            const WorldBrickGridParamsLayout params{
+                .originX = static_cast<float>(origBrick.x) * brickWorldSize,
+                .originY = static_cast<float>(origBrick.y) * brickWorldSize,
+                .originZ = static_cast<float>(origBrick.z) * brickWorldSize,
+                .cellSize = brickWorldSize,
+                .dimsX = dims.x,
+                .dimsY = dims.y,
+                .dimsZ = dims.z,
+                .voxelDim = Brick::kDim,
+            };
+            std::memcpy(worldBrickGridParamsBuffer_->mappedData(), &params, sizeof(params));
+
+            // Upload handles (whole array — small and rebuilt every frame anyway).
+            const auto handles = worldBrickGrid_.handles();
+            if (!handles.empty()) {
+                std::memcpy(worldBrickGridHandlesBuffer_->mappedData(), handles.data(),
+                            handles.size() * sizeof(BrickHandle));
             }
-            std::memcpy(worldGridParamsBuffer_->mappedData(), &params, sizeof(params));
+
+            // Upload dirty bricks into the brick pool buffer.
+            auto *poolDst = static_cast<Brick *>(brickPoolBuffer_->mappedData());
+            const std::vector<BrickHandle> dirty = brickPool_.drainDirty();
+            for (BrickHandle h : dirty) {
+                poolDst[h] = brickPool_.brick(h);
+            }
         }
 
         {
@@ -484,35 +469,10 @@ namespace RAGE {
         VulkanDescriptorWriter writer(ctx_.vkDevice());
         writer.writeStorageImage(set, 0, target, ImageLayout::General);
         writer.writeUniformBuffer(set, 2, *frameUniformBuffer_);
-        writer.writeUniformBuffer(set, 3, *sceneCastersBuffer_);
+        writer.writeStorageBuffer(set, 3, *brickPoolBuffer_);
+        writer.writeStorageBuffer(set, 4, *worldBrickGridHandlesBuffer_);
         writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
-        writer.writeUniformBuffer(set, 7, *worldGridParamsBuffer_);
-        writer.writeStorageBuffer(set, 8, *worldGridBitsBuffer_);
-
-        const VulkanBuffer *fallbackBuffer = nullptr;
-        const VulkanBuffer *fallbackMipBuffer = nullptr;
-        {
-            const PhaseScope mipScope(phaseBegin_, phaseEnd_, "Pass.MipBuildAndBind");
-            fallbackBuffer = shadowCasters_[0]->voxelBuffer();
-            fallbackMipBuffer = shadowCasters_[0]->occupancyMipBuffer();
-            if (fallbackMipBuffer == nullptr) {
-                fallbackMipBuffer = fallbackBuffer;
-            }
-            for (uint32_t slot = 0; slot < kMaxSceneCasters; ++slot) {
-                const VulkanBuffer *buf = (slot < shadowCasters_.size())
-                                              ? shadowCasters_[slot]->voxelBuffer()
-                                              : fallbackBuffer;
-                writer.writeStorageBufferArray(set, 4, slot, *buf);
-
-                const VulkanBuffer *mipBuf = (slot < shadowCasters_.size())
-                                                 ? shadowCasters_[slot]->occupancyMipBuffer()
-                                                 : fallbackMipBuffer;
-                if (mipBuf == nullptr) {
-                    mipBuf = fallbackMipBuffer;
-                }
-                writer.writeStorageBufferArray(set, 6, slot, *mipBuf);
-            }
-        }
+        writer.writeUniformBuffer(set, 6, *worldBrickGridParamsBuffer_);
 
         {
             const PhaseScope commitScope(phaseBegin_, phaseEnd_, "Pass.DescriptorCommit");

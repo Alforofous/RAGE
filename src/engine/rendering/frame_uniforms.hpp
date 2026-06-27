@@ -47,7 +47,7 @@ namespace RAGE {
         int32_t debugPixelY = -1;
         int32_t _pad3 = 0;
         int32_t _pad4 = 0;
-        int32_t mipSkipEnabled = 0;
+        int32_t mipSkipEnabled = 1;
         int32_t heatmapMode = 0;
         int32_t heatmapMaxSteps = 1024;
         int32_t _pad6 = 0;

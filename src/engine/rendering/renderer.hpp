@@ -11,7 +11,9 @@
 #include "engine/rendering/ambient_light.hpp"
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/pixel_debug.hpp"
+#include "engine/rendering/world_brick_grid.hpp"
 #include "engine/rendering/world_grid.hpp"
+#include "engine/scene/brick_pool.hpp"
 #include "engine/scene/renderable_node3d.hpp"
 #include "gpu/vulkan/vulkan_buffer.hpp"
 #include "gpu/gpu_queue_kind.hpp"
@@ -110,6 +112,19 @@ namespace RAGE {
         void setHeatmapMaxSteps(int32_t maxSteps) { heatmapMaxSteps_ = maxSteps; }
         int32_t heatmapMaxSteps() const { return heatmapMaxSteps_; }
 
+        /**
+         * Shared brick pool that will back every `Voxel3D`'s storage once M3-C lands.
+         * Lives for the renderer's lifetime; stable address.
+         */
+        BrickPool &brickPool() { return brickPool_; }
+        const BrickPool &brickPool() const { return brickPool_; }
+
+        /**
+         * Top-level sparse grid mapping world brick coords to handles into the brick pool.
+         * Rebuilt each frame from the scene's `VoxelData` placements.
+         */
+        const WorldBrickGrid &worldBrickGrid() const { return worldBrickGrid_; }
+
         // Debug-only: pick a single pixel for shader-side introspection. setPickTarget queues
         // the request for the next render(); tryReadPick consumes the result after that frame
         // completes. See engine/rendering/pixel_debug.hpp.
@@ -184,11 +199,9 @@ namespace RAGE {
         std::optional<VulkanRenderTarget> renderTarget_;
         std::optional<VulkanRenderTarget> thumbnailTarget_;
         std::optional<VulkanBuffer> frameUniformBuffer_;
-        std::optional<VulkanBuffer> sceneCastersBuffer_;
-        std::optional<VulkanBuffer> worldGridParamsBuffer_;
-        std::optional<VulkanBuffer> worldGridBitsBuffer_;
-        std::vector<CasterAabb> casterAabbsScratch_;
-        std::vector<uint8_t> worldGridBitsScratch_;
+        std::optional<VulkanBuffer> brickPoolBuffer_;
+        std::optional<VulkanBuffer> worldBrickGridHandlesBuffer_;
+        std::optional<VulkanBuffer> worldBrickGridParamsBuffer_;
         std::optional<VulkanBuffer> pixelDebugBuffer_;
         std::optional<VulkanBuffer> thumbnailStaging_;
         bool thumbnailQueued_ = false;
@@ -202,10 +215,13 @@ namespace RAGE {
         std::vector<Pass> passes_;
         std::vector<std::shared_ptr<DirectionalLight>> directionalLights_;
         AmbientLight ambient_{};
-        bool mipSkipEnabled_ = false;
+        bool mipSkipEnabled_ = true;
         int32_t heatmapMode_ = 0;
         int32_t heatmapMaxSteps_ = 1024;
         std::vector<Voxel3D *> shadowCasters_;
+        BrickPool brickPool_;
+        WorldBrickGrid worldBrickGrid_;
+        std::vector<VoxelDataWorldPlacement> brickPlacementsScratch_;
 
         FrameHook frameEnd_;
         GpuPassHook beforeGpuPass_;
