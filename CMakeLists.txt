@@ -146,12 +146,13 @@ add_custom_target(sample_assets ALL DEPENDS ${SAMPLE_VOX_OUTPUTS})
 # --- App (temporary test executable) ---
 
 add_executable(RAGE
+    src/app/debug_ui.cpp
     src/app/free_fly_controller.cpp
     src/app/main.cpp
     src/app/profiler.cpp
     src/app/window.cpp
 )
-target_link_libraries(RAGE rage_engine)
+target_link_libraries(RAGE rage_engine imgui)
 add_dependencies(RAGE shaders sample_assets)
 
 if(RAGE_ENABLE_PROFILING)

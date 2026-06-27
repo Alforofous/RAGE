@@ -5,8 +5,8 @@
 #include <exception>
 #include <limits>
 #include <utility>
-#include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/world_grid.hpp"
+#include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/frame_uniforms.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/scene_casters.hpp"
@@ -51,7 +51,6 @@ namespace RAGE {
             out.worldMax = mx;
             return out;
         }
-
         // RAII bracket for the engine's phase callbacks: fires `begin(name)` on construction
         // and `end(name)` on destruction. Lets any return path inside render() leave the
         // phase balanced without each branch having to remember to call end. Engine has no
@@ -193,6 +192,47 @@ namespace RAGE {
         for (uint32_t i = 0; i < swapchain_.imageCount(); ++i) {
             renderDoneByImage_.push_back(ctx_.semaphores().acquire());
         }
+
+        if (swapchainRebuilt_) {
+            swapchainImageCache_.clear();
+            swapchainImageCache_.reserve(swapchain_.imageCount());
+            for (uint32_t i = 0; i < swapchain_.imageCount(); ++i) {
+                swapchainImageCache_.push_back(swapchain_.image(i));
+            }
+            const auto [sw, sh] = swapchain_.extent();
+            swapchainRebuilt_(SwapchainInfo{ .device = ctx_.vkDevice(),
+                                             .physicalDevice = ctx_.physicalDevice(),
+                                             .instance = ctx_.vkInstance(),
+                                             .graphicsQueue = ctx_.graphicsQueue().vkQueue(),
+                                             .graphicsQueueFamily = ctx_.graphicsQueue().queueFamily(),
+                                             .colorFormat = swapchain_.vkFormat(),
+                                             .imageCount = swapchain_.imageCount(),
+                                             .images = swapchainImageCache_.data(),
+                                             .width = sw,
+                                             .height = sh });
+        }
+    }
+
+    void Renderer::onSwapchainRebuilt(SwapchainRebuiltHook h) {
+        swapchainRebuilt_ = std::move(h);
+        if (swapchainRebuilt_ && !needsRecreate_ && swapchain_.imageCount() > 0) {
+            swapchainImageCache_.clear();
+            swapchainImageCache_.reserve(swapchain_.imageCount());
+            for (uint32_t i = 0; i < swapchain_.imageCount(); ++i) {
+                swapchainImageCache_.push_back(swapchain_.image(i));
+            }
+            const auto [sw, sh] = swapchain_.extent();
+            swapchainRebuilt_(SwapchainInfo{ .device = ctx_.vkDevice(),
+                                             .physicalDevice = ctx_.physicalDevice(),
+                                             .instance = ctx_.vkInstance(),
+                                             .graphicsQueue = ctx_.graphicsQueue().vkQueue(),
+                                             .graphicsQueueFamily = ctx_.graphicsQueue().queueFamily(),
+                                             .colorFormat = swapchain_.vkFormat(),
+                                             .imageCount = swapchain_.imageCount(),
+                                             .images = swapchainImageCache_.data(),
+                                             .width = sw,
+                                             .height = sh });
+        }
     }
 
     void Renderer::collectShadowCasters(Node3D &node) {
@@ -226,6 +266,7 @@ namespace RAGE {
 
         const bool extentChanged = (extent != lastExtent_) && (lastExtent_.width != 0);
         if (needsRecreate_ || extentChanged) {
+            const PhaseScope rebuild(phaseBegin_, phaseEnd_, "Render.RebuildFrameResources");
             drainInFlight();
             vkDeviceWaitIdle(ctx_.vkDevice());
             if (lastExtent_.width != 0) {
@@ -236,7 +277,10 @@ namespace RAGE {
             needsRecreate_ = false;
         }
 
-        drainInFlight();
+        {
+            const PhaseScope drain(phaseBegin_, phaseEnd_, "Render.DrainInFlight");
+            drainInFlight();
+        }
 
         if (thumbnailQueued_ && frameImage_ && thumbnailStaging_.has_value()) {
             const auto width = static_cast<uint16_t>(thumbnailTarget_->width());
@@ -257,12 +301,15 @@ namespace RAGE {
         const VulkanSemaphoreHandle &renderDone = renderDoneByImage_[acq.imageIndex];
 
         std::vector<Renderable *> visible;
-        collectVisible(root, visible);
-
-        shadowCasters_.clear();
-        collectShadowCasters(root);
+        {
+            const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
+            collectVisible(root, visible);
+            shadowCasters_.clear();
+            collectShadowCasters(root);
+        }
 
         {
+            const PhaseScope writeScene(phaseBegin_, phaseEnd_, "Render.SceneCastersWrite");
             SceneCasters scene{};
             scene.count = static_cast<int32_t>(shadowCasters_.size());
             for (size_t i = 0; i < shadowCasters_.size(); ++i) {
@@ -289,6 +336,7 @@ namespace RAGE {
         }
 
         {
+            const PhaseScope writeGrid(phaseBegin_, phaseEnd_, "Render.WorldGridBuildWrite");
             casterAabbsScratch_.clear();
             casterAabbsScratch_.reserve(shadowCasters_.size());
             for (const Voxel3D *v : shadowCasters_) {
@@ -316,6 +364,7 @@ namespace RAGE {
         }
 
         {
+            const PhaseScope writeUbo(phaseBegin_, phaseEnd_, "Render.FrameUniformsWrite");
             FrameUniforms uniforms{};
             const Mat4 camWorld = camera.worldMatrix();
             const Vec3 cameraPos = camWorld.transformPoint(Vec3::zero());
@@ -341,15 +390,19 @@ namespace RAGE {
 
             uniforms.debugPixelX = pendingPickX_;
             uniforms.debugPixelY = pendingPickY_;
+            uniforms.mipSkipEnabled = mipSkipEnabled_ ? 1 : 0;
+            uniforms.heatmapMode = heatmapMode_;
+            uniforms.heatmapMaxSteps = heatmapMaxSteps_;
 
             std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
         }
 
+        const PhaseScope recordScope(phaseBegin_, phaseEnd_, "Render.RecordFrame");
         VulkanCommandBuffer<queue_kind::Graphics> cmd = cmdPool_.allocate();
         VulkanRecorder<queue_kind::Graphics> rec = std::move(cmd).begin();
         const auto [swW, swH] = swapchain_.extent();
         const FrameContext frameCtx{ .camera = &camera };
-        recordFrame(rec, swapchain_.image(acq.imageIndex), swW, swH, visible, frameCtx);
+        recordFrame(rec, swapchain_.image(acq.imageIndex), acq.imageIndex, swW, swH, visible, frameCtx);
         VulkanExecutable<queue_kind::Graphics> exe = std::move(rec).end();
 
         const std::array<VulkanSemaphoreWait, 1> waits{ { { .semaphore = imageReady,
@@ -420,7 +473,12 @@ namespace RAGE {
         if (!anyCaster->hasMaterial()) {
             return;
         }
-        VulkanPipeline &pipeline = pipelineCache_.getOrCreate(*anyCaster->material());
+        VulkanPipeline *pipelinePtr = nullptr;
+        {
+            const PhaseScope pipelineScope(phaseBegin_, phaseEnd_, "Pass.PipelineGetOrCreate");
+            pipelinePtr = &pipelineCache_.getOrCreate(*anyCaster->material());
+        }
+        VulkanPipeline &pipeline = *pipelinePtr;
 
         VkDescriptorSet set = descPool_.allocate(pipeline.descriptorSetLayouts()[0]);
         VulkanDescriptorWriter writer(ctx_.vkDevice());
@@ -431,27 +489,35 @@ namespace RAGE {
         writer.writeUniformBuffer(set, 7, *worldGridParamsBuffer_);
         writer.writeStorageBuffer(set, 8, *worldGridBitsBuffer_);
 
-        const VulkanBuffer *fallbackBuffer = shadowCasters_[0]->voxelBuffer();
-        const VulkanBuffer *fallbackMipBuffer = shadowCasters_[0]->occupancyMipBuffer();
-        if (fallbackMipBuffer == nullptr) {
-            fallbackMipBuffer = fallbackBuffer;
-        }
-        for (uint32_t slot = 0; slot < kMaxSceneCasters; ++slot) {
-            const VulkanBuffer *buf = (slot < shadowCasters_.size())
-                                          ? shadowCasters_[slot]->voxelBuffer()
-                                          : fallbackBuffer;
-            writer.writeStorageBufferArray(set, 4, slot, *buf);
-
-            const VulkanBuffer *mipBuf = (slot < shadowCasters_.size())
-                                             ? shadowCasters_[slot]->occupancyMipBuffer()
-                                             : fallbackMipBuffer;
-            if (mipBuf == nullptr) {
-                mipBuf = fallbackMipBuffer;
+        const VulkanBuffer *fallbackBuffer = nullptr;
+        const VulkanBuffer *fallbackMipBuffer = nullptr;
+        {
+            const PhaseScope mipScope(phaseBegin_, phaseEnd_, "Pass.MipBuildAndBind");
+            fallbackBuffer = shadowCasters_[0]->voxelBuffer();
+            fallbackMipBuffer = shadowCasters_[0]->occupancyMipBuffer();
+            if (fallbackMipBuffer == nullptr) {
+                fallbackMipBuffer = fallbackBuffer;
             }
-            writer.writeStorageBufferArray(set, 6, slot, *mipBuf);
+            for (uint32_t slot = 0; slot < kMaxSceneCasters; ++slot) {
+                const VulkanBuffer *buf = (slot < shadowCasters_.size())
+                                              ? shadowCasters_[slot]->voxelBuffer()
+                                              : fallbackBuffer;
+                writer.writeStorageBufferArray(set, 4, slot, *buf);
+
+                const VulkanBuffer *mipBuf = (slot < shadowCasters_.size())
+                                                 ? shadowCasters_[slot]->occupancyMipBuffer()
+                                                 : fallbackMipBuffer;
+                if (mipBuf == nullptr) {
+                    mipBuf = fallbackMipBuffer;
+                }
+                writer.writeStorageBufferArray(set, 6, slot, *mipBuf);
+            }
         }
 
-        writer.commit();
+        {
+            const PhaseScope commitScope(phaseBegin_, phaseEnd_, "Pass.DescriptorCommit");
+            writer.commit();
+        }
 
         const std::array<VkDescriptorSet, 1> sets{ set };
         const auto wg = anyCaster->material()->shader()->localWorkgroupSize();
@@ -471,8 +537,9 @@ namespace RAGE {
         }
     }
 
-    void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapW,
-                               uint32_t swapH, std::span<Renderable *const> renderables, const FrameContext &frame) {
+    void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage,
+                               uint32_t swapImageIndex, uint32_t swapW, uint32_t swapH,
+                               std::span<Renderable *const> renderables, const FrameContext &frame) {
         recordPass(rec, *renderTarget_, renderables, frame, true, true);
 
         VulkanRenderTarget &mainTarget = *renderTarget_;
@@ -543,15 +610,43 @@ namespace RAGE {
             thumbnailQueued_ = true;
         }
 
-        const std::array<VulkanImageBarrier, 1> toPresent{ { { .image = swapImage,
-                                                               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                               .oldLayout = ImageLayout::TransferDstOptimal,
-                                                               .newLayout = ImageLayout::PresentSrc,
-                                                               .srcStage = PipelineStage::Transfer,
-                                                               .dstStage = PipelineStage::BottomOfPipe,
-                                                               .srcAccess = AccessFlags::TransferWrite,
-                                                               .dstAccess = AccessFlags::None } } };
-        rec.pipelineBarrier(toPresent);
+        if (uiRender_) {
+            const std::array<VulkanImageBarrier, 1> toColor{ { { .image = swapImage,
+                                                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                  .oldLayout = ImageLayout::TransferDstOptimal,
+                                                                  .newLayout = ImageLayout::ColorAttachmentOptimal,
+                                                                  .srcStage = PipelineStage::Transfer,
+                                                                  .dstStage = PipelineStage::ColorAttachmentOutput,
+                                                                  .srcAccess = AccessFlags::TransferWrite,
+                                                                  .dstAccess = AccessFlags::ColorAttachmentWrite } } };
+            rec.pipelineBarrier(toColor);
+
+            uiRender_(UiRenderContext{ .cmd = rec.rawHandle(),
+                                       .swapImage = swapImage,
+                                       .swapImageIndex = swapImageIndex,
+                                       .width = swapW,
+                                       .height = swapH });
+
+            const std::array<VulkanImageBarrier, 1> toPresent{ { { .image = swapImage,
+                                                                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                    .oldLayout = ImageLayout::ColorAttachmentOptimal,
+                                                                    .newLayout = ImageLayout::PresentSrc,
+                                                                    .srcStage = PipelineStage::ColorAttachmentOutput,
+                                                                    .dstStage = PipelineStage::BottomOfPipe,
+                                                                    .srcAccess = AccessFlags::ColorAttachmentWrite,
+                                                                    .dstAccess = AccessFlags::None } } };
+            rec.pipelineBarrier(toPresent);
+        } else {
+            const std::array<VulkanImageBarrier, 1> toPresent{ { { .image = swapImage,
+                                                                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                    .oldLayout = ImageLayout::TransferDstOptimal,
+                                                                    .newLayout = ImageLayout::PresentSrc,
+                                                                    .srcStage = PipelineStage::Transfer,
+                                                                    .dstStage = PipelineStage::BottomOfPipe,
+                                                                    .srcAccess = AccessFlags::TransferWrite,
+                                                                    .dstAccess = AccessFlags::None } } };
+            rec.pipelineBarrier(toPresent);
+        }
 
         (void)passes_;
     }

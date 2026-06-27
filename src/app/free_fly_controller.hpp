@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include "engine/scene/camera.hpp"
 #include "window.hpp"
 
@@ -32,6 +33,24 @@ namespace RAGE::App {
         void setMoveSpeed(float v) { moveSpeed_ = v; }
         void setMouseSensitivity(float v) { mouseSensitivity_ = v; }
 
+        /**
+         * Apply a one-frame mouse-scroll delta as a speed-multiplier adjustment, but only
+         * while mouse-look is active (so users don't get camera speed flipping while
+         * scrolling debug UI). Multiplier ratchets exponentially per scroll tick and is
+         * clamped to [0.1, 10] so a couple of accidental scrolls don't pin it to one end.
+         */
+        void applyScrollDelta(float delta);
+
+        float speedMultiplier() const { return speedMultiplier_; }
+        void setSpeedMultiplier(float v);
+
+        // Predicates the app installs so other layers (e.g. a debug UI hovering over a panel)
+        // can veto input each frame. Default-empty predicates mean "input is never vetoed".
+        // The controller knows nothing about who answers — keeps this class UI-library-free.
+        using Predicate = std::function<bool()>;
+        void setMouseVeto(Predicate p) { mouseVeto_ = std::move(p); }
+        void setKeyboardVeto(Predicate p) { keyboardVeto_ = std::move(p); }
+
     private:
         void captureMouse();
         void releaseMouse();
@@ -45,5 +64,8 @@ namespace RAGE::App {
         double lastMouseX_ = 0.0;
         double lastMouseY_ = 0.0;
         bool mouseCaptured_ = false;
+        float speedMultiplier_ = 1.0f;
+        Predicate mouseVeto_;
+        Predicate keyboardVeto_;
     };
 }

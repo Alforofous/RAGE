@@ -11,15 +11,24 @@ set(GLFW_INSTALL OFF CACHE BOOL "Generate installation target" FORCE)
 # Add GLFW as a subdirectory
 add_subdirectory(glfw)
 
-# Build ImGui as a static library (no CMakeLists.txt in upstream repo)
+# Build ImGui as a static library (no CMakeLists.txt in upstream repo). Backends compiled in
+# so RAGE's debug-UI wrapper only depends on this one target.
 add_library(imgui STATIC
     imgui/imgui.cpp
     imgui/imgui_demo.cpp
     imgui/imgui_draw.cpp
     imgui/imgui_tables.cpp
     imgui/imgui_widgets.cpp
+    imgui/backends/imgui_impl_glfw.cpp
+    imgui/backends/imgui_impl_vulkan.cpp
 )
-target_include_directories(imgui PUBLIC imgui)
+target_include_directories(imgui PUBLIC imgui imgui/backends)
+target_link_libraries(imgui PUBLIC glfw)
+if(DEFINED ENV{VULKAN_SDK})
+    target_include_directories(imgui PUBLIC "$ENV{VULKAN_SDK}/Include")
+    target_link_directories(imgui PUBLIC "$ENV{VULKAN_SDK}/Lib")
+    target_link_libraries(imgui PUBLIC vulkan-1)
+endif()
 
 # Add GLM as a subdirectory
 add_subdirectory(glm)

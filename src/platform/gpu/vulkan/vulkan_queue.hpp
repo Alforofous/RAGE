@@ -108,6 +108,7 @@ namespace RAGE {
 
     private:
         friend class VulkanSwapchain;
+        friend class Renderer;
 
         VkQueue vkQueue() const { return queue_; }
 

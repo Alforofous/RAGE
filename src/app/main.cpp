@@ -2,8 +2,6 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <string>
 #include <memory>
@@ -14,6 +12,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include "app/build_paths.hpp"
+#include "debug_ui.hpp"
 #include "engine/content/vox_loader.hpp"
 #include "engine/materials/material.hpp"
 #include "engine/rendering/pixel_debug.hpp"
@@ -86,29 +85,8 @@ namespace {
 }
 
 int main(int argc, char **argv) {
-    bool launchProfiler = false;
-    for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--profile") == 0) {
-            launchProfiler = true;
-        }
-    }
-
-    if (launchProfiler) {
-        const char *tracyExe = RAGE::App::kTracyServerExePath;
-        if (tracyExe == nullptr || tracyExe[0] == '\0') {
-            std::fprintf(stderr,
-                         "--profile: profiling support not built. Reconfigure with "
-                         "-DRAGE_ENABLE_PROFILING=ON.\n");
-        } else {
-            std::string spawn = "start \"\" \"";
-            spawn += tracyExe;
-            spawn += "\" -a 127.0.0.1";
-            std::fprintf(stdout, "--profile: launching %s\n", tracyExe);
-            std::fflush(stdout);
-            std::system(spawn.c_str());
-        }
-    }
-
+    (void)argc;
+    (void)argv;
     try {
         App::Window window(1280, 720, "RAGE Smoke");
 
@@ -188,12 +166,57 @@ int main(int argc, char **argv) {
             App::Profiler profiler;
             profiler.attach(renderer);
 
+            App::DebugUi debugUi(ctx, window.glfwHandle());
+            debugUi.attach(renderer);
+
+            App::FreeFlyController controller(camera, window);
+            controller.setMouseVeto([&debugUi]() { return debugUi.wantsMouse(); });
+            controller.setKeyboardVeto([&debugUi]() { return debugUi.wantsKeyboard(); });
+
+            bool mipSkipEnabled = renderer.mipSkipEnabled();
+            int heatmapMode = renderer.heatmapMode();
+            int heatmapMaxSteps = renderer.heatmapMaxSteps();
+            debugUi.setBuilder([&]() {
+                debugUi.beginPanel("RAGE Debug");
+                if (!loaderDone.load()) {
+                    debugUi.text("Loading assets...");
+                    for (const auto &job : loadJobs) {
+                        debugUi.text("  %s: mip %.0f%%", job->label.c_str(),
+                                     job->mipProgress.load() * 100.0f);
+                    }
+                }
+                if constexpr (App::kIsDevBuild) {
+                    if (App::Profiler::isLinked()) {
+                        if (profiler.isProfilerGuiRunning()) {
+                            debugUi.text("Tracy: running (close to relaunch)");
+                        } else if (debugUi.button("Launch Tracy")) {
+                            profiler.launchProfilerGui();
+                        }
+                    }
+                }
+                if (debugUi.checkbox("Mip skip", &mipSkipEnabled)) {
+                    renderer.setMipSkipEnabled(mipSkipEnabled);
+                }
+                static const char *const kHeatmapOpts[] = { "Off", "Step count" };
+                if (debugUi.radio("Heatmap", &heatmapMode,
+                                  std::span<const char *const>(kHeatmapOpts, std::size(kHeatmapOpts)))) {
+                    renderer.setHeatmapMode(heatmapMode);
+                }
+                if (heatmapMode != 0 && debugUi.sliderInt("Heatmap max steps", &heatmapMaxSteps, 32, 4096)) {
+                    renderer.setHeatmapMaxSteps(heatmapMaxSteps);
+                }
+                debugUi.separatorText("Camera");
+                float speedMult = controller.speedMultiplier();
+                if (debugUi.sliderFloat("Speed (x)", &speedMult, 0.1f, 10.0f)) {
+                    controller.setSpeedMultiplier(speedMult);
+                }
+                debugUi.endPanel();
+            });
+
             auto sun = std::make_shared<DirectionalLight>(Vec3(-1.0f, -1.0f, -1.0f),
                                                           Color(1.0f, 0.95f, 0.85f), 1.2f);
             renderer.addLight(sun);
             renderer.setAmbientLight({ .color = Color(0.4f, 0.5f, 0.8f), .intensity = 0.25f });
-
-            App::FreeFlyController controller(camera, window);
 
             bool prevRight = false;
             double lastTime = glfwGetTime();
@@ -221,6 +244,7 @@ int main(int argc, char **argv) {
                     fpsAccumFrames = 0;
                 }
 
+                controller.applyScrollDelta(debugUi.scrollDelta());
                 controller.update(dt);
 
                 const auto [w, h] = window.framebufferExtent();
@@ -230,7 +254,8 @@ int main(int argc, char **argv) {
                 }
 
                 GLFWwindow *gw = window.glfwHandle();
-                const bool rightDown = (glfwGetMouseButton(gw, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+                const bool rightDown =
+                    !debugUi.wantsMouse() && (glfwGetMouseButton(gw, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
                 if (rightDown && !prevRight) {
                     const int cursorMode = glfwGetInputMode(gw, GLFW_CURSOR);
                     int32_t px = static_cast<int32_t>(w) / 2;

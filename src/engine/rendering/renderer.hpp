@@ -101,6 +101,15 @@ namespace RAGE {
         void setAmbientLight(AmbientLight ambient) { ambient_ = ambient; }
         AmbientLight ambientLight() const { return ambient_; }
 
+        // Debug toggles surfaced through FrameUniforms. App-side UI flips them at runtime;
+        // engine and shader read them via the existing uniform binding. No new descriptors.
+        void setMipSkipEnabled(bool enabled) { mipSkipEnabled_ = enabled; }
+        bool mipSkipEnabled() const { return mipSkipEnabled_; }
+        void setHeatmapMode(int32_t mode) { heatmapMode_ = mode; }
+        int32_t heatmapMode() const { return heatmapMode_; }
+        void setHeatmapMaxSteps(int32_t maxSteps) { heatmapMaxSteps_ = maxSteps; }
+        int32_t heatmapMaxSteps() const { return heatmapMaxSteps_; }
+
         // Debug-only: pick a single pixel for shader-side introspection. setPickTarget queues
         // the request for the next render(); tryReadPick consumes the result after that frame
         // completes. See engine/rendering/pixel_debug.hpp.
@@ -116,12 +125,38 @@ namespace RAGE {
             std::function<void(const void *rgbaBytes, uint16_t width, uint16_t height)>;
         using PhaseHook = std::function<void(const char *name)>;
 
+        struct SwapchainInfo {
+            VkDevice device = VK_NULL_HANDLE;
+            VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+            VkInstance instance = VK_NULL_HANDLE;
+            VkQueue graphicsQueue = VK_NULL_HANDLE;
+            uint32_t graphicsQueueFamily = 0;
+            VkFormat colorFormat = VK_FORMAT_UNDEFINED;
+            uint32_t imageCount = 0;
+            const VkImage *images = nullptr;
+            uint32_t width = 0;
+            uint32_t height = 0;
+        };
+
+        struct UiRenderContext {
+            VkCommandBuffer cmd = VK_NULL_HANDLE;
+            VkImage swapImage = VK_NULL_HANDLE;
+            uint32_t swapImageIndex = 0;
+            uint32_t width = 0;
+            uint32_t height = 0;
+        };
+
+        using SwapchainRebuiltHook = std::function<void(const SwapchainInfo &)>;
+        using UiRenderHook = std::function<void(const UiRenderContext &)>;
+
         void onFrameEnd(FrameHook h) { frameEnd_ = std::move(h); }
         void onBeforeGpuPass(GpuPassHook h) { beforeGpuPass_ = std::move(h); }
         void onAfterGpuPass(GpuPassHook h) { afterGpuPass_ = std::move(h); }
         void onFrameImage(FrameImageHook h) { frameImage_ = std::move(h); }
         void onPhaseBegin(PhaseHook h) { phaseBegin_ = std::move(h); }
         void onPhaseEnd(PhaseHook h) { phaseEnd_ = std::move(h); }
+        void onSwapchainRebuilt(SwapchainRebuiltHook h);
+        void onUiRender(UiRenderHook h) { uiRender_ = std::move(h); }
 
     private:
         using Renderable = RenderableNode3D<VulkanShaderModule>;
@@ -129,8 +164,9 @@ namespace RAGE {
         void rebuildFrameResources(FrameExtent extent);
         void collectVisible(Node3D &node, std::vector<Renderable *> &out);
         void collectShadowCasters(Node3D &node);
-        void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapW, uint32_t swapH,
-                         std::span<Renderable *const> renderables, const FrameContext &frame);
+        void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapImageIndex,
+                         uint32_t swapW, uint32_t swapH, std::span<Renderable *const> renderables,
+                         const FrameContext &frame);
         void recordPass(VulkanRecorder<queue_kind::Graphics> &rec, VulkanRenderTarget &target,
                         std::span<Renderable *const> renderables, const FrameContext &frame, bool isFirstPass,
                         bool isLastPass);
@@ -161,10 +197,14 @@ namespace RAGE {
         bool pickResultReady_ = false;
         PixelDebug pickResult_{};
         std::vector<VulkanSemaphoreHandle> renderDoneByImage_;
+        std::vector<VkImage> swapchainImageCache_;
         std::optional<VulkanPendingSubmission<queue_kind::Graphics>> inFlight_;
         std::vector<Pass> passes_;
         std::vector<std::shared_ptr<DirectionalLight>> directionalLights_;
         AmbientLight ambient_{};
+        bool mipSkipEnabled_ = false;
+        int32_t heatmapMode_ = 0;
+        int32_t heatmapMaxSteps_ = 1024;
         std::vector<Voxel3D *> shadowCasters_;
 
         FrameHook frameEnd_;
@@ -173,6 +213,8 @@ namespace RAGE {
         FrameImageHook frameImage_;
         PhaseHook phaseBegin_;
         PhaseHook phaseEnd_;
+        SwapchainRebuiltHook swapchainRebuilt_;
+        UiRenderHook uiRender_;
 
         FrameExtent lastExtent_{};
         bool needsRecreate_ = true;

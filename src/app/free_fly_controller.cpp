@@ -1,5 +1,6 @@
 #include "free_fly_controller.hpp"
 #include <algorithm>
+#include <cmath>
 #include <numbers>
 #include <GLFW/glfw3.h>
 #include "math/quat.hpp"
@@ -38,9 +39,14 @@ namespace RAGE::App {
             return;
         }
 
-        const auto pressed = [w](int key) -> bool { return glfwGetKey(w, key) == GLFW_PRESS; };
+        const bool keyboardVetoed = !mouseCaptured_ && keyboardVeto_ && keyboardVeto_();
+        const bool mouseVetoed = !mouseCaptured_ && mouseVeto_ && mouseVeto_();
 
-        if (glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+        const auto pressed = [w, keyboardVetoed](int key) -> bool {
+            return !keyboardVetoed && glfwGetKey(w, key) == GLFW_PRESS;
+        };
+
+        if (!mouseVetoed && glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
             captureMouse();
         }
         if (pressed(GLFW_KEY_ESCAPE)) {
@@ -88,8 +94,22 @@ namespace RAGE::App {
         }
 
         if (local.lengthSquared() > 0.0f) {
-            const Vec3 worldDelta = camera_.rotation().rotate(local.normalized()) * (moveSpeed_ * deltaSeconds);
+            const Vec3 worldDelta =
+                camera_.rotation().rotate(local.normalized()) * (moveSpeed_ * speedMultiplier_ * deltaSeconds);
             camera_.setPosition(camera_.position() + worldDelta);
         }
+    }
+
+    void FreeFlyController::applyScrollDelta(float delta) {
+        if (!mouseCaptured_ || delta == 0.0f) {
+            return;
+        }
+        constexpr float kScrollStepBase = 1.2f;
+        const float factor = std::pow(kScrollStepBase, delta);
+        setSpeedMultiplier(speedMultiplier_ * factor);
+    }
+
+    void FreeFlyController::setSpeedMultiplier(float v) {
+        speedMultiplier_ = std::clamp(v, 0.1f, 10.0f);
     }
 }

@@ -63,6 +63,7 @@ namespace RAGE {
         VkImage image(uint32_t index) const { return images_.at(index); }
         VkImageView imageView(uint32_t index) const { return imageViews_.at(index); }
         ImageFormat format() const;
+        VkFormat vkFormat() const { return surfaceFormat_.format; }
         std::pair<uint32_t, uint32_t> extent() const { return { extent_.width, extent_.height }; }
 
     private:
