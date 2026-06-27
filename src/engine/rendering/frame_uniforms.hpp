@@ -28,6 +28,8 @@ namespace RAGE {
      *         ivec4 dirLightCount_pad;
      *         vec4 dirLightDir_intensity[4];
      *         vec4 dirLightColor[4];
+     *         ivec4 debugPixel_pad;
+     *         ivec4 debugFlags;   // (mipSkipEnabled, heatmapMode, heatmapMaxSteps, _)
      *     } frame;
      */
     struct FrameUniforms {
@@ -45,6 +47,10 @@ namespace RAGE {
         int32_t debugPixelY = -1;
         int32_t _pad3 = 0;
         int32_t _pad4 = 0;
+        int32_t mipSkipEnabled = 0;
+        int32_t heatmapMode = 0;
+        int32_t heatmapMaxSteps = 1024;
+        int32_t _pad6 = 0;
     };
-    static_assert(sizeof(FrameUniforms) == 224, "FrameUniforms layout must match shader expectation");
+    static_assert(sizeof(FrameUniforms) == 240, "FrameUniforms layout must match shader expectation");
 }

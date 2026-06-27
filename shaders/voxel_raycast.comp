@@ -12,12 +12,15 @@ layout(set = 0, binding = 2, std140) uniform FrameUniforms {
     vec4 dirLightDir_intensity[4];
     vec4 dirLightColor[4];
     ivec4 debugPixel_pad;
+    ivec4 debugFlags;
 } frame;
 
 struct CasterEntry {
     mat4 invModel;
     ivec4 dims_pad;
     vec4 voxelSize_pad;
+    ivec4 mipLevelCount_pad;
+    uvec4 mipLevels[4];
 };
 
 layout(set = 0, binding = 3, std140) uniform SceneCasters {
@@ -28,6 +31,10 @@ layout(set = 0, binding = 3, std140) uniform SceneCasters {
 layout(set = 0, binding = 4, std430) readonly buffer CasterVoxels {
     uint data[];
 } casterVoxels[16];
+
+layout(set = 0, binding = 6, std430) readonly buffer CasterMips {
+    uint data[];
+} casterMips[16];
 
 layout(set = 0, binding = 5, std430) buffer PixelDebug {
     int hit;
@@ -63,8 +70,8 @@ layout(set = 0, binding = 5, std430) buffer PixelDebug {
     float finalB;
 } dbg;
 
-const int kMaxSteps = 256;
-const int kMaxShadowSteps = 128;
+const int kMaxSteps = 1024;
+const int kMaxShadowSteps = 1024;
 
 vec4 unpackRGBA8(uint packed) {
     return vec4(
@@ -75,6 +82,38 @@ vec4 unpackRGBA8(uint packed) {
     );
 }
 
+// Read one occupancy-mip bit at the given level and cell in a caster's mip SSBO.
+bool mipBitOccupied(int casterIdx, int level, ivec3 cell, uvec4 levelInfo) {
+    uvec3 lvlDim = levelInfo.xyz;
+    if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, ivec3(lvlDim)))) {
+        return true;  // out-of-bounds = treat as occupied (conservative)
+    }
+    uint bitIdx = (uint(cell.z) * lvlDim.x * lvlDim.y) + (uint(cell.y) * lvlDim.x) + uint(cell.x);
+    uint byteOffset = levelInfo.w + (bitIdx >> 3u);
+    uint wordIdx = byteOffset >> 2u;
+    uint byteInWord = byteOffset & 3u;
+    uint word = casterMips[casterIdx].data[wordIdx];
+    uint byteVal = (word >> (byteInWord * 8u)) & 0xFFu;
+    return (byteVal & (1u << (bitIdx & 7u))) != 0u;
+}
+
+// Returns the highest mip level L (1..mipLevelCount) where the 2^(L+1) block containing
+// voxelIdx is reported empty. Returns 0 if even the finest mip says "occupied" (caller
+// must do a leaf voxel test). Stepping by 2^level cells is safe along the ray's path.
+int coarsestEmptyMipLevel(int casterIdx, ivec3 voxelIdx) {
+    int levelCount = scene.entries[casterIdx].mipLevelCount_pad.x;
+    int chosen = 0;
+    for (int L = 0; L < levelCount; ++L) {
+        uvec4 info = scene.entries[casterIdx].mipLevels[L];
+        ivec3 lvlCell = voxelIdx >> (L + 1);
+        if (mipBitOccupied(casterIdx, L, lvlCell, info)) {
+            break;
+        }
+        chosen = L + 1;
+    }
+    return chosen;
+}
+
 struct PrimaryHit {
     bool hit;
     float tHit;
@@ -83,6 +122,7 @@ struct PrimaryHit {
     int lastStepAxis;
     ivec3 stepDir;
     uint packed;
+    int stepCount;
 };
 
 PrimaryHit traceCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
@@ -90,6 +130,7 @@ PrimaryHit traceCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
     res.hit = false;
     res.tHit = 1e30;
     res.casterIdx = casterIdx;
+    res.stepCount = 0;
 
     mat4 invModel = scene.entries[casterIdx].invModel;
     ivec3 dims = scene.entries[casterIdx].dims_pad.xyz;
@@ -141,47 +182,55 @@ PrimaryHit traceCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
     }
 
     for (int step_n = 0; step_n < kMaxSteps; ++step_n) {
+        res.stepCount = step_n + 1;
         if (voxelIdx.x < 0 || voxelIdx.y < 0 || voxelIdx.z < 0
          || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
             return res;
         }
 
-        int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
-        uint packed = casterVoxels[casterIdx].data[flatIdx];
+        int mipLevel = (frame.debugFlags.x != 0) ? coarsestEmptyMipLevel(casterIdx, voxelIdx) : 0;
+        if (mipLevel == 0) {
+            int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
+            uint packed = casterVoxels[casterIdx].data[flatIdx];
 
-        if ((packed >> 24u) > 0u) {
-            res.hit = true;
-            res.tHit = tHit;
-            res.voxelIdx = voxelIdx;
-            res.lastStepAxis = lastStepAxis;
-            res.stepDir = stepDir;
-            res.packed = packed;
-            return res;
-        }
-
-        if (sideDist.x < sideDist.y) {
-            if (sideDist.x < sideDist.z) {
-                tHit = sideDist.x;
-                sideDist.x += deltaDist.x;
-                voxelIdx.x += stepDir.x;
-                lastStepAxis = 0;
-            } else {
-                tHit = sideDist.z;
-                sideDist.z += deltaDist.z;
-                voxelIdx.z += stepDir.z;
-                lastStepAxis = 2;
+            if ((packed >> 24u) > 0u) {
+                res.hit = true;
+                res.tHit = tHit;
+                res.voxelIdx = voxelIdx;
+                res.lastStepAxis = lastStepAxis;
+                res.stepDir = stepDir;
+                res.packed = packed;
+                return res;
             }
-        } else if (sideDist.y < sideDist.z) {
-            tHit = sideDist.y;
-            sideDist.y += deltaDist.y;
-            voxelIdx.y += stepDir.y;
-            lastStepAxis = 1;
-        } else {
-            tHit = sideDist.z;
-            sideDist.z += deltaDist.z;
-            voxelIdx.z += stepDir.z;
-            lastStepAxis = 2;
         }
+
+        int axis = 0;
+        if (sideDist.x < sideDist.y) {
+            axis = (sideDist.x < sideDist.z) ? 0 : 2;
+        } else {
+            axis = (sideDist.y < sideDist.z) ? 1 : 2;
+        }
+
+        int stride = 1;
+        if (mipLevel > 0) {
+            int blockSize = 1 << mipLevel;
+            int base = (voxelIdx[axis] >> mipLevel) << mipLevel;
+            stride = (stepDir[axis] > 0) ? (base + blockSize - voxelIdx[axis])
+                                         : (voxelIdx[axis] - base + 1);
+            float sdMain = sideDist[axis];
+            float ddMain = deltaDist[axis];
+            for (int i = 0; i < 3; ++i) {
+                if (i == axis) continue;
+                int maxK = int(floor((sideDist[i] - sdMain) / ddMain)) + 1;
+                stride = min(stride, max(1, maxK));
+            }
+        }
+
+        float s = float(stride);
+        tHit = sideDist[axis] + (s - 1.0) * deltaDist[axis];
+        sideDist[axis] += s * deltaDist[axis];
+        voxelIdx[axis] += stepDir[axis] * stride;
+        lastStepAxis = axis;
     }
 
     return res;
@@ -233,26 +282,40 @@ ivec4 traceShadowInCasterBlocker(int casterIdx, vec3 worldOrigin, vec3 worldDir)
          || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
             return ivec4(-1, 0, 0, 0);
         }
-        int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
-        if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
-            return ivec4(casterIdx, voxelIdx.x, voxelIdx.y, voxelIdx.z);
+
+        int mipLevel = (frame.debugFlags.x != 0) ? coarsestEmptyMipLevel(casterIdx, voxelIdx) : 0;
+        if (mipLevel == 0) {
+            int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
+            if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
+                return ivec4(casterIdx, voxelIdx.x, voxelIdx.y, voxelIdx.z);
+            }
         }
 
+        int axis = 0;
         if (sideDist.x < sideDist.y) {
-            if (sideDist.x < sideDist.z) {
-                sideDist.x += deltaDist.x;
-                voxelIdx.x += stepDir.x;
-            } else {
-                sideDist.z += deltaDist.z;
-                voxelIdx.z += stepDir.z;
-            }
-        } else if (sideDist.y < sideDist.z) {
-            sideDist.y += deltaDist.y;
-            voxelIdx.y += stepDir.y;
+            axis = (sideDist.x < sideDist.z) ? 0 : 2;
         } else {
-            sideDist.z += deltaDist.z;
-            voxelIdx.z += stepDir.z;
+            axis = (sideDist.y < sideDist.z) ? 1 : 2;
         }
+
+        int stride = 1;
+        if (mipLevel > 0) {
+            int blockSize = 1 << mipLevel;
+            int base = (voxelIdx[axis] >> mipLevel) << mipLevel;
+            stride = (stepDir[axis] > 0) ? (base + blockSize - voxelIdx[axis])
+                                         : (voxelIdx[axis] - base + 1);
+            float sdMain = sideDist[axis];
+            float ddMain = deltaDist[axis];
+            for (int i = 0; i < 3; ++i) {
+                if (i == axis) continue;
+                int maxK = int(floor((sideDist[i] - sdMain) / ddMain)) + 1;
+                stride = min(stride, max(1, maxK));
+            }
+        }
+
+        float s = float(stride);
+        sideDist[axis] += s * deltaDist[axis];
+        voxelIdx[axis] += stepDir[axis] * stride;
     }
     return ivec4(-1, 0, 0, 0);
 }
@@ -302,26 +365,40 @@ bool traceShadowInCaster(int casterIdx, vec3 worldOrigin, vec3 worldDir) {
          || voxelIdx.x >= dims.x || voxelIdx.y >= dims.y || voxelIdx.z >= dims.z) {
             return false;
         }
-        int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
-        if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
-            return true;
+
+        int mipLevel = (frame.debugFlags.x != 0) ? coarsestEmptyMipLevel(casterIdx, voxelIdx) : 0;
+        if (mipLevel == 0) {
+            int flatIdx = voxelIdx.z * dims.x * dims.y + voxelIdx.y * dims.x + voxelIdx.x;
+            if ((casterVoxels[casterIdx].data[flatIdx] >> 24u) > 0u) {
+                return true;
+            }
         }
 
+        int axis = 0;
         if (sideDist.x < sideDist.y) {
-            if (sideDist.x < sideDist.z) {
-                sideDist.x += deltaDist.x;
-                voxelIdx.x += stepDir.x;
-            } else {
-                sideDist.z += deltaDist.z;
-                voxelIdx.z += stepDir.z;
-            }
-        } else if (sideDist.y < sideDist.z) {
-            sideDist.y += deltaDist.y;
-            voxelIdx.y += stepDir.y;
+            axis = (sideDist.x < sideDist.z) ? 0 : 2;
         } else {
-            sideDist.z += deltaDist.z;
-            voxelIdx.z += stepDir.z;
+            axis = (sideDist.y < sideDist.z) ? 1 : 2;
         }
+
+        int stride = 1;
+        if (mipLevel > 0) {
+            int blockSize = 1 << mipLevel;
+            int base = (voxelIdx[axis] >> mipLevel) << mipLevel;
+            stride = (stepDir[axis] > 0) ? (base + blockSize - voxelIdx[axis])
+                                         : (voxelIdx[axis] - base + 1);
+            float sdMain = sideDist[axis];
+            float ddMain = deltaDist[axis];
+            for (int i = 0; i < 3; ++i) {
+                if (i == axis) continue;
+                int maxK = int(floor((sideDist[i] - sdMain) / ddMain)) + 1;
+                stride = min(stride, max(1, maxK));
+            }
+        }
+
+        float s = float(stride);
+        sideDist[axis] += s * deltaDist[axis];
+        voxelIdx[axis] += stepDir[axis] * stride;
     }
     return false;
 }

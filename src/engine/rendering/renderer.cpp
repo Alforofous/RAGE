@@ -225,6 +225,16 @@ namespace RAGE {
                 e.dimsY = dims.y;
                 e.dimsZ = dims.z;
                 e.voxelSize = v->voxelSize();
+
+                const OccupancyMipLayout &mip = v->occupancyMipLayout();
+                const auto levels = std::min<uint32_t>(static_cast<uint32_t>(mip.levelDims.size()), kMaxMipLevels);
+                e.mipLevelCount = static_cast<int32_t>(levels);
+                for (uint32_t L = 0; L < levels; ++L) {
+                    e.mipLevels[L][0] = static_cast<uint32_t>(mip.levelDims[L].x);
+                    e.mipLevels[L][1] = static_cast<uint32_t>(mip.levelDims[L].y);
+                    e.mipLevels[L][2] = static_cast<uint32_t>(mip.levelDims[L].z);
+                    e.mipLevels[L][3] = mip.levelByteOffsets[L];
+                }
             }
             std::memcpy(sceneCastersBuffer_->mappedData(), &scene, sizeof(scene));
         }
@@ -344,11 +354,23 @@ namespace RAGE {
         writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
 
         const VulkanBuffer *fallbackBuffer = shadowCasters_[0]->voxelBuffer();
+        const VulkanBuffer *fallbackMipBuffer = shadowCasters_[0]->occupancyMipBuffer();
+        if (fallbackMipBuffer == nullptr) {
+            fallbackMipBuffer = fallbackBuffer;
+        }
         for (uint32_t slot = 0; slot < kMaxSceneCasters; ++slot) {
             const VulkanBuffer *buf = (slot < shadowCasters_.size())
                                           ? shadowCasters_[slot]->voxelBuffer()
                                           : fallbackBuffer;
             writer.writeStorageBufferArray(set, 4, slot, *buf);
+
+            const VulkanBuffer *mipBuf = (slot < shadowCasters_.size())
+                                             ? shadowCasters_[slot]->occupancyMipBuffer()
+                                             : fallbackMipBuffer;
+            if (mipBuf == nullptr) {
+                mipBuf = fallbackMipBuffer;
+            }
+            writer.writeStorageBufferArray(set, 6, slot, *mipBuf);
         }
 
         writer.commit();

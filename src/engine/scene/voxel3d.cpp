@@ -1,4 +1,5 @@
 #include "voxel3d.hpp"
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
@@ -14,6 +15,7 @@ namespace RAGE {
             throw std::runtime_error("Voxel3D: voxelSize must be positive");
         }
         rebuildBuffer();
+        rebuildOccupancyMipLayout();
     }
 
     void Voxel3D::setVoxel(IVec3 c, Color rgba) {
@@ -38,6 +40,7 @@ namespace RAGE {
             }
         }
         dirty_ = true;
+        rebuildOccupancyMip();
     }
 
     void Voxel3D::fillSolid(Color rgba) {
@@ -48,6 +51,7 @@ namespace RAGE {
             data[i] = packed;
         }
         dirty_ = true;
+        rebuildOccupancyMip();
     }
 
     void Voxel3D::clear() {
@@ -63,6 +67,11 @@ namespace RAGE {
         }
         dims_ = newDims;
         rebuildBuffer();
+        rebuildOccupancyMipLayout();
+    }
+
+    const VulkanBuffer *Voxel3D::occupancyMipBuffer() {
+        return mipBuffer_.has_value() ? &*mipBuffer_ : nullptr;
     }
 
     void Voxel3D::prepareFrame(VulkanDescriptorWriter &writer, VkDescriptorSet set, PushConstantBuilder &pc,
@@ -122,4 +131,39 @@ namespace RAGE {
         }
         return static_cast<const uint32_t *>(buffer_->mappedData());
     }
+
+    void Voxel3D::rebuildOccupancyMipLayout() {
+        constexpr uint32_t kMaxLevels = 4;
+        mipLayout_ = computeOccupancyMipLayout(dims_, kMaxLevels);
+
+        if (mipLayout_.totalBytes > 0) {
+            mipBuffer_.emplace(allocator_->createBuffer({
+                .size = std::max(mipLayout_.totalBytes, 4u),
+                .usage = BufferUsage::Storage,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+            std::memset(mipBuffer_->mappedData(), 0, mipLayout_.totalBytes);
+        } else {
+            mipBuffer_.reset();
+        }
+    }
+
+    void Voxel3D::rebuildOccupancyMip() {
+        if (mipBuildProgress_) {
+            mipBuildProgress_(0.0f);
+        }
+        if (mipLayout_.totalBytes == 0 || !mipBuffer_.has_value()) {
+            if (mipBuildProgress_) {
+                mipBuildProgress_(1.0f);
+            }
+            return;
+        }
+        auto *const mipData = static_cast<uint8_t *>(mipBuffer_->mappedData());
+        buildOccupancyMip(mappedVoxels(), dims_, mipLayout_, mipData, mipBuildShouldCancel_);
+        if (mipBuildProgress_) {
+            mipBuildProgress_(1.0f);
+        }
+    }
+
+    void Voxel3D::rebuildOccupancyMipNow() { rebuildOccupancyMip(); }
 }

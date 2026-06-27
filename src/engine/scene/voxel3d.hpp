@@ -6,14 +6,13 @@
 #include <optional>
 #include "engine/rendering/frame_context.hpp"
 #include "engine/scene/renderable_node3d.hpp"
+#include "engine/scene/voxel_occupancy_mip.hpp"
 #include "gpu/vulkan/vulkan_allocator.hpp"
 #include "gpu/vulkan/vulkan_buffer.hpp"
 #include "gpu/vulkan/vulkan_descriptor_writer.hpp"
 #include "gpu/vulkan/vulkan_shader_module.hpp"
 #include "math/color.hpp"
 #include "math/ivec.hpp"
-#include "math/mat.hpp"
-#include "math/vec.hpp"
 
 namespace RAGE {
     /**
@@ -47,6 +46,41 @@ namespace RAGE {
         float voxelSize() const { return voxelSize_; }
         const VulkanBuffer *voxelBuffer() const { return buffer_.has_value() ? &*buffer_ : nullptr; }
 
+        /**
+         * Occupancy mip pyramid for empty-space skipping during DDA. Level L is a bit-packed
+         * grid of `ceil(dims / 2^(L+1))` cells, where each bit answers "is any voxel in the
+         * corresponding 2^(L+1) block occupied?". Levels stop when dims collapse to 1×1×1 or
+         * after a hard cap.
+         *
+         * Built eagerly inside the bulk-fill methods (`fillSolid`, `clear`, `fill`).
+         * `setVoxel` leaves the mip silently stale — fine while the renderer's `mipSkipEnabled`
+         * is false; callers doing live voxel edits should call `rebuildOccupancyMipNow()`
+         * afterwards (typically on a worker thread).
+         */
+        const VulkanBuffer *occupancyMipBuffer();
+        const OccupancyMipLayout &occupancyMipLayout() const { return mipLayout_; }
+
+        /**
+         * Force a synchronous mip rebuild. Called automatically by the bulk-fill methods;
+         * exposed publicly so callers can drive the build from a worker thread for async
+         * loading. The engine knows nothing about threads — the caller owns concurrency.
+         *
+         * Fires the `MipBuildProgress` callback (if set) at the start, between mip levels,
+         * and at completion. Progress values are in [0.0, 1.0]. Callback runs on the calling
+         * thread — if called from a worker, the callback fires on the worker too.
+         */
+        void rebuildOccupancyMipNow();
+
+        using MipBuildProgressHook = std::function<void(float progress)>;
+        void onMipBuildProgress(MipBuildProgressHook h) { mipBuildProgress_ = std::move(h); }
+
+        /**
+         * Cooperative cancellation. If the callback returns true between mip Z slices, the
+         * build aborts and the mip buffer is left partially-filled. Useful for app shutdown
+         * so an in-flight mip build doesn't block process exit.
+         */
+        void onMipBuildShouldCancel(MipBuildCancelFn h) { mipBuildShouldCancel_ = std::move(h); }
+
         void prepareFrame(VulkanDescriptorWriter &writer, VkDescriptorSet set, PushConstantBuilder &pc,
                           const FrameContext &frame) override;
 
@@ -55,6 +89,8 @@ namespace RAGE {
         void uploadDirty();
 
         void rebuildBuffer();
+        void rebuildOccupancyMipLayout();
+        void rebuildOccupancyMip();
         bool inBounds(IVec3 c) const;
         size_t coordToIndex(IVec3 c) const;
         uint32_t *mappedVoxels();
@@ -64,6 +100,10 @@ namespace RAGE {
         IVec3 dims_{};
         float voxelSize_ = 1.0f;
         std::optional<VulkanBuffer> buffer_;
+        std::optional<VulkanBuffer> mipBuffer_;
+        OccupancyMipLayout mipLayout_;
         bool dirty_ = false;
+        MipBuildProgressHook mipBuildProgress_;
+        MipBuildCancelFn mipBuildShouldCancel_;
     };
 }
