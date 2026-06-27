@@ -69,6 +69,7 @@ set(ENGINE_SOURCES
     src/engine/scene/voxel3d.cpp
     src/engine/scene/voxel_data.cpp
     src/engine/scene/voxel_occupancy_mip.cpp
+    src/engine/rendering/world_brick_grid.cpp
     src/engine/rendering/world_grid.cpp
 )
 
