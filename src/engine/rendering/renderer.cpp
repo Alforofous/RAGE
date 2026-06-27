@@ -1,15 +1,11 @@
 #include "renderer.hpp"
-#include <algorithm>
 #include <array>
 #include <cstring>
 #include <exception>
-#include <limits>
 #include <utility>
-#include "engine/rendering/world_grid.hpp"
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/frame_uniforms.hpp"
 #include "engine/rendering/pixel_debug.hpp"
-#include "engine/rendering/scene_casters.hpp"
 #include "engine/scene/camera.hpp"
 #include "engine/scene/directional_light.hpp"
 #include "engine/scene/node3d.hpp"
@@ -216,9 +212,9 @@ namespace RAGE {
     }
 
     void Renderer::collectShadowCasters(Node3D &node) {
-        if (shadowCasters_.size() >= kMaxSceneCasters) {
-            return;
-        }
+        // M3+M4: no fixed cap. World brick grid scales with the union of placements; the
+        // brick pool deduplicates identical content. Previously had a `kMaxSceneCasters`
+        // ceiling of 16 from the pre-M3 SceneCasters UBO — gone with that descriptor.
         auto *v = dynamic_cast<Voxel3D *>(&node);
         if (v != nullptr && v->voxelData() != nullptr) {
             shadowCasters_.push_back(v);
