@@ -150,6 +150,27 @@ namespace RAGE::App {
 #endif
     }
 
+    void Profiler::beginZone(const char *name) {
+#ifdef RAGE_PROFILING_TRACY
+        const size_t nameLen = std::strlen(name);
+        auto srcLoc =
+            ___tracy_alloc_srcloc_name(0, nullptr, 0, nullptr, 0, name, nameLen, 0xffaaaaee);
+        const auto ctx = ___tracy_emit_zone_begin_alloc(srcLoc, 1);
+        g_zoneStack.push_back(ctx);
+#else
+        (void)name;
+#endif
+    }
+
+    void Profiler::endZone() {
+#ifdef RAGE_PROFILING_TRACY
+        if (!g_zoneStack.empty()) {
+            ___tracy_emit_zone_end(g_zoneStack.back());
+            g_zoneStack.pop_back();
+        }
+#endif
+    }
+
     bool Profiler::isLinked() {
 #ifdef RAGE_PROFILING_TRACY
         return true;

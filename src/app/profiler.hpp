@@ -107,6 +107,44 @@ namespace RAGE::App {
         void message(const std::string &text);
 
         /**
+         * Open / close a profiling zone on the **calling thread**. Useful for app-level
+         * instrumentation outside the engine's standard phase callbacks — e.g. wrapping
+         * a worker-thread asset load so its duration shows up on that thread's Tracy
+         * timeline. Pair begin/end on the same thread; nesting is allowed and tracked
+         * per-thread.
+         *
+         * No-ops when this build doesn't link Tracy. The `name` string must remain valid
+         * until `endZone()` returns — string literals are fine.
+         */
+        void beginZone(const char *name);
+        void endZone();
+
+        /**
+         * RAII bracket around `beginZone()` / `endZone()`. Construct at the start of the
+         * region you want timed; the zone auto-closes at scope exit.
+         *
+         *     {
+         *         App::Profiler::Zone z(profiler, "VoxelLoad");
+         *         expensiveWork();
+         *     }
+         */
+        class Zone {
+        public:
+            Zone(Profiler &profiler, const char *name)
+                : profiler_(profiler) {
+                profiler_.beginZone(name);
+            }
+            ~Zone() { profiler_.endZone(); }
+            Zone(const Zone &) = delete;
+            Zone &operator=(const Zone &) = delete;
+            Zone(Zone &&) = delete;
+            Zone &operator=(Zone &&) = delete;
+
+        private:
+            Profiler &profiler_;
+        };
+
+        /**
          * True when this build links the profiler client (i.e. configured with
          * -DRAGE_ENABLE_PROFILING=ON). Production builds return false; the app uses this to
          * decide whether to show a "Launch Tracy" button or other dev-only UI. No runtime
