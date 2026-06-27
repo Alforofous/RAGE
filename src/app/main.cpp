@@ -88,9 +88,12 @@ namespace {
 
 int main(int argc, char **argv) {
     bool autoLaunchTracy = false;
+    bool sceneCubes = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--profile") == 0) {
             autoLaunchTracy = true;
+        } else if (std::strcmp(argv[i], "--scene=cubes") == 0) {
+            sceneCubes = true;
         }
     }
 
@@ -150,8 +153,38 @@ int main(int argc, char **argv) {
             };
 
             Node3D root;
-            root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
-            root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
+            if (sceneCubes) {
+                // Procedural cube-grid scene — hundreds of identical solid cubes, every brick
+                // bit-identical. Designed to demonstrate brick dedup (M4): no-dedup gives
+                // worst-case unique storage; dedup-on collapses the whole grid to ~1 brick.
+                constexpr int32_t kCubeDim = 16;
+                constexpr int kGridN = 16;          // 16×16 = 256 cubes
+                constexpr float kCubeSpacing = 1.5f;
+                constexpr uint32_t kCubeColor = 0xFFCCDDEEu;
+                const std::vector<uint32_t> cubeVoxels(
+                    static_cast<size_t>(kCubeDim) * kCubeDim * kCubeDim, kCubeColor);
+                const float kOriginX = -static_cast<float>(kGridN - 1) * kCubeSpacing * 0.5f;
+                const float kOriginZ = -16.0f;
+                for (int gx = 0; gx < kGridN; ++gx) {
+                    for (int gz = 0; gz < kGridN; ++gz) {
+                        auto cube = std::make_unique<Voxel3D>(renderer.brickPool(),
+                                                              IVec3(kCubeDim, kCubeDim, kCubeDim),
+                                                              kVoxelSize);
+                        cube->fillFromPackedRGBA8(cubeVoxels.data(),
+                                                  IVec3(kCubeDim, kCubeDim, kCubeDim));
+                        cube->setMaterial(voxelMaterial);
+                        cube->setPosition(Vec3(kOriginX + (static_cast<float>(gx) * kCubeSpacing),
+                                                -0.4f,
+                                                kOriginZ + (static_cast<float>(gz) * kCubeSpacing)));
+                        root.add(std::move(cube));
+                    }
+                }
+                std::fprintf(stdout, "Built procedural cube scene: %d×%d = %d cubes\n", kGridN,
+                             kGridN, kGridN * kGridN);
+            } else {
+                root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
+                root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
+            }
 
             std::atomic<bool> loaderDone{ false };
             App::Profiler profiler;
