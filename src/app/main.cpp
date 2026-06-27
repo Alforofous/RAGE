@@ -26,6 +26,7 @@
 #include "engine/scene/camera.hpp"
 #include "engine/scene/directional_light.hpp"
 #include "engine/scene/node3d.hpp"
+#include "engine/scene/svdag.hpp"
 #include "engine/scene/voxel3d.hpp"
 #include "free_fly_controller.hpp"
 #include "gpu/vulkan/vulkan_allocator.hpp"
@@ -91,7 +92,7 @@ namespace {
 
 int main(int argc, char **argv) {
     bool autoLaunchTracy = false;
-    enum class SceneKind { Sphere, Cubes, Terrain };
+    enum class SceneKind { Sphere, Cubes, Terrain, BigWorld };
     SceneKind scene = SceneKind::Sphere;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--profile") == 0) {
@@ -100,6 +101,8 @@ int main(int argc, char **argv) {
             scene = SceneKind::Cubes;
         } else if (std::strcmp(argv[i], "--scene=terrain") == 0) {
             scene = SceneKind::Terrain;
+        } else if (std::strcmp(argv[i], "--scene=bigworld") == 0) {
+            scene = SceneKind::BigWorld;
         }
     }
 
@@ -231,6 +234,63 @@ int main(int argc, char **argv) {
                 terrain->setPosition(Vec3(-6.4f, -3.2f, -16.0f));
                 root.add(std::move(terrain));
                 std::fprintf(stdout, "Built procedural terrain scene: %d×%d×%d voxels\n", kW, kH, kD);
+            } else if (scene == SceneKind::BigWorld) {
+                // Tiled procedural world. 8×8 grid of identical 128×32×128 terrain tiles
+                // (6.4 m × 1.6 m × 6.4 m each → world is ~51 m × 1.6 m × 51 m). All tiles
+                // share bit-identical content so M4 brick dedup collapses every tile's
+                // bricks across the whole grid, and the SVDAG sees a structurally
+                // repeating world brick grid with massive subtree dedup opportunity —
+                // both the spatial index *and* the voxel storage compress hard.
+                constexpr int32_t kTileW = 128;
+                constexpr int32_t kTileH = 32;
+                constexpr int32_t kTileD = 128;
+                constexpr int kGridN = 8;
+                const auto pack = [](int r, int g, int b) -> uint32_t {
+                    return static_cast<uint32_t>(r) | (static_cast<uint32_t>(g) << 8u)
+                           | (static_cast<uint32_t>(b) << 16u) | 0xFF000000u;
+                };
+                const uint32_t kStone = pack(0x70, 0x70, 0x70);
+                const uint32_t kDirt  = pack(0x6E, 0x4E, 0x35);
+                const uint32_t kGrass = pack(0x4A, 0x8A, 0x3D);
+                std::vector<uint32_t> tileVoxels(static_cast<size_t>(kTileW) * kTileH * kTileD, 0u);
+                for (int32_t z = 0; z < kTileD; ++z) {
+                    for (int32_t x = 0; x < kTileW; ++x) {
+                        const float fx = static_cast<float>(x);
+                        const float fz = static_cast<float>(z);
+                        const float h = (std::sin(fx * 0.10f) * 3.0f) + (std::sin(fz * 0.08f) * 2.0f)
+                                        + 14.0f;
+                        const int32_t height = std::clamp(static_cast<int32_t>(h), 1, kTileH - 1);
+                        for (int32_t y = 0; y <= height; ++y) {
+                            const int32_t depth = height - y;
+                            uint32_t color = kStone;
+                            if (depth == 0) {
+                                color = kGrass;
+                            } else if (depth <= 3) {
+                                color = kDirt;
+                            }
+                            const size_t idx = (static_cast<size_t>(z) * kTileH * kTileW)
+                                               + (static_cast<size_t>(y) * kTileW) + static_cast<size_t>(x);
+                            tileVoxels[idx] = color;
+                        }
+                    }
+                }
+                const float kTileWorld = static_cast<float>(kTileW) * kVoxelSize;
+                const float kOriginX = -kTileWorld * static_cast<float>(kGridN) * 0.5f;
+                const float kOriginZ = -kTileWorld * static_cast<float>(kGridN) * 0.5f;
+                for (int gx = 0; gx < kGridN; ++gx) {
+                    for (int gz = 0; gz < kGridN; ++gz) {
+                        auto tile = std::make_unique<Voxel3D>(renderer.brickPool(),
+                                                              IVec3(kTileW, kTileH, kTileD), kVoxelSize);
+                        tile->fillFromPackedRGBA8(tileVoxels.data(), IVec3(kTileW, kTileH, kTileD));
+                        tile->setMaterial(voxelMaterial);
+                        tile->setPosition(Vec3(kOriginX + (static_cast<float>(gx) * kTileWorld),
+                                                -1.6f,
+                                                kOriginZ + (static_cast<float>(gz) * kTileWorld)));
+                        root.add(std::move(tile));
+                    }
+                }
+                std::fprintf(stdout, "Built tiled big-world scene: %d×%d tiles of %d×%d×%d voxels\n",
+                             kGridN, kGridN, kTileW, kTileH, kTileD);
             } else {
                 root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
                 root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
@@ -280,6 +340,8 @@ int main(int argc, char **argv) {
             int heatmapMode = renderer.heatmapMode();
             int heatmapMaxSteps = renderer.heatmapMaxSteps();
             bool brickDedup = renderer.brickPool().isDedupEnabled();
+            Svdag svdagSnapshot{};
+            size_t svdagSnapshotGridBytes = 0;
             debugUi.setBuilder([&]() {
                 debugUi.beginPanel("RAGE Debug");
                 if (!loaderDone.load()) {
@@ -365,6 +427,31 @@ int main(int argc, char **argv) {
                 debugUi.separator();
                 debugUi.text("Total:          %.2f MB  (saved %.2f MB / %.0f%%)",
                              brickmapTotalMB, savingsMB, savingsPct);
+
+                debugUi.separatorText("SVDAG (preview)");
+                if (debugUi.button("Build SVDAG from world brick grid")) {
+                    const auto handles = renderer.worldBrickGrid().handles();
+                    const IVec3 dims = renderer.worldBrickGrid().dims();
+                    svdagSnapshotGridBytes = handles.size() * sizeof(BrickHandle);
+                    svdagSnapshot = buildSvdag(handles.data(), dims);
+                }
+                if (!svdagSnapshot.nodes.empty()) {
+                    const double svdagMB = static_cast<double>(svdagBytes(svdagSnapshot))
+                                           / (1024.0 * 1024.0);
+                    const double flatGridMB = static_cast<double>(svdagSnapshotGridBytes)
+                                              / (1024.0 * 1024.0);
+                    const double svdagSavedMB = flatGridMB - svdagMB;
+                    const double svdagSavedPct =
+                        flatGridMB > 0.0 ? (svdagSavedMB / flatGridMB) * 100.0 : 0.0;
+                    debugUi.text("Nodes:          %zu", svdagSnapshot.nodes.size());
+                    debugUi.text("Levels:         %d (paddedDim=%d)", svdagSnapshot.levels,
+                                 svdagSnapshot.paddedDim);
+                    debugUi.text("SVDAG size:     %.3f MB", svdagMB);
+                    debugUi.text("Flat grid:      %.3f MB", flatGridMB);
+                    debugUi.text("Saved vs grid:  %.3f MB (%.0f%%)", svdagSavedMB, svdagSavedPct);
+                } else {
+                    debugUi.text("(click to compute compression vs world brick grid)");
+                }
 
                 debugUi.endPanel();
             });
