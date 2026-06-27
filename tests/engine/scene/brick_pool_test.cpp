@@ -102,3 +102,99 @@ TEST(BrickPool, GrowsBeyondInitialCapacity) {
     EXPECT_EQ(pool.allocated(), 100u);
     EXPECT_GE(pool.capacity(), 101u);
 }
+
+TEST(BrickPool, DedupOffAlwaysAllocatesFresh) {
+    BrickPool pool;
+    pool.setDedupEnabled(false);
+    Brick contents{};
+    contents.voxels[0] = 0xDEADBEEFu;
+
+    const BrickHandle a = pool.acquireBrick(contents);
+    const BrickHandle b = pool.acquireBrick(contents);
+    EXPECT_NE(a, b);
+    EXPECT_EQ(pool.allocated(), 2u);
+    EXPECT_EQ(pool.logicalBricks(), 2u);
+}
+
+TEST(BrickPool, DedupOnReusesIdenticalContent) {
+    BrickPool pool;
+    Brick contents{};
+    contents.voxels[0] = 0xDEADBEEFu;
+
+    const BrickHandle a = pool.acquireBrick(contents);
+    const BrickHandle b = pool.acquireBrick(contents);
+    EXPECT_EQ(a, b);
+    EXPECT_EQ(pool.allocated(), 1u);
+    EXPECT_EQ(pool.logicalBricks(), 2u);
+    EXPECT_EQ(pool.refCount(a), 2u);
+}
+
+TEST(BrickPool, DedupOnAllocatesNewWhenContentDiffers) {
+    BrickPool pool;
+
+    Brick a{};
+    a.voxels[0] = 0xAAAAAAAAu;
+    Brick b{};
+    b.voxels[0] = 0xBBBBBBBBu;
+
+    const BrickHandle ha = pool.acquireBrick(a);
+    const BrickHandle hb = pool.acquireBrick(b);
+    EXPECT_NE(ha, hb);
+    EXPECT_EQ(pool.allocated(), 2u);
+}
+
+TEST(BrickPool, ReleaseDecrementsRefcountAndFreesAtZero) {
+    BrickPool pool;
+    Brick contents{};
+    contents.voxels[0] = 0x12345678u;
+
+    const BrickHandle h = pool.acquireBrick(contents);
+    pool.acquireBrick(contents);
+    EXPECT_EQ(pool.refCount(h), 2u);
+    EXPECT_EQ(pool.allocated(), 1u);
+
+    pool.release(h);
+    EXPECT_EQ(pool.refCount(h), 1u);
+    EXPECT_EQ(pool.allocated(), 1u);
+
+    pool.release(h);
+    EXPECT_EQ(pool.allocated(), 0u);
+}
+
+TEST(BrickPool, RemoveBrickFromDedupPreventsFutureDedupHits) {
+    BrickPool pool;
+    Brick contents{};
+    contents.voxels[0] = 0xCAFEBABEu;
+
+    const BrickHandle a = pool.acquireBrick(contents);
+    pool.removeBrickFromDedup(a);
+
+    const BrickHandle b = pool.acquireBrick(contents);
+    EXPECT_NE(a, b);
+    EXPECT_EQ(pool.allocated(), 2u);
+}
+
+TEST(BrickPool, LogicalBricksMatchesAllocatedWhenDedupOff) {
+    BrickPool pool;
+    pool.setDedupEnabled(false);
+    Brick contents{};
+    contents.voxels[0] = 0x1u;
+
+    for (int i = 0; i < 50; ++i) {
+        pool.acquireBrick(contents);
+    }
+    EXPECT_EQ(pool.allocated(), 50u);
+    EXPECT_EQ(pool.logicalBricks(), 50u);
+}
+
+TEST(BrickPool, LogicalBricksDivergesFromAllocatedWhenDedupOn) {
+    BrickPool pool;
+    Brick contents{};
+    contents.voxels[0] = 0x1u;
+
+    for (int i = 0; i < 50; ++i) {
+        pool.acquireBrick(contents);
+    }
+    EXPECT_EQ(pool.allocated(), 1u);
+    EXPECT_EQ(pool.logicalBricks(), 50u);
+}

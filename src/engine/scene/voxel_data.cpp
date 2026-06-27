@@ -76,6 +76,16 @@ namespace RAGE {
             }
             h = pool_->allocate();
             handles_[flat] = h;
+        } else if (pool_->refCount(h) > 1u) {
+            // Copy-on-write: shared with other VoxelData entries, must clone.
+            const BrickHandle newH = pool_->allocate();
+            pool_->brick(newH) = pool_->brick(h);
+            pool_->release(h);
+            h = newH;
+            handles_[flat] = h;
+        } else {
+            // Exclusive use; remove from dedup map (about to mutate its content).
+            pool_->removeBrickFromDedup(h);
         }
         const int32_t lx = c.x % Brick::kDim;
         const int32_t ly = c.y % Brick::kDim;
@@ -132,23 +142,33 @@ namespace RAGE {
                         continue;
                     }
 
-                    const size_t flat = brickFlatIndex({ bx, by, bz });
-                    BrickHandle h = handles_[flat];
-                    if (h == kEmptyBrick) {
-                        h = pool_->allocate();
-                        handles_[flat] = h;
-                    }
-                    Brick &brick = pool_->brick(h);
+                    Brick local{};
                     for (int32_t z = z0; z < z1; ++z) {
                         for (int32_t y = y0; y < y1; ++y) {
                             for (int32_t x = x0; x < x1; ++x) {
-                                brick.voxels[brickVoxelIndex(x - x0, y - y0, z - z0)] = src[srcFlat(x, y, z)];
+                                local.voxels[brickVoxelIndex(x - x0, y - y0, z - z0)] = src[srcFlat(x, y, z)];
                             }
                         }
                     }
-                    pool_->markDirty(h);
+                    const size_t flat = brickFlatIndex({ bx, by, bz });
+                    if (handles_[flat] != kEmptyBrick) {
+                        pool_->release(handles_[flat]);
+                    }
+                    handles_[flat] = pool_->acquireBrick(local);
                 }
             }
+        }
+    }
+
+    void VoxelData::rebuildBricks() {
+        for (size_t i = 0; i < handles_.size(); ++i) {
+            if (handles_[i] == kEmptyBrick) {
+                continue;
+            }
+            const Brick snapshot = pool_->brick(handles_[i]);
+            const BrickHandle newH = pool_->acquireBrick(snapshot);
+            pool_->release(handles_[i]);
+            handles_[i] = newH;
         }
     }
 }

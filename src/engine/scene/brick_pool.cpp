@@ -1,10 +1,26 @@
 #include "brick_pool.hpp"
 
+#include <cstring>
 #include <stdexcept>
 #include <string>
 
 namespace RAGE {
     namespace {
+        size_t hashBrick(const Brick &b) {
+            constexpr size_t kFnvSeed = 14695981039346656037ull;
+            constexpr size_t kFnvPrime = 1099511628211ull;
+            size_t h = kFnvSeed;
+            for (size_t i = 0; i < Brick::kVoxelCount; ++i) {
+                h ^= static_cast<size_t>(b.voxels[i]);
+                h *= kFnvPrime;
+            }
+            return h;
+        }
+
+        bool brickEqual(const Brick &a, const Brick &b) {
+            return std::memcmp(a.voxels, b.voxels, sizeof(Brick::voxels)) == 0;
+        }
+
         void throwIfInvalid(BrickHandle h, size_t capacity) {
             if (h == kEmptyBrick || h >= capacity) {
                 throw std::out_of_range("BrickPool: invalid BrickHandle");
@@ -13,19 +29,16 @@ namespace RAGE {
     }
 
     BrickPool::BrickPool() {
-        // Reserve max capacity upfront — bricks_ never grows past this, so the
-        // references returned by `brick()` stay valid across concurrent `allocate()`
-        // calls (worker thread). The dirty-list vectors are reserved at the same size
-        // so `markDirty` never reallocates either.
         bricks_.reserve(kMaxBricks);
+        refCount_.reserve(kMaxBricks);
         dirtyFlags_.reserve(kMaxBricks);
         dirtyHandles_.reserve(kMaxBricks);
-        bricks_.emplace_back();     // index 0 = sentinel
+        bricks_.emplace_back();
+        refCount_.push_back(0u);
         dirtyFlags_.push_back(0u);
     }
 
-    BrickHandle BrickPool::allocate() {
-        std::lock_guard lock(mutex_);
+    BrickHandle BrickPool::allocateSlotLocked_() {
         BrickHandle h = kEmptyBrick;
         if (!freeList_.empty()) {
             h = freeList_.back();
@@ -37,13 +50,38 @@ namespace RAGE {
             }
             h = static_cast<BrickHandle>(bricks_.size());
             bricks_.emplace_back();
+            refCount_.push_back(0u);
             dirtyFlags_.push_back(0u);
         }
-        if (dirtyFlags_[h] == 0u) {
-            dirtyFlags_[h] = 1u;
-            dirtyHandles_.push_back(h);
-        }
+        refCount_[h] = 1u;
+        markDirtyLocked_(h);
         return h;
+    }
+
+    BrickHandle BrickPool::allocate() {
+        std::lock_guard lock(mutex_);
+        return allocateSlotLocked_();
+    }
+
+    BrickHandle BrickPool::acquireBrick(const Brick &contents) {
+        std::lock_guard lock(mutex_);
+        if (dedupEnabled_) {
+            const size_t h = hashBrick(contents);
+            const auto range = contentHashToHandle_.equal_range(h);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (brickEqual(bricks_[it->second], contents)) {
+                    ++refCount_[it->second];
+                    return it->second;
+                }
+            }
+            const BrickHandle handle = allocateSlotLocked_();
+            bricks_[handle] = contents;
+            contentHashToHandle_.insert({ h, handle });
+            return handle;
+        }
+        const BrickHandle handle = allocateSlotLocked_();
+        bricks_[handle] = contents;
+        return handle;
     }
 
     void BrickPool::release(BrickHandle h) {
@@ -52,7 +90,14 @@ namespace RAGE {
         }
         std::lock_guard lock(mutex_);
         throwIfInvalid(h, bricks_.size());
-        freeList_.push_back(h);
+        if (refCount_[h] == 0u) {
+            return;
+        }
+        --refCount_[h];
+        if (refCount_[h] == 0u) {
+            removeFromDedupLocked_(h);
+            freeList_.push_back(h);
+        }
     }
 
     Brick &BrickPool::brick(BrickHandle h) {
@@ -65,14 +110,44 @@ namespace RAGE {
         return bricks_[h];
     }
 
-    size_t BrickPool::capacity() const {
+    uint32_t BrickPool::refCount(BrickHandle h) const {
+        if (h == kEmptyBrick) {
+            return 0u;
+        }
         std::lock_guard lock(mutex_);
-        return bricks_.size();
+        throwIfInvalid(h, bricks_.size());
+        return refCount_[h];
     }
 
-    size_t BrickPool::allocated() const {
+    void BrickPool::removeBrickFromDedup(BrickHandle h) {
+        if (h == kEmptyBrick) {
+            return;
+        }
         std::lock_guard lock(mutex_);
-        return bricks_.size() - 1u - freeList_.size();
+        throwIfInvalid(h, bricks_.size());
+        removeFromDedupLocked_(h);
+    }
+
+    void BrickPool::removeFromDedupLocked_(BrickHandle h) {
+        if (contentHashToHandle_.empty()) {
+            return;
+        }
+        const size_t hash = hashBrick(bricks_[h]);
+        auto range = contentHashToHandle_.equal_range(hash);
+        for (auto it = range.first; it != range.second; ++it) {
+            if (it->second == h) {
+                contentHashToHandle_.erase(it);
+                return;
+            }
+        }
+    }
+
+    void BrickPool::markDirtyLocked_(BrickHandle h) {
+        if (dirtyFlags_[h] != 0u) {
+            return;
+        }
+        dirtyFlags_[h] = 1u;
+        dirtyHandles_.push_back(h);
     }
 
     void BrickPool::markDirty(BrickHandle h) {
@@ -81,11 +156,7 @@ namespace RAGE {
         }
         std::lock_guard lock(mutex_);
         throwIfInvalid(h, bricks_.size());
-        if (dirtyFlags_[h] != 0u) {
-            return;
-        }
-        dirtyFlags_[h] = 1u;
-        dirtyHandles_.push_back(h);
+        markDirtyLocked_(h);
     }
 
     std::vector<BrickHandle> BrickPool::drainDirty() {
@@ -96,5 +167,34 @@ namespace RAGE {
         std::vector<BrickHandle> out;
         std::swap(out, dirtyHandles_);
         return out;
+    }
+
+    size_t BrickPool::capacity() const {
+        std::lock_guard lock(mutex_);
+        return bricks_.size();
+    }
+
+    size_t BrickPool::allocated() const {
+        std::lock_guard lock(mutex_);
+        return bricks_.size() - 1u - freeList_.size();
+    }
+
+    size_t BrickPool::logicalBricks() const {
+        std::lock_guard lock(mutex_);
+        size_t total = 0;
+        for (size_t i = 1; i < refCount_.size(); ++i) {
+            total += refCount_[i];
+        }
+        return total;
+    }
+
+    void BrickPool::setDedupEnabled(bool enabled) {
+        std::lock_guard lock(mutex_);
+        dedupEnabled_ = enabled;
+    }
+
+    bool BrickPool::isDedupEnabled() const {
+        std::lock_guard lock(mutex_);
+        return dedupEnabled_;
     }
 }

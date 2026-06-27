@@ -230,6 +230,7 @@ int main(int argc, char **argv) {
             bool mipSkipEnabled = renderer.mipSkipEnabled();
             int heatmapMode = renderer.heatmapMode();
             int heatmapMaxSteps = renderer.heatmapMaxSteps();
+            bool brickDedup = renderer.brickPool().isDedupEnabled();
             debugUi.setBuilder([&]() {
                 debugUi.beginPanel("RAGE Debug");
                 if (!loaderDone.load()) {
@@ -266,7 +267,22 @@ int main(int argc, char **argv) {
                 }
 
                 debugUi.separatorText("Memory");
-                const auto bricksAllocated = renderer.brickPool().allocated();
+                if (debugUi.checkbox("Brick dedup", &brickDedup)) {
+                    renderer.brickPool().setDedupEnabled(brickDedup);
+                    std::function<void(Node3D &)> rebuildWalk = [&](Node3D &node) {
+                        if (auto *v = dynamic_cast<Voxel3D *>(&node)) {
+                            if (VoxelData *vd = v->voxelData()) {
+                                vd->rebuildBricks();
+                            }
+                        }
+                        for (const auto &child : node.children()) {
+                            rebuildWalk(*child);
+                        }
+                    };
+                    rebuildWalk(root);
+                }
+                const auto bricksUnique = renderer.brickPool().allocated();
+                const auto bricksLogical = renderer.brickPool().logicalBricks();
                 const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())
                                       / (1024.0 * 1024.0);
                 size_t handleGridBytes = 0;
@@ -288,14 +304,18 @@ int main(int argc, char **argv) {
                 const double denseMB = static_cast<double>(denseBytes) / (1024.0 * 1024.0);
                 const double savingsMB = denseMB - brickmapTotalMB;
                 const double savingsPct = denseMB > 0.0 ? (savingsMB / denseMB) * 100.0 : 0.0;
+                const double dedupRatio =
+                    bricksUnique > 0 ? static_cast<double>(bricksLogical) / static_cast<double>(bricksUnique) : 1.0;
 
                 debugUi.text("Brickmap (sparse)");
-                debugUi.text("  Bricks: %zu / %zu", bricksAllocated, BrickPool::kMaxBricks);
-                debugUi.text("  Pool:         %.2f MB", poolMB);
-                debugUi.text("  Handle grids: %.2f KB", handleGridKB);
-                debugUi.text("  Total:        %.2f MB", brickmapTotalMB);
+                debugUi.text("  Bricks unique:  %zu / %zu", bricksUnique, BrickPool::kMaxBricks);
+                debugUi.text("  Bricks logical: %zu", bricksLogical);
+                debugUi.text("  Dedup ratio:    %.2fx", dedupRatio);
+                debugUi.text("  Pool:           %.2f MB", poolMB);
+                debugUi.text("  Handle grids:   %.2f KB", handleGridKB);
+                debugUi.text("  Total:          %.2f MB", brickmapTotalMB);
                 debugUi.text("If dense (per-Voxel3D)");
-                debugUi.text("  Total:        %.2f MB", denseMB);
+                debugUi.text("  Total:          %.2f MB", denseMB);
                 debugUi.text("Sparsity saved: %.2f MB (%.1f%%)", savingsMB, savingsPct);
 
                 debugUi.endPanel();
