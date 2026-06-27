@@ -59,10 +59,16 @@ namespace RAGE {
         const Brick &brick(BrickHandle h) const;
 
         /** Total brick slots (including index 0 and currently-free slots). */
-        size_t capacity() const { return bricks_.size(); }
+        size_t capacity() const;
 
         /** Number of bricks currently allocated (excluding index 0 + free list). */
-        size_t allocated() const { return bricks_.size() - 1u - freeList_.size(); }
+        size_t allocated() const;
+
+        /** Pool memory currently used by allocated bricks (excluding sentinel, free list). */
+        size_t allocatedBytes() const { return allocated() * sizeof(Brick); }
+
+        /** Pool memory reserved upfront, regardless of how many bricks are in use. */
+        size_t reservedBytes() const { return kMaxBricks * sizeof(Brick); }
 
         /**
          * Mark a brick as needing GPU re-upload. Cheap to call repeatedly per frame
@@ -78,7 +84,7 @@ namespace RAGE {
         std::vector<BrickHandle> drainDirty();
 
     private:
-        mutable std::mutex mutex_;
+        mutable std::mutex mutex_;   // already const-lockable; both kept here on purpose
         std::vector<Brick> bricks_;
         std::vector<BrickHandle> freeList_;
         std::vector<uint8_t> dirtyFlags_;       // 0/1 per brick handle

@@ -71,6 +71,19 @@ namespace RAGE {
         BrickHandle handleAt(IVec3 brickCoord) const;
         std::span<const BrickHandle> handles() const { return handles_; }
 
+        /** Size of the handle-grid storage (excluding the bricks themselves in the pool). */
+        size_t handleGridBytes() const { return handles_.size() * sizeof(BrickHandle); }
+
+        /**
+         * What dense storage for the same `voxelDims` would have cost (4 bytes per voxel —
+         * the encoding the brick pool also uses internally). Used by the memory tracker UI
+         * to show the sparse-vs-dense savings.
+         */
+        size_t denseEquivalentBytes() const {
+            return static_cast<size_t>(voxelDims_.x) * static_cast<size_t>(voxelDims_.y)
+                   * static_cast<size_t>(voxelDims_.z) * sizeof(uint32_t);
+        }
+
     private:
         size_t brickFlatIndex(IVec3 brickCoord) const;
 

@@ -230,6 +230,34 @@ int main(int argc, char **argv) {
                 if (debugUi.sliderFloat("Speed (x)", &speedMult, 0.1f, 10.0f)) {
                     controller.setSpeedMultiplier(speedMult);
                 }
+
+                debugUi.separatorText("Memory");
+                const auto bricksAllocated = renderer.brickPool().allocated();
+                const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())
+                                      / (1024.0 * 1024.0);
+                size_t handleGridBytes = 0;
+                size_t denseBytes = 0;
+                for (const auto &job : loadJobs) {
+                    if (const VoxelData *vd = job->target->voxelData()) {
+                        handleGridBytes += vd->handleGridBytes();
+                        denseBytes += vd->denseEquivalentBytes();
+                    }
+                }
+                const double handleGridMB = static_cast<double>(handleGridBytes) / (1024.0 * 1024.0);
+                const double brickmapTotalMB = poolMB + handleGridMB;
+                const double denseMB = static_cast<double>(denseBytes) / (1024.0 * 1024.0);
+                const double savingsMB = denseMB - brickmapTotalMB;
+                const double savingsPct = denseMB > 0.0 ? (savingsMB / denseMB) * 100.0 : 0.0;
+
+                debugUi.text("Brickmap (sparse)");
+                debugUi.text("  Bricks: %zu / %zu", bricksAllocated, BrickPool::kMaxBricks);
+                debugUi.text("  Pool:         %.2f MB", poolMB);
+                debugUi.text("  Handle grids: %.2f MB", handleGridMB);
+                debugUi.text("  Total:        %.2f MB", brickmapTotalMB);
+                debugUi.text("If dense (per-Voxel3D)");
+                debugUi.text("  Total:        %.2f MB", denseMB);
+                debugUi.text("Sparsity saved: %.2f MB (%.1f%%)", savingsMB, savingsPct);
+
                 debugUi.endPanel();
             });
 
@@ -259,6 +287,11 @@ int main(int argc, char **argv) {
                     window.setTitle(titleBuf.data());
                     profiler.plot("fps", fps);
                     profiler.plot("frame_ms", avgMs);
+                    profiler.plot("brick_count",
+                                  static_cast<double>(renderer.brickPool().allocated()));
+                    profiler.plot("brick_pool_mb",
+                                  static_cast<double>(renderer.brickPool().allocatedBytes())
+                                      / (1024.0 * 1024.0));
                     fpsLastUpdate = now;
                     fpsAccumDt = 0.0;
                     fpsAccumFrames = 0;

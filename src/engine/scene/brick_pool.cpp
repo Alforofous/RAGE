@@ -65,6 +65,16 @@ namespace RAGE {
         return bricks_[h];
     }
 
+    size_t BrickPool::capacity() const {
+        std::lock_guard lock(mutex_);
+        return bricks_.size();
+    }
+
+    size_t BrickPool::allocated() const {
+        std::lock_guard lock(mutex_);
+        return bricks_.size() - 1u - freeList_.size();
+    }
+
     void BrickPool::markDirty(BrickHandle h) {
         if (h == kEmptyBrick) {
             return;
