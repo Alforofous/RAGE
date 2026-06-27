@@ -107,6 +107,14 @@ namespace RAGE::App {
         void message(const std::string &text);
 
         /**
+         * Label the **calling thread** so its row in the profiler timeline shows this
+         * name instead of an auto-generated id. Call from inside the worker exactly
+         * once, near its entry. Name pointer needs to outlive the run; string literals
+         * are fine. No-op on production builds.
+         */
+        void setThreadName(const char *name);
+
+        /**
          * Open / close a profiling zone on the **calling thread**. Useful for app-level
          * instrumentation outside the engine's standard phase callbacks — e.g. wrapping
          * a worker-thread asset load so its duration shows up on that thread's Tracy
@@ -163,6 +171,14 @@ namespace RAGE::App {
 
         /** True if a previously-spawned Tracy GUI child is still alive. */
         bool isProfilerGuiRunning();
+
+        /**
+         * True when the profiler client has an active connection to a server. With Tracy's
+         * on-demand mode (RAGE_DEV_BUILD default) zones aren't recorded until a server is
+         * connected — call this before kicking off short-lived work you want captured.
+         * Returns false on production builds (no client linked).
+         */
+        bool isConnected() const;
 
     private:
         // GPU-context handle owned by the wrapper. Kept opaque so we don't leak Tracy types.

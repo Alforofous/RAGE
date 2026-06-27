@@ -150,6 +150,14 @@ namespace RAGE::App {
 #endif
     }
 
+    void Profiler::setThreadName(const char *name) {
+#ifdef RAGE_PROFILING_TRACY
+        ___tracy_set_thread_name(name);
+#else
+        (void)name;
+#endif
+    }
+
     void Profiler::beginZone(const char *name) {
 #ifdef RAGE_PROFILING_TRACY
         const size_t nameLen = std::strlen(name);
@@ -168,6 +176,14 @@ namespace RAGE::App {
             ___tracy_emit_zone_end(g_zoneStack.back());
             g_zoneStack.pop_back();
         }
+#endif
+    }
+
+    bool Profiler::isConnected() const {
+#ifdef RAGE_PROFILING_TRACY
+        return ___tracy_connected() != 0;
+#else
+        return false;
 #endif
     }
 
