@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <memory>
 #include <numbers>
@@ -270,14 +271,20 @@ int main(int argc, char **argv) {
                                       / (1024.0 * 1024.0);
                 size_t handleGridBytes = 0;
                 size_t denseBytes = 0;
-                for (const auto &job : loadJobs) {
-                    if (const VoxelData *vd = job->target->voxelData()) {
-                        handleGridBytes += vd->handleGridBytes();
-                        denseBytes += vd->denseEquivalentBytes();
+                std::function<void(const Node3D &)> walkScene = [&](const Node3D &node) {
+                    if (const auto *v = dynamic_cast<const Voxel3D *>(&node)) {
+                        if (const VoxelData *vd = v->voxelData()) {
+                            handleGridBytes += vd->handleGridBytes();
+                            denseBytes += vd->denseEquivalentBytes();
+                        }
                     }
-                }
-                const double handleGridMB = static_cast<double>(handleGridBytes) / (1024.0 * 1024.0);
-                const double brickmapTotalMB = poolMB + handleGridMB;
+                    for (const auto &child : node.children()) {
+                        walkScene(*child);
+                    }
+                };
+                walkScene(root);
+                const double handleGridKB = static_cast<double>(handleGridBytes) / 1024.0;
+                const double brickmapTotalMB = poolMB + (handleGridKB / 1024.0);
                 const double denseMB = static_cast<double>(denseBytes) / (1024.0 * 1024.0);
                 const double savingsMB = denseMB - brickmapTotalMB;
                 const double savingsPct = denseMB > 0.0 ? (savingsMB / denseMB) * 100.0 : 0.0;
@@ -285,7 +292,7 @@ int main(int argc, char **argv) {
                 debugUi.text("Brickmap (sparse)");
                 debugUi.text("  Bricks: %zu / %zu", bricksAllocated, BrickPool::kMaxBricks);
                 debugUi.text("  Pool:         %.2f MB", poolMB);
-                debugUi.text("  Handle grids: %.2f MB", handleGridMB);
+                debugUi.text("  Handle grids: %.2f KB", handleGridKB);
                 debugUi.text("  Total:        %.2f MB", brickmapTotalMB);
                 debugUi.text("If dense (per-Voxel3D)");
                 debugUi.text("  Total:        %.2f MB", denseMB);
