@@ -341,7 +341,7 @@ namespace RAGE {
             auto *poolDst = static_cast<Brick *>(brickPoolBuffer_->mappedData());
             const std::vector<BrickHandle> dirty = brickPool_.drainDirty();
             for (BrickHandle h : dirty) {
-                poolDst[h] = brickPool_.brick(h);
+                poolDst[h.id] = brickPool_.brick(h);
             }
 
             // GPU-resident SVDAG cache. Builds + uploads only when the source brick

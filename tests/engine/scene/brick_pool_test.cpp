@@ -63,8 +63,8 @@ TEST(BrickPool, ReleaseOfEmptyHandleIsNoOp) {
 TEST(BrickPool, AccessingEmptyOrOutOfRangeHandleThrows) {
     BrickPool pool;
     EXPECT_THROW(pool.brick(kEmptyBrick), std::out_of_range);
-    EXPECT_THROW(pool.brick(999u), std::out_of_range);
-    EXPECT_THROW(pool.release(999u), std::out_of_range);
+    EXPECT_THROW(pool.brick(BrickHandle{ 999u }), std::out_of_range);
+    EXPECT_THROW(pool.release(BrickHandle{ 999u }), std::out_of_range);
 }
 
 TEST(BrickPool, MarkDirtyDedupesRepeatedCallsForSameHandle) {

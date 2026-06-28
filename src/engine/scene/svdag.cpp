@@ -63,9 +63,9 @@ namespace RAGE {
         }
     }
 
-    Svdag buildSvdag(const uint32_t *gridHandles, IVec3 gridDims) {
+    Svdag buildSvdag(std::span<const BrickHandle> gridHandles, IVec3 gridDims) {
         Svdag svdag{};
-        if (gridDims.x <= 0 || gridDims.y <= 0 || gridDims.z <= 0 || gridHandles == nullptr) {
+        if (gridDims.x <= 0 || gridDims.y <= 0 || gridDims.z <= 0 || gridHandles.empty()) {
             return svdag;
         }
 
@@ -102,13 +102,13 @@ namespace RAGE {
                                 const int32_t sx = (x * 2) + dx;
                                 const int32_t sy = (y * 2) + dy;
                                 const int32_t sz = (z * 2) + dz;
-                                uint32_t handle = kEmptyBrick;
+                                BrickHandle handle = kEmptyBrick;
                                 if (sx < gridDims.x && sy < gridDims.y && sz < gridDims.z) {
                                     handle = gridHandles[(static_cast<size_t>(sz) * gridDims.x * gridDims.y)
                                                           + (static_cast<size_t>(sy) * gridDims.x)
                                                           + static_cast<size_t>(sx)];
                                 }
-                                node.children[(dz * 4) + (dy * 2) + dx] = handle;
+                                node.children[(dz * 4) + (dy * 2) + dx] = handle.id;
                             }
                         }
                     }

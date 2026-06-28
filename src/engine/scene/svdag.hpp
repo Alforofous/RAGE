@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 #include "engine/scene/brick.hpp"
 #include "math/ivec.hpp"
@@ -35,7 +36,7 @@ namespace RAGE {
     // how cross-level dedup collapses both into a single physical node (index 0). If
     // this ever diverges, the builder's `nodeIsEmpty` check and the shader's
     // `current == 0u` early-exit both silently misclassify entire subtrees.
-    static_assert(kEmptyBrick == kEmptySvdagNode,
+    static_assert(kEmptyBrick.id == kEmptySvdagNode,
                   "SVDAG cross-level dedup requires the empty-brick and empty-subtree sentinels to share a value");
 
     /**
@@ -68,7 +69,7 @@ namespace RAGE {
      * brick handles, and at every inner level on 8-tuples of child node indices. Empty
      * subtrees are folded under the `kEmptySvdagNode` sentinel.
      */
-    Svdag buildSvdag(const uint32_t *gridHandles, IVec3 gridDims);
+    Svdag buildSvdag(std::span<const BrickHandle> gridHandles, IVec3 gridDims);
 
     /** Total bytes the SVDAG would occupy in a GPU buffer (excluding `rootIndex` / metadata). */
     inline size_t svdagBytes(const Svdag &svdag) { return svdag.nodes.size() * sizeof(SvdagNode); }

@@ -31,9 +31,26 @@ namespace RAGE {
      * Pool index into a `BrickPool`. Zero is reserved as the "no brick" sentinel so a
      * default-zero-initialized world grid means "empty everywhere"; valid handles are
      * 1..N. Treat as opaque — never arithmetic on a handle outside the pool.
+     *
+     * Strong-typedef wrapping a `uint32_t`: explicit construction blocks accidental
+     * conversion from arbitrary integers, and the wrapped layout matches a raw `uint32_t`
+     * by size + alignment so a `std::vector<BrickHandle>` can be uploaded to a GPU SSBO
+     * via memcpy without per-element conversion.
      */
-    using BrickHandle = uint32_t;
-    inline constexpr BrickHandle kEmptyBrick = 0u;
+    struct BrickHandle {
+        uint32_t id = 0;
+
+        constexpr BrickHandle() = default;
+        constexpr explicit BrickHandle(uint32_t v) : id(v) {}
+
+        constexpr bool operator==(const BrickHandle &) const = default;
+        constexpr bool operator!=(const BrickHandle &) const = default;
+    };
+    static_assert(sizeof(BrickHandle) == sizeof(uint32_t),
+                  "BrickHandle must be layout-compatible with uint32_t for GPU upload");
+    static_assert(alignof(BrickHandle) == alignof(uint32_t));
+
+    inline constexpr BrickHandle kEmptyBrick{};
 
     /** Flat index within a brick, 0..511. */
     inline constexpr size_t brickVoxelIndex(int32_t x, int32_t y, int32_t z) {

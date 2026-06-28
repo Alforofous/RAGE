@@ -22,7 +22,7 @@ namespace RAGE {
         }
 
         void throwIfInvalid(BrickHandle h, size_t capacity) {
-            if (h == kEmptyBrick || h >= capacity) {
+            if (h == kEmptyBrick || h.id >= capacity) {
                 throw std::out_of_range("BrickPool: invalid BrickHandle");
             }
         }
@@ -43,17 +43,17 @@ namespace RAGE {
         if (!freeList_.empty()) {
             h = freeList_.back();
             freeList_.pop_back();
-            bricks_[h] = Brick{};
+            bricks_[h.id] = Brick{};
         } else {
             if (bricks_.size() >= kMaxBricks) {
                 throw std::runtime_error("BrickPool: exhausted (max bricks = " + std::to_string(kMaxBricks) + ")");
             }
-            h = static_cast<BrickHandle>(bricks_.size());
+            h = BrickHandle{ static_cast<uint32_t>(bricks_.size()) };
             bricks_.emplace_back();
             refCount_.push_back(0u);
             dirtyFlags_.push_back(0u);
         }
-        refCount_[h] = 1u;
+        refCount_[h.id] = 1u;
         markDirtyLocked_(h);
         return h;
     }
@@ -69,18 +69,18 @@ namespace RAGE {
             const size_t h = hashBrick(contents);
             const auto range = contentHashToHandle_.equal_range(h);
             for (auto it = range.first; it != range.second; ++it) {
-                if (brickEqual(bricks_[it->second], contents)) {
-                    ++refCount_[it->second];
+                if (brickEqual(bricks_[it->second.id], contents)) {
+                    ++refCount_[it->second.id];
                     return it->second;
                 }
             }
             const BrickHandle handle = allocateSlotLocked_();
-            bricks_[handle] = contents;
+            bricks_[handle.id] = contents;
             contentHashToHandle_.insert({ h, handle });
             return handle;
         }
         const BrickHandle handle = allocateSlotLocked_();
-        bricks_[handle] = contents;
+        bricks_[handle.id] = contents;
         return handle;
     }
 
@@ -90,11 +90,11 @@ namespace RAGE {
         }
         std::lock_guard lock(mutex_);
         throwIfInvalid(h, bricks_.size());
-        if (refCount_[h] == 0u) {
+        if (refCount_[h.id] == 0u) {
             return;
         }
-        --refCount_[h];
-        if (refCount_[h] == 0u) {
+        --refCount_[h.id];
+        if (refCount_[h.id] == 0u) {
             removeFromDedupLocked_(h);
             freeList_.push_back(h);
         }
@@ -102,7 +102,7 @@ namespace RAGE {
 
     const Brick &BrickPool::brick(BrickHandle h) const {
         throwIfInvalid(h, bricks_.size());
-        return bricks_[h];
+        return bricks_[h.id];
     }
 
     void BrickPool::writeVoxel(BrickHandle h, uint32_t localIndex, uint32_t packed) {
@@ -114,7 +114,7 @@ namespace RAGE {
         if (localIndex >= Brick::kVoxelCount) {
             throw std::out_of_range("BrickPool::writeVoxel: local voxel index out of range");
         }
-        bricks_[h].voxels[localIndex] = packed;
+        bricks_[h.id].voxels[localIndex] = packed;
         markDirtyLocked_(h);
     }
 
@@ -124,7 +124,7 @@ namespace RAGE {
         }
         std::lock_guard lock(mutex_);
         throwIfInvalid(h, bricks_.size());
-        return refCount_[h];
+        return refCount_[h.id];
     }
 
     BrickHandle BrickPool::prepareForWrite(BrickHandle h) {
@@ -133,10 +133,10 @@ namespace RAGE {
         }
         std::lock_guard lock(mutex_);
         throwIfInvalid(h, bricks_.size());
-        if (refCount_[h] > 1u) {
+        if (refCount_[h.id] > 1u) {
             const BrickHandle newH = allocateSlotLocked_();
-            bricks_[newH] = bricks_[h];
-            --refCount_[h];
+            bricks_[newH.id] = bricks_[h.id];
+            --refCount_[h.id];
             return newH;
         }
         removeFromDedupLocked_(h);
@@ -147,7 +147,7 @@ namespace RAGE {
         if (contentHashToHandle_.empty()) {
             return;
         }
-        const size_t hash = hashBrick(bricks_[h]);
+        const size_t hash = hashBrick(bricks_[h.id]);
         auto range = contentHashToHandle_.equal_range(hash);
         for (auto it = range.first; it != range.second; ++it) {
             if (it->second == h) {
@@ -158,10 +158,10 @@ namespace RAGE {
     }
 
     void BrickPool::markDirtyLocked_(BrickHandle h) {
-        if (dirtyFlags_[h] != 0u) {
+        if (dirtyFlags_[h.id] != 0u) {
             return;
         }
-        dirtyFlags_[h] = 1u;
+        dirtyFlags_[h.id] = 1u;
         dirtyHandles_.push_back(h);
     }
 
@@ -177,7 +177,7 @@ namespace RAGE {
     std::vector<BrickHandle> BrickPool::drainDirty() {
         std::lock_guard lock(mutex_);
         for (BrickHandle h : dirtyHandles_) {
-            dirtyFlags_[h] = 0u;
+            dirtyFlags_[h.id] = 0u;
         }
         std::vector<BrickHandle> out;
         std::swap(out, dirtyHandles_);
@@ -198,7 +198,7 @@ namespace RAGE {
         std::lock_guard lock(mutex_);
         size_t total = 0;
         for (size_t i = 1; i < refCount_.size(); ++i) {
-            total += refCount_[i];
+            total += static_cast<size_t>(refCount_[i]);
         }
         return total;
     }

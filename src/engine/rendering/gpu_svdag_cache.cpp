@@ -52,7 +52,7 @@ namespace RAGE {
             if (handles.empty()) {
                 svdag_ = Svdag{};
             } else {
-                svdag_ = buildSvdag(handles.data(), dims);
+                svdag_ = buildSvdag(handles, dims);
             }
             lastSourceHash_ = sourceHash;
             if (svdag_.nodes.size() > kMaxNodes_) {
