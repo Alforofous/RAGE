@@ -6,7 +6,6 @@
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/frame_uniforms.hpp"
 #include "engine/rendering/pixel_debug.hpp"
-#include "engine/rendering/svdag_params.hpp"
 #include "engine/scene/camera.hpp"
 #include "engine/scene/directional_light.hpp"
 #include "engine/scene/node3d.hpp"
@@ -54,7 +53,8 @@ namespace RAGE {
         , swapchain_(swapchain)
         , cmdPool_(ctx.vkDevice(), ctx.graphicsQueue().queueFamily())
         , descPool_(ctx.vkDevice(), {})
-        , pipelineCache_(ctx.vkDevice()) {}
+        , pipelineCache_(ctx.vkDevice())
+        , svdagCache_(allocator) {}
 
     Renderer::~Renderer() {
         try {
@@ -136,28 +136,6 @@ namespace RAGE {
                 .memory = MemoryLocation::CpuToGpu,
             }));
             std::memset(worldBrickGridParamsBuffer_->mappedData(), 0, 32);
-        }
-
-        if (!svdagNodesBuffer_.has_value()) {
-            // Capacity for ~64K SVDAG nodes (= 2 MB). Well above what our test scenes need;
-            // a 128³ padded cube with our terrain content lands around 1K nodes. Grows with
-            // world size — M5 will revisit if we move to dynamic resizing.
-            constexpr uint64_t kMaxNodes = 64u * 1024u;
-            constexpr uint64_t kNodeBytes = kMaxNodes * sizeof(SvdagNode);
-            svdagNodesBuffer_.emplace(allocator_.createBuffer({
-                .size = kNodeBytes,
-                .usage = BufferUsage::Storage,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-            std::memset(svdagNodesBuffer_->mappedData(), 0, kNodeBytes);
-        }
-        if (!svdagParamsBuffer_.has_value()) {
-            svdagParamsBuffer_.emplace(allocator_.createBuffer({
-                .size = 32,                  // 2 × vec4 in std140
-                .usage = BufferUsage::Uniform,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-            std::memset(svdagParamsBuffer_->mappedData(), 0, 32);
         }
 
         if (!pixelDebugBuffer_.has_value()) {
@@ -366,54 +344,21 @@ namespace RAGE {
                 poolDst[h] = brickPool_.brick(h);
             }
 
-            // Build + upload SVDAG only when needed. Skip entirely when useSvdag_ is off
-            // (saves the full build cost — sub-ms at 32³ but ~100 ms at 128³ in Debug),
-            // and when on, skip when the source brick grid hasn't changed since last
-            // build (FNV hash of handles + dims). Static scenes thus pay the build cost
-            // exactly once.
+            // GPU-resident SVDAG cache. Builds + uploads only when the source brick
+            // grid hash differs from last frame; skipped entirely when the toggle is
+            // off so the SVDAG build cost (~100 ms at paddedDim=256 in Debug) is paid
+            // only when the path is actually in use.
             if (useSvdag_) {
-                uint64_t hash = 1469598103934665603ull;
-                const auto mix = [&hash](const void *bytes, size_t n) {
-                    const auto *p = static_cast<const uint8_t *>(bytes);
-                    for (size_t i = 0; i < n; ++i) {
-                        hash ^= static_cast<uint64_t>(p[i]);
-                        hash *= 1099511628211ull;
-                    }
-                };
-                mix(&dims, sizeof(dims));
-                if (!handles.empty()) {
-                    mix(handles.data(), handles.size() * sizeof(BrickHandle));
-                }
-                const bool dirty = (hash != lastSvdagSourceHash_) || svdag_.nodes.empty();
-                if (dirty) {
-                    const PhaseScope svdagBuild(phaseBegin_, phaseEnd_, "Render.SvdagBuild");
-                    if (handles.empty()) {
-                        svdag_ = Svdag{};
-                    } else {
-                        svdag_ = buildSvdag(handles.data(), dims);
-                    }
-                    lastSvdagSourceHash_ = hash;
-                    constexpr uint64_t kMaxNodes = 64u * 1024u;
-                    if (!svdag_.nodes.empty() && svdag_.nodes.size() <= kMaxNodes) {
-                        std::memcpy(svdagNodesBuffer_->mappedData(), svdag_.nodes.data(),
-                                    svdag_.nodes.size() * sizeof(SvdagNode));
-                    } else if (svdag_.nodes.size() > kMaxNodes) {
-                        Core::log(Core::LogLevel::Warn,
-                                  "SVDAG node count exceeds GPU buffer capacity — falling back to flat grid");
-                    }
+                const PhaseScope svdagBuild(phaseBegin_, phaseEnd_, "Render.SvdagUpdate");
+                const Vec3 originWorld(static_cast<float>(origBrick.x) * brickWorldSize,
+                                       static_cast<float>(origBrick.y) * brickWorldSize,
+                                       static_cast<float>(origBrick.z) * brickWorldSize);
+                const auto result = svdagCache_.update(handles, dims, originWorld, brickWorldSize);
+                if (result.capacityExceeded) {
+                    Core::log(Core::LogLevel::Warn,
+                              "SVDAG node count exceeds GPU buffer capacity — falling back to flat grid");
                 }
             }
-            const SvdagParamsUbo sparams{
-                .originWorld_brickSize = Vec4(static_cast<float>(origBrick.x) * brickWorldSize,
-                                              static_cast<float>(origBrick.y) * brickWorldSize,
-                                              static_cast<float>(origBrick.z) * brickWorldSize,
-                                              brickWorldSize),
-                .rootIndex = static_cast<int32_t>(svdag_.rootIndex),
-                .levels = svdag_.levels,
-                .paddedDim = svdag_.paddedDim,
-                ._pad = 0,
-            };
-            std::memcpy(svdagParamsBuffer_->mappedData(), &sparams, sizeof(sparams));
         }
 
         {
@@ -542,8 +487,8 @@ namespace RAGE {
         writer.writeStorageBuffer(set, 4, *worldBrickGridHandlesBuffer_);
         writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
         writer.writeUniformBuffer(set, 6, *worldBrickGridParamsBuffer_);
-        writer.writeStorageBuffer(set, 9, *svdagNodesBuffer_);
-        writer.writeUniformBuffer(set, 10, *svdagParamsBuffer_);
+        writer.writeStorageBuffer(set, 9, *svdagCache_.nodesBuffer());
+        writer.writeUniformBuffer(set, 10, *svdagCache_.paramsBuffer());
 
         {
             const PhaseScope commitScope(phaseBegin_, phaseEnd_, "Pass.DescriptorCommit");

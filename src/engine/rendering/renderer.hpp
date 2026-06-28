@@ -11,6 +11,7 @@
 #include "engine/rendering/ambient_light.hpp"
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/pixel_debug.hpp"
+#include "engine/rendering/gpu_svdag_cache.hpp"
 #include "engine/rendering/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/svdag.hpp"
@@ -117,7 +118,7 @@ namespace RAGE {
         // scenes. Build cost is sub-ms for our current scene scale.
         void setUseSvdag(bool enabled) { useSvdag_ = enabled; }
         bool useSvdag() const { return useSvdag_; }
-        const Svdag &svdag() const { return svdag_; }
+        const Svdag &svdag() const { return svdagCache_.svdag(); }
 
         /**
          * Shared brick pool that will back every `Voxel3D`'s storage once M3-C lands.
@@ -209,10 +210,7 @@ namespace RAGE {
         std::optional<VulkanBuffer> brickPoolBuffer_;
         std::optional<VulkanBuffer> worldBrickGridHandlesBuffer_;
         std::optional<VulkanBuffer> worldBrickGridParamsBuffer_;
-        std::optional<VulkanBuffer> svdagNodesBuffer_;
-        std::optional<VulkanBuffer> svdagParamsBuffer_;
-        Svdag svdag_{};
-        uint64_t lastSvdagSourceHash_ = 0;   // FNV of (handles + dims); rebuild only on change.
+        GpuSvdagCache svdagCache_;
         std::optional<VulkanBuffer> pixelDebugBuffer_;
         std::optional<VulkanBuffer> thumbnailStaging_;
         bool thumbnailQueued_ = false;

@@ -60,6 +60,7 @@ set(ENGINE_SOURCES
     src/platform/gpu/vulkan/vulkan_swapchain.cpp
     src/engine/content/vox_loader.cpp
     src/engine/materials/pipeline_cache.cpp
+    src/engine/rendering/gpu_svdag_cache.cpp
     src/engine/rendering/renderer.cpp
     src/engine/scene/camera.cpp
     src/engine/scene/directional_light.cpp
