@@ -45,7 +45,7 @@ TEST(BrickPool, AllocateReturnsNonZeroHandlesAndMarksDirty) {
 TEST(BrickPool, ReleaseReusesHandleAndZeroesContents) {
     BrickPool pool;
     const BrickHandle a = pool.allocate();
-    pool.brick(a).voxels[42] = 0xDEADBEEFu;
+    pool.writeVoxel(a, 42u, 0xDEADBEEFu);
 
     pool.release(a);
     EXPECT_EQ(pool.allocated(), 0u);

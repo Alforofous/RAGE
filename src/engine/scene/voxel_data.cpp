@@ -86,8 +86,7 @@ namespace RAGE {
         const int32_t lx = c.x % Brick::kDim;
         const int32_t ly = c.y % Brick::kDim;
         const int32_t lz = c.z % Brick::kDim;
-        pool_->brick(h).voxels[brickVoxelIndex(lx, ly, lz)] = packed;
-        pool_->markDirty(h);
+        pool_->writeVoxel(h, brickVoxelIndex(lx, ly, lz), packed);
     }
 
     void VoxelData::fillFromPackedRGBA8(const uint32_t *src, IVec3 srcDims, const FillProgressFn &onProgress,

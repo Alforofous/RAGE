@@ -85,8 +85,20 @@ namespace RAGE {
          */
         void release(BrickHandle h);
 
-        Brick &brick(BrickHandle h);
+        /**
+         * Read-only access to a brick's voxel storage. Mutations go through
+         * `writeVoxel` so the pool can mark the brick dirty in lock-step with the
+         * write — never `const_cast` the returned reference.
+         */
         const Brick &brick(BrickHandle h) const;
+
+        /**
+         * Write a single voxel into the brick at `h` and mark it dirty for the next
+         * GPU upload. The caller must own `h` exclusively — pass through
+         * `prepareForWrite` first if the handle was obtained from `acquireBrick` and
+         * might be shared. `localIndex` is `brickVoxelIndex(lx, ly, lz)`.
+         */
+        void writeVoxel(BrickHandle h, uint32_t localIndex, uint32_t packed);
 
         /** Current refcount on `h`. Read-only diagnostic — never key control flow off
          *  this value (the result is stale the moment it's returned). To mutate a

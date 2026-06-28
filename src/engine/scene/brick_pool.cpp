@@ -100,14 +100,22 @@ namespace RAGE {
         }
     }
 
-    Brick &BrickPool::brick(BrickHandle h) {
+    const Brick &BrickPool::brick(BrickHandle h) const {
         throwIfInvalid(h, bricks_.size());
         return bricks_[h];
     }
 
-    const Brick &BrickPool::brick(BrickHandle h) const {
+    void BrickPool::writeVoxel(BrickHandle h, uint32_t localIndex, uint32_t packed) {
+        if (h == kEmptyBrick) {
+            return;
+        }
+        std::lock_guard lock(mutex_);
         throwIfInvalid(h, bricks_.size());
-        return bricks_[h];
+        if (localIndex >= Brick::kVoxelCount) {
+            throw std::out_of_range("BrickPool::writeVoxel: local voxel index out of range");
+        }
+        bricks_[h].voxels[localIndex] = packed;
+        markDirtyLocked_(h);
     }
 
     uint32_t BrickPool::refCount(BrickHandle h) const {
