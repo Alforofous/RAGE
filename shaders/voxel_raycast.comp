@@ -202,12 +202,25 @@ struct OuterTrace {
 // `floor((worldPos - origin) / brickSize)` indexing the flat grid, but reading from the
 // dedup'd SVDAG storage. Returns the brick handle (0 if any subtree along the path is
 // empty or the coord is outside the padded cube).
-uint svdagBrickAt(ivec3 brickCoord, out int emptySubtreeSize) {
-    emptySubtreeSize = 1;
+// Tagged result of a descent:
+//   handle != 0  → leaf brick at this coord; emptySubtreeSize is 1 and unused
+//   handle == 0  → empty region of `emptySubtreeSize` cells per axis (subtreeSize is a
+//                  power of 2 in [1, paddedDim]). The outer DDA reads this to decide
+//                  whether to do a single-cell step or a multi-cell t-based jump.
+struct SvdagLookup {
+    uint handle;
+    int emptySubtreeSize;
+};
+
+SvdagLookup svdagBrickAt(ivec3 brickCoord) {
+    SvdagLookup result;
+    result.handle = 0u;
+    result.emptySubtreeSize = 1;
+
     int paddedDim = svdagParams.root_levels_paddedDim_pad.z;
-    if (paddedDim <= 0) return 0u;
+    if (paddedDim <= 0) return result;
     if (any(lessThan(brickCoord, ivec3(0))) || any(greaterThanEqual(brickCoord, ivec3(paddedDim)))) {
-        return 0u;
+        return result;
     }
     int levels = svdagParams.root_levels_paddedDim_pad.y;
     int rootIdx = svdagParams.root_levels_paddedDim_pad.x;
@@ -216,11 +229,8 @@ uint svdagBrickAt(ivec3 brickCoord, out int emptySubtreeSize) {
     ivec3 c = brickCoord;
     for (int level = levels; level > 0; --level) {
         if (current == 0u) {
-            // Empty subtree of width `dim` cells (in cube-local brick coords) — the outer
-            // DDA uses this to jump past the whole region in one step instead of stepping
-            // one cell at a time.
-            emptySubtreeSize = dim;
-            return 0u;
+            result.emptySubtreeSize = dim;
+            return result;
         }
         int half_ = dim / 2;
         uint octant = 0u;
@@ -230,7 +240,8 @@ uint svdagBrickAt(ivec3 brickCoord, out int emptySubtreeSize) {
         current = svdagNodes.data[current * 8u + octant];
         dim = half_;
     }
-    return current;
+    result.handle = current;
+    return result;
 }
 
 // SVDAG path: integer-coord descent + empty-subtree skip.
@@ -299,11 +310,10 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, ivec3(paddedDim)))) {
             return out_;
         }
-        int emptySubtreeSize = 1;
-        uint handle = svdagBrickAt(cell, emptySubtreeSize);
-        if (handle != 0u) {
+        SvdagLookup lookup = svdagBrickAt(cell);
+        if (lookup.handle != 0u) {
             vec3 brickOrigin = gridOrigin + vec3(cell) * cs;
-            InnerHit inner = innerTraceBrick(handle, worldOrigin, worldDir, brickOrigin, voxelSize, tCellEnter, entryAxis);
+            InnerHit inner = innerTraceBrick(lookup.handle, worldOrigin, worldDir, brickOrigin, voxelSize, tCellEnter, entryAxis);
             out_.totalSteps += inner.stepCount;
             if (inner.hit) {
                 out_.hit = true;
@@ -319,13 +329,13 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
                 }
                 return out_;
             }
-        } else if (emptySubtreeSize > 1) {
+        } else if (lookup.emptySubtreeSize > 1) {
             // Jump past the whole empty subtree in one step instead of doing
             // emptySubtreeSize-many single-cell DDA advances. This is the SVDAG win:
             // sky rays traverse the cube in O(log) outer steps rather than O(paddedDim).
-            ivec3 subOriginCell = (cell / emptySubtreeSize) * emptySubtreeSize;
+            ivec3 subOriginCell = (cell / lookup.emptySubtreeSize) * lookup.emptySubtreeSize;
             vec3 subMinW = gridOrigin + vec3(subOriginCell) * cs;
-            vec3 subMaxW = subMinW + vec3(emptySubtreeSize) * cs;
+            vec3 subMaxW = subMinW + vec3(lookup.emptySubtreeSize) * cs;
             vec3 st0 = (subMinW - worldOrigin) * invDir;
             vec3 st1 = (subMaxW - worldOrigin) * invDir;
             vec3 sthi = max(st0, st1);
