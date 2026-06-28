@@ -74,10 +74,7 @@ TEST(Svdag, MeasuresMeaningfulCompressionOnLargelyEmptyGrid) {
 }
 
 namespace {
-    // Mirror of the shader's integer-coord descent (svdagBrickAt in voxel_raycast.comp).
-    // Keeping a host-side reference implementation lets us pin the shader's traversal
-    // contract via tests rather than rendered-pixel sanity checks. If the shader and
-    // this function ever diverge, one of them is wrong.
+    // Host-side mirror of the shader's svdagBrickAt. Diverging from the GLSL = test break.
     uint32_t descend(const Svdag &s, IVec3 brickCoord, int32_t &outEmptySubtreeSize) {
         outEmptySubtreeSize = 1;
         if (s.paddedDim <= 0 || s.nodes.empty()) {

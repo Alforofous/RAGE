@@ -136,13 +136,6 @@ namespace RAGE {
             }
 
             if (!stale) {
-                // Return the slot to the free list so the next allocate() reuses this
-                // buffer rather than calling vkAllocateCommandBuffers again. Missing
-                // this push was a real driver-memory leak: every successful
-                // submit→wait cycle was issuing a fresh VkCommandBuffer, growing the
-                // command pool's backing storage by a driver page (~32-64 KB) per
-                // frame. The error paths in begin()/end() already do this correctly;
-                // the success path silently dropped the slot.
                 free_.push_back(slotIndex);
                 outstandingSubmissions_--;
             }

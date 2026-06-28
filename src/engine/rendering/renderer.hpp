@@ -112,36 +112,21 @@ namespace RAGE {
         int32_t heatmapMode() const { return heatmapMode_; }
         void setHeatmapMaxSteps(int32_t maxSteps) { heatmapMaxSteps_ = maxSteps; }
         int32_t heatmapMaxSteps() const { return heatmapMaxSteps_; }
-        // When true the shader's outer DDA descends a per-frame-built SVDAG instead of stepping
-        // the flat world brick grid. Phase B of M4. Both paths produce identical hits; the SVDAG
-        // path skips empty subtrees in O(log depth) and is the architecture for kilometre-scale
-        // scenes. Build cost is sub-ms for our current scene scale.
         void setUseSvdag(bool enabled) { useSvdag_ = enabled; }
         bool useSvdag() const { return useSvdag_; }
         const Svdag &svdag() const { return svdagCache_.svdag(); }
 
         /**
-         * Shared brick pool that backs every `Voxel3D`'s storage. Returned by reference
-         * but the underlying object can be **replaced** via `recreateBrickPool` — the
-         * reference is stable only until that call. Holders of `BrickHandle`s issued
-         * by a particular pool become invalid the moment that pool is replaced.
+         * @brief Brick pool reference; **invalidated** by the next `recreateBrickPool` call.
          */
         BrickPool &brickPool() { return *brickPool_; }
         const BrickPool &brickPool() const { return *brickPool_; }
 
         /**
-         * Destroy the current pool and construct a fresh one with the given dedup
-         * policy. Used by the debug UI's "Restart with no dedup" path; can also be
-         * used by future code that wants to re-seed pool policy across an explicit
-         * lifecycle boundary.
-         *
-         * **Precondition**: every `VoxelData` holding a handle from the current pool
-         * must already have been destroyed by the caller (scene tree cleared). The
-         * pool's destructor doesn't run callbacks; if outstanding handles exist when
-         * the pool is replaced, those `VoxelData`s' destructors will later call
-         * `release` on a different pool — undefined behaviour. The method drains
-         * any in-flight GPU work and waits for device idle before swapping so the
-         * GPU isn't reading the old pool's buffer during the swap.
+         * @brief Destroy + reconstruct the brick pool with a new dedup policy. Caller MUST
+         *        destroy every `VoxelData` holding a handle from the old pool first —
+         *        otherwise their destructors will release into a different pool (UB).
+         *        Drains GPU work + vkDeviceWaitIdle before the swap.
          */
         void recreateBrickPool(bool enableDedup);
 

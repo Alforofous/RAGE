@@ -349,15 +349,11 @@ namespace RAGE::App {
             ImGui::Text("%s: (no data)", label);
             return;
         }
-        // Latest sample = the position just before the writer's next slot.
         const size_t latestIdx = (offset + count + bufferLength - 1) % bufferLength;
         char overlay[64] = "";
         if (overlayFmt != nullptr) {
             std::snprintf(overlay, sizeof(overlay), overlayFmt, samples[latestIdx]);
         }
-        // PlotHistogram renders as vertical bars (one bar per sample) instead of a
-        // connected line. Easier to read at a glance for the ~128-sample windows
-        // we use here, and matches the look of the historical RAGE_gui FPS bar.
         ImGui::PlotHistogram(label, samples, static_cast<int>(count), static_cast<int>(offset),
                              overlay, yMin, yMax, ImVec2(0, 80));
     }

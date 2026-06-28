@@ -123,12 +123,7 @@ TEST(VoxelData, BricksMarkedDirtyAfterMutation) {
     EXPECT_EQ(pool.drainDirty().size(), 1u);
 }
 
-// RAII contract test: destroying every VoxelData must return the pool to its
-// pristine empty state. Run many cycles so a per-cycle leak (refcount drift, a
-// stray dedup-map entry, an undrained dirty handle) accumulates into a visible
-// growth instead of hiding inside a single noisy run. This is the foundation
-// the "Restart with no dedup" scene-reset button stands on — if any of these
-// numbers drift, that button leaks GPU brick memory on each press.
+// RAII cycle: many build/teardown rounds force per-cycle leaks to accumulate visibly.
 TEST(VoxelData, DestroyingVoxelDatasReleasesAllBricksBackToPool) {
     BrickPool pool;
 
@@ -139,9 +134,6 @@ TEST(VoxelData, DestroyingVoxelDatasReleasesAllBricksBackToPool) {
     for (int32_t cycle = 0; cycle < kCycles; ++cycle) {
         SCOPED_TRACE("cycle " + std::to_string(cycle));
 
-        // Mix of distinct content (each VoxelData unique) and duplicate content
-        // (last two share a pattern → exercises the dedup path's refcount math
-        // on the destruction side).
         std::vector<std::unique_ptr<VoxelData>> scene;
         const size_t voxelsPerData = static_cast<size_t>(kVoxelDimsPerSide) * kVoxelDimsPerSide
                                      * kVoxelDimsPerSide;
@@ -156,11 +148,8 @@ TEST(VoxelData, DestroyingVoxelDatasReleasesAllBricksBackToPool) {
         }
         ASSERT_GT(pool.allocated(), 0u) << "scene must have populated bricks before teardown";
 
-        // Tear the scene down. The unique_ptrs' destructors fire in reverse-insert order,
-        // each VoxelData's destructor releases every non-empty handle back to the pool.
         scene.clear();
 
-        // Pristine post-conditions.
         EXPECT_EQ(pool.allocated(), 0u) << "every brick must be back on the free list";
         EXPECT_EQ(pool.logicalBricks(), 0u) << "refcount sum must be zero with no live handle holders";
         EXPECT_EQ(pool.drainDirty().size(), 0u) << "no dirty bricks should outlive the scene";
@@ -168,10 +157,6 @@ TEST(VoxelData, DestroyingVoxelDatasReleasesAllBricksBackToPool) {
 }
 
 TEST(VoxelData, DestroyingSharedDedupedBrickDoesNotDoubleReleaseOrLeak) {
-    // The dedup-on path is special: two VoxelDatas can hold the same handle.
-    // Destroying both must drop the refcount cleanly to zero without leaks
-    // (each releases its share) and without double-free (the second release
-    // sees refcount==0 and is a no-op via throwIfInvalid's caller).
     BrickPool pool;
     {
         VoxelData a(pool, { 8, 8, 8 });

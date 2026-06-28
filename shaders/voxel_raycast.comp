@@ -197,16 +197,9 @@ struct OuterTrace {
     float voxelSize;
 };
 
-// Integer brick-coord lookup. Descends the SVDAG using purely integer arithmetic — no
-// floating-point comparisons against split planes. This makes the lookup equivalent to
-// `floor((worldPos - origin) / brickSize)` indexing the flat grid, but reading from the
-// dedup'd SVDAG storage. Returns the brick handle (0 if any subtree along the path is
-// empty or the coord is outside the padded cube).
-// Tagged result of a descent:
-//   handle != 0  → leaf brick at this coord; emptySubtreeSize is 1 and unused
-//   handle == 0  → empty region of `emptySubtreeSize` cells per axis (subtreeSize is a
-//                  power of 2 in [1, paddedDim]). The outer DDA reads this to decide
-//                  whether to do a single-cell step or a multi-cell t-based jump.
+// handle != 0  → leaf brick.
+// handle == 0  → empty subtree of `emptySubtreeSize` cells per axis (pow2 in [1, paddedDim]);
+//                the outer DDA jumps this many cells in one t-based step.
 struct SvdagLookup {
     uint handle;
     int emptySubtreeSize;
@@ -244,20 +237,6 @@ SvdagLookup svdagBrickAt(ivec3 brickCoord) {
     return result;
 }
 
-// SVDAG path: integer-coord descent + empty-subtree skip.
-//
-// The outer DDA walks brick cells over the padded SVDAG cube, but at each cell it asks
-// `svdagBrickAt(cell, out emptySubtreeSize)`. On a non-empty leaf this returns the brick
-// handle (size=1). On an empty subtree it returns 0 plus the subtree's edge length in
-// cells; the DDA then jumps past the whole subtree in a single t-based AABB-exit step
-// rather than stepping cell-by-cell. Sky rays through a kilometre-scale world thus take
-// O(log paddedDim) outer iterations instead of O(paddedDim).
-//
-// Integer-coord descent (vs position-based with float midplane comparisons) is chosen
-// for boundary robustness — shadow rays are particularly sensitive to the
-// just-past-the-face floating-point bookkeeping the position-based variant requires. The
-// skip mechanism is functionally equivalent to ESVO's POP-to-common-ancestor pattern;
-// see Dubiousconst282's 2024 sparse-64-tree guide for the integer-DDA framing.
 OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
     OuterTrace out_;
     out_.hit = false;
@@ -273,19 +252,13 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
     vec3 gridMin = gridOrigin;
     vec3 gridMax = gridOrigin + vec3(paddedDim) * cs;
 
-    // Per-axis cube entry/exit t. Axes the ray is parallel to (|worldDir[a]| ≤ eps)
-    // are excluded from the slab intersection entirely — substituting a huge
-    // sentinel so the min/max naturally ignore them. Reasoning: a parallel ray
-    // never crosses that axis's face, so its t-interval there is (-∞, +∞); the
-    // ray's intersection with the cube is determined by the other axes. The
-    // previous attempt at "huge finite invDir" relied on 0 × huge being tiny,
-    // which is implementation-defined in GLSL — different GPUs handle this
-    // differently, and the artifact was a one-pixel-wide line where the camera
-    // math gave a perfectly axis-aligned ray (centre column → dirX=0; horizon
-    // row → dirY=0). Explicit exclusion says what we mean.
+    // Axis-parallel rays are excluded from the slab test on that axis (kBigT
+    // sentinel) so the min/max naturally ignore it. Relying on huge-but-finite
+    // invDir hits 0×huge precision issues that vary across GLSL implementations
+    // and produced a one-pixel-wide line artifact on perfectly axis-aligned rays.
     const float kBoxParallelEps = 1e-12;
     const float kBigT = 1e30;
-    vec3 invDir = 1.0 / worldDir;     // safe to compute; only used on non-parallel axes below.
+    vec3 invDir = 1.0 / worldDir;
     vec3 tlo, thi;
     if (abs(worldDir.x) > kBoxParallelEps) {
         float a = (gridMin.x - worldOrigin.x) * invDir.x;
@@ -354,11 +327,6 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
                 return out_;
             }
         } else if (lookup.emptySubtreeSize > 1) {
-            // Jump past the whole empty subtree in one step instead of doing
-            // emptySubtreeSize-many single-cell DDA advances. This is the SVDAG win:
-            // sky rays traverse the cube in O(log) outer steps rather than O(paddedDim).
-            // Per-axis box-exit t uses the same axis-parallel-aware pattern as the cube
-            // entry above — parallel axes contribute kBigT and the min() ignores them.
             ivec3 subOriginCell = (cell / lookup.emptySubtreeSize) * lookup.emptySubtreeSize;
             vec3 subMinW = gridOrigin + vec3(subOriginCell) * cs;
             vec3 subMaxW = subMinW + vec3(lookup.emptySubtreeSize) * cs;
@@ -373,19 +341,15 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
                 ? max((subMinW.z - worldOrigin.z) * invDir.z, (subMaxW.z - worldOrigin.z) * invDir.z)
                 : kBigT;
             float tSubExit = min(min(axisExit.x, axisExit.y), axisExit.z);
-            // Epsilon scales with t — float32 ULP grows with magnitude, so a fixed eps
-            // becomes ineffective at the ~100 m ranges this engine targets.
+            // Eps scales with t — float32 ULP grows with magnitude.
             float tNew = tSubExit + max(1e-4, tSubExit * 4e-6);
             vec3 posNew = worldOrigin + worldDir * tNew;
             vec3 cellFNew = (posNew - gridOrigin) / cs;
             ivec3 newCell = ivec3(floor(cellFNew));
-            // Belt-and-suspenders: if the skip math didn't actually advance the cell
-            // (subtree-exit landed within the same brick somehow — e.g. extreme float
-            // precision loss at large t), bail out of the skip and let the normal DDA
-            // step do its job. Otherwise the loop spins on the same cell until kMax,
-            // which is what produced the bright-yellow line artifacts.
+            // If skip didn't advance (rare float-precision corner), fall through to
+            // normal step instead of spinning to kMaxOuterSteps.
             if (newCell == cell) {
-                // Fall through to normal step — don't continue.
+                // intentional fall-through
             } else {
                 cell = newCell;
                 for (int i = 0; i < 3; ++i) {

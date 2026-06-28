@@ -5,22 +5,12 @@
 
 namespace RAGE {
     /**
-     * GPU uniform-buffer payload describing the SVDAG's spatial layout, written by the
-     * renderer once per frame and bound at descriptor set 0, binding 10 of the voxel
-     * raycast shader.
-     *
-     * Layout matches GLSL std140 — every member is a `vec4`/`ivec4` so alignment rules
-     * collapse to a naturally-aligned 16-byte stride.
-     *
-     * @note Shader-side declaration must mirror this struct exactly:
+     * @brief std140 UBO at set=0 binding=10 of voxel_raycast.comp. Shader-side declaration:
      *
      *     layout(set = 0, binding = 10, std140) uniform SvdagParams {
-     *         vec4 origin_brickSize;            // .xyz = world coords of cube origin, .w = brick world size
+     *         vec4 origin_brickSize;            // .xyz = cube origin (world), .w = brickWorldSize
      *         ivec4 root_levels_paddedDim_pad;  // .x = rootIndex, .y = levels, .z = paddedDim
      *     } svdagParams;
-     *
-     * Field names encode the packing (`origin_brickSize.w == brickWorldSize`) so a
-     * reader doesn't have to count bytes to decode meaning.
      */
     struct SvdagParamsUbo {
         Vec4 originWorld_brickSize;

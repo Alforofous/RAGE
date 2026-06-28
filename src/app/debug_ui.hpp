@@ -83,20 +83,11 @@ namespace RAGE::App {
         void text(const char *fmt, ...);
 
         /**
-         * Time-series plot widget — renders the contents of a ring buffer as a line
-         * graph. Reads through `(samples, count, offset)` so it can take a
-         * `Core::Histogram` (via `data()`, `size()`, `oldestOffset()`) without
-         * copying. Always shows the latest value as a tagline beside the label.
-         *
-         * @param label       Identifier displayed above the plot.
-         * @param samples     Pointer to the ring buffer of length `bufferLength`.
-         * @param bufferLength Total slots in `samples` (= histogram capacity).
-         * @param count       Number of live samples in the ring (≤ bufferLength).
-         * @param offset      Index in `samples` of the oldest live sample.
-         * @param overlayFmt  printf-style format for the "current value" overlay
-         *                    (e.g. "%.2f ms", "%.0f MB"). nullptr to omit.
-         * @param yMin / yMax Vertical range. Pass `(0, FLT_MAX)` to let ImGui
-         *                    auto-scale based on the live samples.
+         * @brief Time-series bar plot. `(samples, bufferLength, count, offset)` is the
+         * shape `Core::Histogram` exposes via `data()` / `capacity()` / `size()` /
+         * `oldestOffset()`. `overlayFmt` is a printf format applied to the latest
+         * sample for the value tagline; null to omit. `(yMin, yMax) = (0, FLT_MAX)`
+         * auto-scales.
          */
         void plot(const char *label, const float *samples, size_t bufferLength, size_t count,
                   size_t offset, const char *overlayFmt, float yMin, float yMax);

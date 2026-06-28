@@ -108,12 +108,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Profiler must outlive the engine objects. Construct first so we can launch
-    // Tracy BEFORE any engine allocations happen — Tracy's on-demand mode only
-    // tracks allocations made AFTER the GUI connects, so doing it the other way
-    // around hides the first ~32 MB of brick-pool reservation (and everything
-    // else in startup) from the Memory tab. With --profile, we block here until
-    // Tracy has connected (5s deadline so missing/broken Tracy doesn't hang).
+    // Tracy's on-demand mode only records allocs made after the GUI connects, so
+    // construct + launch + wait BEFORE the engine allocates anything.
     App::Profiler profiler;
     if (autoLaunchTracy && App::Profiler::isLinked()) {
         profiler.launchProfilerGui();
@@ -180,15 +176,8 @@ int main(int argc, char **argv) {
 
             Node3D root;
 
-            // Scene construction lifted into a callable so the "Restart with no dedup"
-            // path can invoke it again after recreating the brick pool. All scene-state
-            // (loadJobs, root, the renderer's pool) is captured by reference; the
-            // lambda has no return value, mutates root + loadJobs in place.
             const auto buildScene = [&]() {
             if (scene == SceneKind::Cubes) {
-                // Procedural cube-grid scene — hundreds of identical solid cubes, every brick
-                // bit-identical. Designed to demonstrate brick dedup (M4): no-dedup gives
-                // worst-case unique storage; dedup-on collapses the whole grid to ~1 brick.
                 constexpr int32_t kCubeDim = 16;
                 constexpr int kGridN = 16;          // 16×16 = 256 cubes
                 constexpr float kCubeSpacing = 1.5f;
@@ -214,10 +203,6 @@ int main(int argc, char **argv) {
                 std::fprintf(stdout, "Built procedural cube scene: %d×%d = %d cubes\n", kGridN,
                              kGridN, kGridN * kGridN);
             } else if (scene == SceneKind::Terrain) {
-                // Procedural heightmap terrain — stone underground, dirt near surface, grass
-                // on top, empty above. The deep bricks are uniform stone (heavy dedup), the
-                // surface bricks vary with the heightmap (low dedup), and the air above
-                // doesn't allocate at all (sparsity). Realistic mix for M4 measurement.
                 constexpr int32_t kW = 256;
                 constexpr int32_t kH = 64;
                 constexpr int32_t kD = 256;
@@ -258,12 +243,6 @@ int main(int argc, char **argv) {
                 root.add(std::move(terrain));
                 std::fprintf(stdout, "Built procedural terrain scene: %d×%d×%d voxels\n", kW, kH, kD);
             } else if (scene == SceneKind::BigWorld) {
-                // Tiled procedural world. 8×8 grid of identical 128×32×128 terrain tiles
-                // (6.4 m × 1.6 m × 6.4 m each → world is ~51 m × 1.6 m × 51 m). All tiles
-                // share bit-identical content so M4 brick dedup collapses every tile's
-                // bricks across the whole grid, and the SVDAG sees a structurally
-                // repeating world brick grid with massive subtree dedup opportunity —
-                // both the spatial index *and* the voxel storage compress hard.
                 constexpr int32_t kTileW = 128;
                 constexpr int32_t kTileH = 32;
                 constexpr int32_t kTileD = 128;
@@ -322,16 +301,10 @@ int main(int argc, char **argv) {
             buildScene();
 
             std::atomic<bool> loaderDone{ false };
-            // Profiler was constructed + connected before the `try` block (see top
-            // of main) so its Memory tab captures BrickPool's startup reservation
-            // and everything else. Attach to the renderer's per-frame hooks here.
             profiler.attach(renderer);
 
             std::atomic<bool> loaderCancel{ false };
 
-            // Wire the cancel poll onto every load job's target. Called once on initial
-            // setup and again from resetScene after re-running buildScene, so any
-            // freshly-created Voxel3D picks up the same cancel signal.
             const auto wireCancelHooks = [&]() {
                 for (const auto &job : loadJobs) {
                     job->target->onLoadShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
@@ -339,11 +312,6 @@ int main(int argc, char **argv) {
             };
             wireCancelHooks();
 
-            // Surface for build/load failures so the render loop can paint the
-            // partial-scene state instead of dying. A `BrickPool: exhausted` throw
-            // from a no-dedup rebuild is the canonical case — the user just clicked
-            // a button knowing the scene won't fit; the right reaction is to log,
-            // not terminate.
             std::string loaderError;
             std::mutex loaderErrorMutex;
             const auto recordError = [&](const std::string &what) {
@@ -352,9 +320,6 @@ int main(int argc, char **argv) {
                 std::fprintf(stderr, "[scene] %s\n", what.c_str());
             };
 
-            // The loader thread body. Extracted so resetScene can spawn a fresh
-            // thread on its own loadJobs without duplicating the profiler setup
-            // and cancel-aware iteration.
             const auto runLoader = [&]() {
                 profiler.setThreadName("AssetLoader");
                 App::Profiler::Zone outerZone(profiler, "LoaderThread");
@@ -375,22 +340,8 @@ int main(int argc, char **argv) {
             };
             std::thread loaderThread(runLoader);
 
-            // Scene reset orchestrator. Used by the debug-panel "Restart with [no] dedup"
-            // buttons. Sequence is RAII-strict: every owner of brick handles must be
-            // destroyed BEFORE the pool it issued them from. Specifically:
-            //   1. Signal loader to stop; join. After this, no other thread is reading
-            //      or writing the pool / scene tree.
-            //   2. Clear the scene tree. Voxel3D destructors fire, each VoxelData
-            //      releases every non-empty handle back to the (still-alive) old pool.
-            //   3. Clear the loadJobs vector (it owns the staged VoxModel data, but
-            //      its dangling Voxel3D* would now be dangling — drop the vector).
-            //   4. Recreate the renderer's pool with the new policy. The old pool is
-            //      destroyed; the new one starts fresh. The renderer drains GPU work
-            //      and vkDeviceWaitIdle's internally before the swap.
-            //   5. Rebuild the scene against the new pool.
-            //   6. Re-wire cancel hooks (new Voxel3Ds) and spawn a fresh loader thread.
-            // If any step throws, we leak the partial state but the program stays in a
-            // consistent state — the next reset attempt starts from whatever was left.
+            // Step order is RAII-load-bearing: brick handles must be released back to
+            // their issuing pool BEFORE the pool itself is replaced.
             const auto resetScene = [&](bool enableDedup) {
                 loaderCancel.store(true);
                 if (loaderThread.joinable()) {
@@ -408,9 +359,6 @@ int main(int argc, char **argv) {
                 try {
                     buildScene();
                 } catch (const std::exception &e) {
-                    // The canonical case: dedup-off bigworld → BrickPool exhausted.
-                    // The partial scene rendered so far stays on screen; the user
-                    // can press the inverse button to recover into a fitting policy.
                     recordError(std::string("buildScene: ") + e.what());
                 }
                 wireCancelHooks();
@@ -430,9 +378,6 @@ int main(int argc, char **argv) {
             bool useSvdag = renderer.useSvdag();
             bool brickDedup = renderer.brickPool().isDedupEnabled();
 
-            // Sliding-window histories for the debug panel's perf/memory plots.
-            // The engine layer doesn't know about these — main samples them per
-            // frame and feeds the plot widget.
             Core::Histogram<float, 128> frameMsHistory;
             Core::Histogram<float, 128> brickmapMBHistory;
             Core::Histogram<float, 128> processRSSMBHistory;
@@ -570,8 +515,6 @@ int main(int argc, char **argv) {
                 const auto dt = static_cast<float>(now - lastTime);
                 lastTime = now;
 
-                // Feed the debug-panel histograms from the same per-frame data the
-                // profiler already publishes. Engine layer doesn't know about these.
                 frameMsHistory.push(dt * 1000.0f);
                 const float brickPoolMB =
                     static_cast<float>(renderer.brickPool().allocatedBytes()) / (1024.0f * 1024.0f);
