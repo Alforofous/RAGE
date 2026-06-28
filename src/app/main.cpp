@@ -22,6 +22,8 @@
 #include "engine/materials/material.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/renderer.hpp"
+#include "platform/process_memory.hpp"
+#include "shared/histogram.hpp"
 #include "profiler.hpp"
 #include "engine/scene/camera.hpp"
 #include "engine/scene/directional_light.hpp"
@@ -420,6 +422,13 @@ int main(int argc, char **argv) {
             int heatmapMaxSteps = renderer.heatmapMaxSteps();
             bool useSvdag = renderer.useSvdag();
             bool brickDedup = renderer.brickPool().isDedupEnabled();
+
+            // Sliding-window histories for the debug panel's perf/memory plots.
+            // The engine layer doesn't know about these — main samples them per
+            // frame and feeds the plot widget.
+            Core::Histogram<float, 128> frameMsHistory;
+            Core::Histogram<float, 128> brickmapMBHistory;
+            Core::Histogram<float, 128> processRSSMBHistory;
             debugUi.setBuilder([&]() {
                 debugUi.beginPanel("RAGE Debug");
                 if (!loaderDone.load()) {
@@ -506,6 +515,17 @@ int main(int argc, char **argv) {
                 debugUi.text("Total:          %.2f MB  (saved %.2f MB / %.0f%%)",
                              brickmapTotalMB, savingsMB, savingsPct);
 
+                debugUi.separatorText("History");
+                debugUi.plot("Frame", frameMsHistory.data(), frameMsHistory.capacity(),
+                             frameMsHistory.size(), frameMsHistory.oldestOffset(), "%.2f ms",
+                             0.0f, FLT_MAX);
+                debugUi.plot("Brickmap", brickmapMBHistory.data(), brickmapMBHistory.capacity(),
+                             brickmapMBHistory.size(), brickmapMBHistory.oldestOffset(), "%.2f MB",
+                             0.0f, FLT_MAX);
+                debugUi.plot("Process RSS", processRSSMBHistory.data(),
+                             processRSSMBHistory.capacity(), processRSSMBHistory.size(),
+                             processRSSMBHistory.oldestOffset(), "%.0f MB", 0.0f, FLT_MAX);
+
                 if (renderer.useSvdag() && !renderer.svdag().nodes.empty()) {
                     debugUi.separatorText("SVDAG (live)");
                     const Svdag &sv = renderer.svdag();
@@ -542,6 +562,20 @@ int main(int argc, char **argv) {
                 const double now = glfwGetTime();
                 const auto dt = static_cast<float>(now - lastTime);
                 lastTime = now;
+
+                // Feed the debug-panel histograms from the same per-frame data the
+                // profiler already publishes. Engine layer doesn't know about these.
+                frameMsHistory.push(dt * 1000.0f);
+                const float brickPoolMB =
+                    static_cast<float>(renderer.brickPool().allocatedBytes()) / (1024.0f * 1024.0f);
+                const float handleGridMB = static_cast<float>(renderer.worldBrickGrid().handles().size()
+                                                              * sizeof(BrickHandle))
+                                           / (1024.0f * 1024.0f);
+                brickmapMBHistory.push(brickPoolMB + handleGridMB);
+                const uint64_t rss = Platform::processResidentBytes();
+                if (rss > 0) {
+                    processRSSMBHistory.push(static_cast<float>(rss) / (1024.0f * 1024.0f));
+                }
 
                 fpsAccumDt += dt;
                 ++fpsAccumFrames;
