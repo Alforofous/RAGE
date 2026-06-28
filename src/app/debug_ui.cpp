@@ -1,6 +1,7 @@
 #include "debug_ui.hpp"
 
 #include <cstdarg>
+#include <cstdio>
 #include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -340,6 +341,22 @@ namespace RAGE::App {
         va_start(args, fmt);
         ImGui::TextV(fmt, args);
         va_end(args);
+    }
+
+    void DebugUi::plot(const char *label, const float *samples, size_t bufferLength, size_t count,
+                       size_t offset, const char *overlayFmt, float yMin, float yMax) {
+        if (samples == nullptr || count == 0 || bufferLength == 0) {
+            ImGui::Text("%s: (no data)", label);
+            return;
+        }
+        // Latest sample = the position just before the writer's next slot.
+        const size_t latestIdx = (offset + count + bufferLength - 1) % bufferLength;
+        char overlay[64] = "";
+        if (overlayFmt != nullptr) {
+            std::snprintf(overlay, sizeof(overlay), overlayFmt, samples[latestIdx]);
+        }
+        ImGui::PlotLines(label, samples, static_cast<int>(count), static_cast<int>(offset),
+                         overlay, yMin, yMax, ImVec2(0, 48));
     }
 
     bool DebugUi::wantsMouse() const {

@@ -83,6 +83,25 @@ namespace RAGE::App {
         void text(const char *fmt, ...);
 
         /**
+         * Time-series plot widget — renders the contents of a ring buffer as a line
+         * graph. Reads through `(samples, count, offset)` so it can take a
+         * `Core::Histogram` (via `data()`, `size()`, `oldestOffset()`) without
+         * copying. Always shows the latest value as a tagline beside the label.
+         *
+         * @param label       Identifier displayed above the plot.
+         * @param samples     Pointer to the ring buffer of length `bufferLength`.
+         * @param bufferLength Total slots in `samples` (= histogram capacity).
+         * @param count       Number of live samples in the ring (≤ bufferLength).
+         * @param offset      Index in `samples` of the oldest live sample.
+         * @param overlayFmt  printf-style format for the "current value" overlay
+         *                    (e.g. "%.2f ms", "%.0f MB"). nullptr to omit.
+         * @param yMin / yMax Vertical range. Pass `(0, FLT_MAX)` to let ImGui
+         *                    auto-scale based on the live samples.
+         */
+        void plot(const char *label, const float *samples, size_t bufferLength, size_t count,
+                  size_t offset, const char *overlayFmt, float yMin, float yMax);
+
+        /**
          * Mouse-wheel delta this frame, in ImGui's units (+1 per tick up, -1 down). Always
          * the raw wheel value — callers gate based on their own state (e.g. mouse-look
          * capture). ImGui consumes wheel events for its own widgets independently of this
