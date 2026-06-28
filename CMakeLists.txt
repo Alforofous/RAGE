@@ -158,6 +158,7 @@ add_executable(RAGE
     src/app/free_fly_controller.cpp
     src/app/main.cpp
     src/app/profiler.cpp
+    src/app/tracy_alloc_hooks.cpp
     src/app/window.cpp
 )
 target_link_libraries(RAGE rage_engine imgui)
