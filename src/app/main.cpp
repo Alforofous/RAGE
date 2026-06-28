@@ -339,9 +339,8 @@ int main(int argc, char **argv) {
             bool mipSkipEnabled = renderer.mipSkipEnabled();
             int heatmapMode = renderer.heatmapMode();
             int heatmapMaxSteps = renderer.heatmapMaxSteps();
+            bool useSvdag = renderer.useSvdag();
             bool brickDedup = renderer.brickPool().isDedupEnabled();
-            Svdag svdagSnapshot{};
-            size_t svdagSnapshotGridBytes = 0;
             debugUi.setBuilder([&]() {
                 debugUi.beginPanel("RAGE Debug");
                 if (!loaderDone.load()) {
@@ -362,6 +361,9 @@ int main(int argc, char **argv) {
                 }
                 if (debugUi.checkbox("Mip skip", &mipSkipEnabled)) {
                     renderer.setMipSkipEnabled(mipSkipEnabled);
+                }
+                if (debugUi.checkbox("SVDAG traversal", &useSvdag)) {
+                    renderer.setUseSvdag(useSvdag);
                 }
                 static const char *const kHeatmapOpts[] = { "Off", "Step count" };
                 if (debugUi.radio("Heatmap", &heatmapMode,
@@ -428,29 +430,22 @@ int main(int argc, char **argv) {
                 debugUi.text("Total:          %.2f MB  (saved %.2f MB / %.0f%%)",
                              brickmapTotalMB, savingsMB, savingsPct);
 
-                debugUi.separatorText("SVDAG (preview)");
-                if (debugUi.button("Build SVDAG from world brick grid")) {
-                    const auto handles = renderer.worldBrickGrid().handles();
-                    const IVec3 dims = renderer.worldBrickGrid().dims();
-                    svdagSnapshotGridBytes = handles.size() * sizeof(BrickHandle);
-                    svdagSnapshot = buildSvdag(handles.data(), dims);
-                }
-                if (!svdagSnapshot.nodes.empty()) {
-                    const double svdagMB = static_cast<double>(svdagBytes(svdagSnapshot))
-                                           / (1024.0 * 1024.0);
-                    const double flatGridMB = static_cast<double>(svdagSnapshotGridBytes)
-                                              / (1024.0 * 1024.0);
+                if (renderer.useSvdag() && !renderer.svdag().nodes.empty()) {
+                    debugUi.separatorText("SVDAG (live)");
+                    const Svdag &sv = renderer.svdag();
+                    const size_t flatGridBytes =
+                        renderer.worldBrickGrid().handles().size() * sizeof(BrickHandle);
+                    const double svdagMB = static_cast<double>(svdagBytes(sv)) / (1024.0 * 1024.0);
+                    const double flatGridMB =
+                        static_cast<double>(flatGridBytes) / (1024.0 * 1024.0);
                     const double svdagSavedMB = flatGridMB - svdagMB;
                     const double svdagSavedPct =
                         flatGridMB > 0.0 ? (svdagSavedMB / flatGridMB) * 100.0 : 0.0;
-                    debugUi.text("Nodes:          %zu", svdagSnapshot.nodes.size());
-                    debugUi.text("Levels:         %d (paddedDim=%d)", svdagSnapshot.levels,
-                                 svdagSnapshot.paddedDim);
+                    debugUi.text("Nodes:          %zu", sv.nodes.size());
+                    debugUi.text("Levels:         %d (paddedDim=%d)", sv.levels, sv.paddedDim);
                     debugUi.text("SVDAG size:     %.3f MB", svdagMB);
                     debugUi.text("Flat grid:      %.3f MB", flatGridMB);
                     debugUi.text("Saved vs grid:  %.3f MB (%.0f%%)", svdagSavedMB, svdagSavedPct);
-                } else {
-                    debugUi.text("(click to compute compression vs world brick grid)");
                 }
 
                 debugUi.endPanel();

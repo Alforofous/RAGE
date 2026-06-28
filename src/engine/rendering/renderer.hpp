@@ -13,6 +13,7 @@
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
+#include "engine/scene/svdag.hpp"
 #include "engine/scene/renderable_node3d.hpp"
 #include "gpu/vulkan/vulkan_buffer.hpp"
 #include "gpu/gpu_queue_kind.hpp"
@@ -110,6 +111,13 @@ namespace RAGE {
         int32_t heatmapMode() const { return heatmapMode_; }
         void setHeatmapMaxSteps(int32_t maxSteps) { heatmapMaxSteps_ = maxSteps; }
         int32_t heatmapMaxSteps() const { return heatmapMaxSteps_; }
+        // When true the shader's outer DDA descends a per-frame-built SVDAG instead of stepping
+        // the flat world brick grid. Phase B of M4. Both paths produce identical hits; the SVDAG
+        // path skips empty subtrees in O(log depth) and is the architecture for kilometre-scale
+        // scenes. Build cost is sub-ms for our current scene scale.
+        void setUseSvdag(bool enabled) { useSvdag_ = enabled; }
+        bool useSvdag() const { return useSvdag_; }
+        const Svdag &svdag() const { return svdag_; }
 
         /**
          * Shared brick pool that will back every `Voxel3D`'s storage once M3-C lands.
@@ -201,6 +209,10 @@ namespace RAGE {
         std::optional<VulkanBuffer> brickPoolBuffer_;
         std::optional<VulkanBuffer> worldBrickGridHandlesBuffer_;
         std::optional<VulkanBuffer> worldBrickGridParamsBuffer_;
+        std::optional<VulkanBuffer> svdagNodesBuffer_;
+        std::optional<VulkanBuffer> svdagParamsBuffer_;
+        Svdag svdag_{};
+        uint64_t lastSvdagSourceHash_ = 0;   // FNV of (handles + dims); rebuild only on change.
         std::optional<VulkanBuffer> pixelDebugBuffer_;
         std::optional<VulkanBuffer> thumbnailStaging_;
         bool thumbnailQueued_ = false;
@@ -217,6 +229,7 @@ namespace RAGE {
         bool mipSkipEnabled_ = true;
         int32_t heatmapMode_ = 0;
         int32_t heatmapMaxSteps_ = 1024;
+        bool useSvdag_ = false;
         std::vector<Voxel3D *> shadowCasters_;
         BrickPool brickPool_;
         WorldBrickGrid worldBrickGrid_;
