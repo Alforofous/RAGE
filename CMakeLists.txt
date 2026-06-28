@@ -59,6 +59,7 @@ set(ENGINE_SOURCES
     src/platform/gpu/vulkan/vulkan_semaphore_pool.cpp
     src/platform/gpu/vulkan/vulkan_shader_module.cpp
     src/platform/gpu/vulkan/vulkan_swapchain.cpp
+    src/engine/content/scene_generators.cpp
     src/engine/content/vox_loader.cpp
     src/engine/materials/pipeline_cache.cpp
     src/engine/rendering/gpu_svdag_cache.cpp
