@@ -14,6 +14,7 @@ add_executable(rage_tests
     engine/scene/renderable_node3d_test.cpp
     platform/gpu/gpu_allocator_test.cpp
     platform/gpu/gpu_command_test.cpp
+    platform/process_memory_test.cpp
     shared/histogram_test.cpp
     shared/math/color_test.cpp
     shared/math/ivec_test.cpp

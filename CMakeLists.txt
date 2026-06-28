@@ -42,6 +42,7 @@ add_subdirectory(libraries/)
 # --- Engine library ---
 
 set(ENGINE_SOURCES
+    src/platform/process_memory.cpp
     src/platform/gpu/vulkan/vma_impl.cpp
     src/platform/gpu/vulkan/vulkan_allocator.cpp
     src/platform/gpu/vulkan/vulkan_image.cpp
@@ -99,6 +100,10 @@ if(DEFINED ENV{VULKAN_SDK})
 endif()
 
 target_link_libraries(rage_engine project_libraries spirv-reflect-static)
+
+if(WIN32)
+    target_link_libraries(rage_engine psapi)   # GetProcessMemoryInfo for processResidentBytes
+endif()
 
 # --- Shader compilation ---
 
