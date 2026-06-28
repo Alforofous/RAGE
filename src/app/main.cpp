@@ -330,20 +330,37 @@ int main(int argc, char **argv) {
             };
             wireCancelHooks();
 
+            // Surface for build/load failures so the render loop can paint the
+            // partial-scene state instead of dying. A `BrickPool: exhausted` throw
+            // from a no-dedup rebuild is the canonical case — the user just clicked
+            // a button knowing the scene won't fit; the right reaction is to log,
+            // not terminate.
+            std::string loaderError;
+            std::mutex loaderErrorMutex;
+            const auto recordError = [&](const std::string &what) {
+                std::lock_guard lock(loaderErrorMutex);
+                loaderError = what;
+                std::fprintf(stderr, "[scene] %s\n", what.c_str());
+            };
+
             // The loader thread body. Extracted so resetScene can spawn a fresh
             // thread on its own loadJobs without duplicating the profiler setup
             // and cancel-aware iteration.
             const auto runLoader = [&]() {
                 profiler.setThreadName("AssetLoader");
                 App::Profiler::Zone outerZone(profiler, "LoaderThread");
-                for (const auto &job : loadJobs) {
-                    if (loaderCancel.load()) {
-                        break;
+                try {
+                    for (const auto &job : loadJobs) {
+                        if (loaderCancel.load()) {
+                            break;
+                        }
+                        App::Profiler::Zone perFileZone(profiler, "VoxelData::fillFromPackedRGBA8");
+                        job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
+                        job->model.voxels.clear();
+                        job->model.voxels.shrink_to_fit();
                     }
-                    App::Profiler::Zone perFileZone(profiler, "VoxelData::fillFromPackedRGBA8");
-                    job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
-                    job->model.voxels.clear();
-                    job->model.voxels.shrink_to_fit();
+                } catch (const std::exception &e) {
+                    recordError(std::string("loader: ") + e.what());
                 }
                 loaderDone.store(true);
             };
@@ -375,7 +392,18 @@ int main(int argc, char **argv) {
                 renderer.recreateBrickPool(enableDedup);
                 loaderCancel.store(false);
                 loaderDone.store(false);
-                buildScene();
+                {
+                    std::lock_guard lock(loaderErrorMutex);
+                    loaderError.clear();
+                }
+                try {
+                    buildScene();
+                } catch (const std::exception &e) {
+                    // The canonical case: dedup-off bigworld → BrickPool exhausted.
+                    // The partial scene rendered so far stays on screen; the user
+                    // can press the inverse button to recover into a fitting policy.
+                    recordError(std::string("buildScene: ") + e.what());
+                }
                 wireCancelHooks();
                 loaderThread = std::thread(runLoader);
             };
@@ -435,6 +463,12 @@ int main(int argc, char **argv) {
                 if (debugUi.button(brickDedup ? "Restart with no dedup" : "Restart with dedup")) {
                     resetScene(!brickDedup);
                     brickDedup = !brickDedup;
+                }
+                {
+                    std::lock_guard lock(loaderErrorMutex);
+                    if (!loaderError.empty()) {
+                        debugUi.text("! %s", loaderError.c_str());
+                    }
                 }
                 const auto bricksUnique = renderer.brickPool().allocated();
                 const auto bricksLogical = renderer.brickPool().logicalBricks();
