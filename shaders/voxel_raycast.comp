@@ -273,7 +273,18 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
     vec3 gridMin = gridOrigin;
     vec3 gridMax = gridOrigin + vec3(paddedDim) * cs;
 
-    vec3 invDir = 1.0 / worldDir;
+    // Clamp |invDir| to a large finite value so every downstream axis-aligned-bounds
+    // intersection in this function is NaN-safe. Raw 1/0 makes an axis-parallel
+    // ray's invDir ±∞; if the ray's origin ALSO matches a box face on that same
+    // axis (the cube face here, or any subtree face during the empty-skip below),
+    // the box-distance product becomes 0 × ∞ = NaN, which propagates through
+    // min/max and lands the traversal in garbage. Showed up as a one-pixel-wide
+    // line along the screen row/column where the camera math produces a perfectly
+    // axis-aligned ray (centre column → dirX=0; horizon row → dirY=0). The clamp
+    // gives a huge-but-finite invDir; on the parallel axis the resulting t-value
+    // is huge and the min() naturally picks the other (real) axes.
+    const float kInvDirCap = 1e20;
+    vec3 invDir = clamp(1.0 / worldDir, vec3(-kInvDirCap), vec3(kInvDirCap));
     vec3 t0 = (gridMin - worldOrigin) * invDir;
     vec3 t1 = (gridMax - worldOrigin) * invDir;
     vec3 tlo = min(t0, t1);
@@ -336,6 +347,9 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
             ivec3 subOriginCell = (cell / lookup.emptySubtreeSize) * lookup.emptySubtreeSize;
             vec3 subMinW = gridOrigin + vec3(subOriginCell) * cs;
             vec3 subMaxW = subMinW + vec3(lookup.emptySubtreeSize) * cs;
+            // invDir is already clamped to a finite cap at the top of tracePrimarySvdag,
+            // so axis-parallel rays land here without the 0 × ∞ NaN that previously
+            // produced one-pixel-wide line artifacts on the screen.
             vec3 st0 = (subMinW - worldOrigin) * invDir;
             vec3 st1 = (subMaxW - worldOrigin) * invDir;
             vec3 sthi = max(st0, st1);
