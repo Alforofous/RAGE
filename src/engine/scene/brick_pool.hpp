@@ -55,7 +55,15 @@ namespace RAGE {
          */
         static constexpr size_t kMaxBricks = 16384;
 
-        BrickPool();
+        /**
+         * Construct a pool. `enableDedup` is fixed for the pool's lifetime — to
+         * compare dedup-on vs dedup-off, instantiate two pools and bind the scene
+         * to each separately rather than toggling state mid-flight. The structure
+         * analysis flagged the previous runtime toggle as race-prone: re-acquiring
+         * every brick under a new policy while the asset-loader thread is allocating
+         * is exactly the seam the pool's mutex was meant to protect.
+         */
+        explicit BrickPool(bool enableDedup = true);
 
         /**
          * Allocate a fresh, exclusively-owned brick. Refcount = 1, contents zero,
@@ -151,11 +159,8 @@ namespace RAGE {
         /** Pool memory reserved upfront, regardless of how many bricks are in use. */
         size_t reservedBytes() const { return kMaxBricks * sizeof(Brick); }
 
-        /** Toggle content-hash deduplication. Takes effect on future `acquireBrick`
-         *  calls; existing bricks are unaffected. Callers wanting a "rebuild" effect
-         *  must walk the scene and re-acquire each brick after toggling. */
-        void setDedupEnabled(bool enabled);
-        bool isDedupEnabled() const;
+        /** Whether content-hash deduplication is on. Fixed at construction. */
+        bool isDedupEnabled() const { return dedupEnabled_; }
 
     private:
         mutable std::mutex mutex_;

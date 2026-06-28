@@ -380,20 +380,7 @@ int main(int argc, char **argv) {
                 }
 
                 debugUi.separatorText("Memory");
-                if (debugUi.checkbox("Brick dedup", &brickDedup)) {
-                    renderer.brickPool().setDedupEnabled(brickDedup);
-                    std::function<void(Node3D &)> rebuildWalk = [&](Node3D &node) {
-                        if (auto *v = dynamic_cast<Voxel3D *>(&node)) {
-                            if (VoxelData *vd = v->voxelData()) {
-                                vd->rebuildBricks();
-                            }
-                        }
-                        for (const auto &child : node.children()) {
-                            rebuildWalk(*child);
-                        }
-                    };
-                    rebuildWalk(root);
-                }
+                debugUi.text("Brick dedup:    %s", brickDedup ? "on" : "off");
                 const auto bricksUnique = renderer.brickPool().allocated();
                 const auto bricksLogical = renderer.brickPool().logicalBricks();
                 const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())

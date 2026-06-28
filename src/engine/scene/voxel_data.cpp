@@ -170,15 +170,4 @@ namespace RAGE {
         }
     }
 
-    void VoxelData::rebuildBricks() {
-        for (size_t i = 0; i < handles_.size(); ++i) {
-            if (handles_[i] == kEmptyBrick) {
-                continue;
-            }
-            const Brick snapshot = pool_->brick(handles_[i]);
-            const BrickHandle newH = pool_->acquireBrick(snapshot);
-            pool_->release(handles_[i]);
-            handles_[i] = newH;
-        }
-    }
 }

@@ -28,7 +28,8 @@ namespace RAGE {
         }
     }
 
-    BrickPool::BrickPool() {
+    BrickPool::BrickPool(bool enableDedup)
+        : dedupEnabled_(enableDedup) {
         bricks_.reserve(kMaxBricks);
         refCount_.reserve(kMaxBricks);
         dirtyFlags_.reserve(kMaxBricks);
@@ -203,13 +204,4 @@ namespace RAGE {
         return total;
     }
 
-    void BrickPool::setDedupEnabled(bool enabled) {
-        std::lock_guard lock(mutex_);
-        dedupEnabled_ = enabled;
-    }
-
-    bool BrickPool::isDedupEnabled() const {
-        std::lock_guard lock(mutex_);
-        return dedupEnabled_;
-    }
 }

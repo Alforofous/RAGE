@@ -82,17 +82,8 @@ namespace RAGE {
         void forEachOccupiedBrick(
             const std::function<void(IVec3 brickCoord, BrickHandle handle)> &fn) const;
 
-        /**
-         * Re-acquire every currently-occupied brick under the pool's current dedup
-         * setting. Walks each handle, snapshots its content, calls `pool.acquireBrick`
-         * (which dedups or duplicates depending on `isDedupEnabled()`), updates the
-         * handle, releases the old slot. Idempotent if the setting hasn't changed
-         * since the last call; collapses or expands storage when it has.
-         *
-         * Used by the debug UI's "Brick dedup" toggle to give an immediate visible
-         * memory effect on flip.
-         */
-        void rebuildBricks();
+        // (rebuildBricks was removed alongside BrickPool::setDedupEnabled — dedup is now
+        // construction-time policy, so there's nothing to "rebuild against" anymore.)
 
         /** Size of the handle-grid storage (excluding the bricks themselves in the pool). */
         size_t handleGridBytes() const { return handles_.size() * sizeof(BrickHandle); }
