@@ -54,7 +54,21 @@ namespace RAGE {
         , cmdPool_(ctx.vkDevice(), ctx.graphicsQueue().queueFamily())
         , descPool_(ctx.vkDevice(), {})
         , pipelineCache_(ctx.vkDevice())
-        , svdagCache_(allocator) {}
+        , svdagCache_(allocator) {
+        brickPool_.emplace();   // default policy: dedup on
+    }
+
+    void Renderer::recreateBrickPool(bool enableDedup) {
+        // Caller must have already destroyed every VoxelData that held a handle from
+        // the current pool — see method docstring. We drain GPU work first so the
+        // shader isn't mid-read of the brick pool buffer when we swap. The buffer
+        // itself stays allocated; its contents get rewritten lazily as the new
+        // scene's bricks are marked dirty.
+        drainInFlight();
+        vkDeviceWaitIdle(ctx_.vkDevice());
+        brickPool_.reset();
+        brickPool_.emplace(enableDedup);
+    }
 
     Renderer::~Renderer() {
         try {
@@ -339,9 +353,9 @@ namespace RAGE {
 
             // Upload dirty bricks into the brick pool buffer.
             auto *poolDst = static_cast<Brick *>(brickPoolBuffer_->mappedData());
-            const std::vector<BrickHandle> dirty = brickPool_.drainDirty();
+            const std::vector<BrickHandle> dirty = brickPool_->drainDirty();
             for (BrickHandle h : dirty) {
-                poolDst[h.id] = brickPool_.brick(h);
+                poolDst[h.id] = brickPool_->brick(h);
             }
 
             // GPU-resident SVDAG cache. Builds + uploads only when the source brick

@@ -121,11 +121,29 @@ namespace RAGE {
         const Svdag &svdag() const { return svdagCache_.svdag(); }
 
         /**
-         * Shared brick pool that will back every `Voxel3D`'s storage once M3-C lands.
-         * Lives for the renderer's lifetime; stable address.
+         * Shared brick pool that backs every `Voxel3D`'s storage. Returned by reference
+         * but the underlying object can be **replaced** via `recreateBrickPool` — the
+         * reference is stable only until that call. Holders of `BrickHandle`s issued
+         * by a particular pool become invalid the moment that pool is replaced.
          */
-        BrickPool &brickPool() { return brickPool_; }
-        const BrickPool &brickPool() const { return brickPool_; }
+        BrickPool &brickPool() { return *brickPool_; }
+        const BrickPool &brickPool() const { return *brickPool_; }
+
+        /**
+         * Destroy the current pool and construct a fresh one with the given dedup
+         * policy. Used by the debug UI's "Restart with no dedup" path; can also be
+         * used by future code that wants to re-seed pool policy across an explicit
+         * lifecycle boundary.
+         *
+         * **Precondition**: every `VoxelData` holding a handle from the current pool
+         * must already have been destroyed by the caller (scene tree cleared). The
+         * pool's destructor doesn't run callbacks; if outstanding handles exist when
+         * the pool is replaced, those `VoxelData`s' destructors will later call
+         * `release` on a different pool — undefined behaviour. The method drains
+         * any in-flight GPU work and waits for device idle before swapping so the
+         * GPU isn't reading the old pool's buffer during the swap.
+         */
+        void recreateBrickPool(bool enableDedup);
 
         /**
          * Top-level sparse grid mapping world brick coords to handles into the brick pool.
@@ -229,7 +247,7 @@ namespace RAGE {
         int32_t heatmapMaxSteps_ = 1024;
         bool useSvdag_ = false;
         std::vector<Voxel3D *> shadowCasters_;
-        BrickPool brickPool_;
+        std::optional<BrickPool> brickPool_;
         WorldBrickGrid worldBrickGrid_;
         std::vector<VoxelDataWorldPlacement> brickPlacementsScratch_;
 
