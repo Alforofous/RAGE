@@ -273,18 +273,23 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
     vec3 gridMin = gridOrigin;
     vec3 gridMax = gridOrigin + vec3(paddedDim) * cs;
 
-    // Clamp |invDir| to a large finite value so every downstream axis-aligned-bounds
-    // intersection in this function is NaN-safe. Raw 1/0 makes an axis-parallel
-    // ray's invDir ±∞; if the ray's origin ALSO matches a box face on that same
-    // axis (the cube face here, or any subtree face during the empty-skip below),
-    // the box-distance product becomes 0 × ∞ = NaN, which propagates through
-    // min/max and lands the traversal in garbage. Showed up as a one-pixel-wide
-    // line along the screen row/column where the camera math produces a perfectly
-    // axis-aligned ray (centre column → dirX=0; horizon row → dirY=0). The clamp
-    // gives a huge-but-finite invDir; on the parallel axis the resulting t-value
-    // is huge and the min() naturally picks the other (real) axes.
+    // Compute invDir without ever evaluating 1/0. Axis-parallel rays (dir component
+    // exactly 0) would otherwise produce ±∞ from raw division, and any subsequent
+    // box-intersection on that same axis (cube face or any empty-subtree face
+    // during the skip below) where origin matches the face evaluates to 0 × ∞ =
+    // NaN — which propagates through min/max and lands the traversal in garbage.
+    // Shows up on screen as a one-pixel-wide line along the row/column where the
+    // camera math gives a perfectly axis-aligned ray (centre column → dirX=0;
+    // horizon row → dirY=0). clamp() applied to inf is implementation-defined on
+    // some GPUs (the previous fix relied on it and still leaked NaN through),
+    // so we substitute a huge finite invDir before any division can fire.
+    const float kAxisEps = 1e-20;
     const float kInvDirCap = 1e20;
-    vec3 invDir = clamp(1.0 / worldDir, vec3(-kInvDirCap), vec3(kInvDirCap));
+    vec3 safeDir;
+    safeDir.x = abs(worldDir.x) > kAxisEps ? worldDir.x : (worldDir.x >= 0.0 ? kAxisEps : -kAxisEps);
+    safeDir.y = abs(worldDir.y) > kAxisEps ? worldDir.y : (worldDir.y >= 0.0 ? kAxisEps : -kAxisEps);
+    safeDir.z = abs(worldDir.z) > kAxisEps ? worldDir.z : (worldDir.z >= 0.0 ? kAxisEps : -kAxisEps);
+    vec3 invDir = clamp(1.0 / safeDir, vec3(-kInvDirCap), vec3(kInvDirCap));
     vec3 t0 = (gridMin - worldOrigin) * invDir;
     vec3 t1 = (gridMax - worldOrigin) * invDir;
     vec3 tlo = min(t0, t1);
