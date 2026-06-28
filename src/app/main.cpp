@@ -108,6 +108,21 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Profiler must outlive the engine objects. Construct first so we can launch
+    // Tracy BEFORE any engine allocations happen — Tracy's on-demand mode only
+    // tracks allocations made AFTER the GUI connects, so doing it the other way
+    // around hides the first ~32 MB of brick-pool reservation (and everything
+    // else in startup) from the Memory tab. With --profile, we block here until
+    // Tracy has connected (5s deadline so missing/broken Tracy doesn't hang).
+    App::Profiler profiler;
+    if (autoLaunchTracy && App::Profiler::isLinked()) {
+        profiler.launchProfilerGui();
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!profiler.isConnected() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+
     try {
         App::Window window(1280, 720, "RAGE Smoke");
 
@@ -307,18 +322,10 @@ int main(int argc, char **argv) {
             buildScene();
 
             std::atomic<bool> loaderDone{ false };
-            App::Profiler profiler;
+            // Profiler was constructed + connected before the `try` block (see top
+            // of main) so its Memory tab captures BrickPool's startup reservation
+            // and everything else. Attach to the renderer's per-frame hooks here.
             profiler.attach(renderer);
-            if (autoLaunchTracy && App::Profiler::isLinked()) {
-                profiler.launchProfilerGui();
-                // Wait for Tracy's on-demand connection so early app work (asset load,
-                // first-frame setup) lands on the timeline instead of being dropped.
-                // Timeout-bounded so a missing/broken Tracy install never hangs startup.
-                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-                while (!profiler.isConnected() && std::chrono::steady_clock::now() < deadline) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                }
-            }
 
             std::atomic<bool> loaderCancel{ false };
 
