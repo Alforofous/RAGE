@@ -179,8 +179,8 @@ namespace RAGE {
         void onBeforeGpuPass(GpuPassHook h) { beforeGpuPass_ = std::move(h); }
         void onAfterGpuPass(GpuPassHook h) { afterGpuPass_ = std::move(h); }
         void onFrameImage(FrameImageHook h) { frameImage_ = std::move(h); }
-        void onPhaseBegin(PhaseHook h) { phaseBegin_.push_back(std::move(h)); }
-        void onPhaseEnd(PhaseHook h) { phaseEnd_.push_back(std::move(h)); }
+        void onPhaseBegin(PhaseHook h) { phaseBegin_ = std::move(h); }
+        void onPhaseEnd(PhaseHook h) { phaseEnd_ = std::move(h); }
         void onSwapchainRebuilt(SwapchainRebuiltHook h);
         void onUiRender(UiRenderHook h) { uiRender_ = std::move(h); }
 
@@ -240,8 +240,8 @@ namespace RAGE {
         GpuPassHook beforeGpuPass_;
         GpuPassHook afterGpuPass_;
         FrameImageHook frameImage_;
-        std::vector<PhaseHook> phaseBegin_;
-        std::vector<PhaseHook> phaseEnd_;
+        PhaseHook phaseBegin_;
+        PhaseHook phaseEnd_;
         SwapchainRebuiltHook swapchainRebuilt_;
         UiRenderHook uiRender_;
 

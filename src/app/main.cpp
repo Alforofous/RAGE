@@ -22,7 +22,6 @@
 #include "engine/materials/material.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/renderer.hpp"
-#include "phase_tracker.hpp"
 #include "platform/process_memory.hpp"
 #include "shared/histogram.hpp"
 #include "profiler.hpp"
@@ -303,8 +302,6 @@ int main(int argc, char **argv) {
 
             std::atomic<bool> loaderDone{ false };
             profiler.attach(renderer);
-            App::PhaseTracker phaseTracker;
-            phaseTracker.attach(renderer);
 
             std::atomic<bool> loaderCancel{ false };
 
@@ -488,13 +485,6 @@ int main(int argc, char **argv) {
                 debugUi.plot("Process RSS", processRSSMBHistory.data(),
                              processRSSMBHistory.capacity(), processRSSMBHistory.size(),
                              processRSSMBHistory.oldestOffset(), "%.0f MB", 0.0f, FLT_MAX);
-
-                debugUi.separatorText("Phases");
-                phaseTracker.forEachPhase([&](const std::string &name,
-                                              const App::PhaseTracker::PhaseHistory &h) {
-                    debugUi.plot(name.c_str(), h.data(), h.capacity(), h.size(),
-                                 h.oldestOffset(), "%.3f ms", 0.0f, FLT_MAX);
-                });
 
                 if (renderer.useSvdag() && !renderer.svdag().nodes.empty()) {
                     debugUi.separatorText("SVDAG (live)");

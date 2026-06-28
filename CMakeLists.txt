@@ -157,7 +157,6 @@ add_executable(RAGE
     src/app/debug_ui.cpp
     src/app/free_fly_controller.cpp
     src/app/main.cpp
-    src/app/phase_tracker.cpp
     src/app/profiler.cpp
     src/app/tracy_alloc_hooks.cpp
     src/app/window.cpp

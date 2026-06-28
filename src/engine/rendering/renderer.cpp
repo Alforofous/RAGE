@@ -24,21 +24,16 @@ namespace RAGE {
         // profiler library knowledge — this just routes the engine's own callbacks.
         class PhaseScope {
         public:
-            PhaseScope(const std::vector<Renderer::PhaseHook> &begin,
-                       const std::vector<Renderer::PhaseHook> &end, const char *name)
+            PhaseScope(const Renderer::PhaseHook &begin, const Renderer::PhaseHook &end, const char *name)
                 : end_(end)
                 , name_(name) {
-                for (const auto &hook : begin) {
-                    if (hook) {
-                        hook(name);
-                    }
+                if (begin) {
+                    begin(name);
                 }
             }
             ~PhaseScope() {
-                for (const auto &hook : end_) {
-                    if (hook) {
-                        hook(name_);
-                    }
+                if (end_) {
+                    end_(name_);
                 }
             }
             PhaseScope(const PhaseScope &) = delete;
@@ -47,7 +42,7 @@ namespace RAGE {
             PhaseScope &operator=(PhaseScope &&) = delete;
 
         private:
-            const std::vector<Renderer::PhaseHook> &end_;
+            const Renderer::PhaseHook &end_;
             const char *name_;
         };
     }
