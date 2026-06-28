@@ -83,3 +83,85 @@ TEST(Svdag, MeasuresMeaningfulCompressionOnLargelyEmptyGrid) {
     const size_t svdagBytesUsed = svdagBytes(s);
     EXPECT_LT(svdagBytesUsed, flatGridBytes);
 }
+
+namespace {
+    // Mirror of the shader's integer-coord descent (svdagBrickAt in voxel_raycast.comp).
+    // Keeping a host-side reference implementation lets us pin the shader's traversal
+    // contract via tests rather than rendered-pixel sanity checks. If the shader and
+    // this function ever diverge, one of them is wrong.
+    uint32_t descend(const Svdag &s, IVec3 brickCoord, int32_t &outEmptySubtreeSize) {
+        outEmptySubtreeSize = 1;
+        if (s.paddedDim <= 0 || s.nodes.empty()) {
+            return 0u;
+        }
+        if (brickCoord.x < 0 || brickCoord.x >= s.paddedDim || brickCoord.y < 0
+            || brickCoord.y >= s.paddedDim || brickCoord.z < 0 || brickCoord.z >= s.paddedDim) {
+            return 0u;
+        }
+        uint32_t current = s.rootIndex;
+        int32_t dim = s.paddedDim;
+        IVec3 c = brickCoord;
+        for (int32_t level = s.levels; level > 0; --level) {
+            if (current == 0u) {
+                outEmptySubtreeSize = dim;
+                return 0u;
+            }
+            const int32_t half = dim / 2;
+            uint32_t octant = 0u;
+            if (c.x >= half) { octant |= 1u; c.x -= half; }
+            if (c.y >= half) { octant |= 2u; c.y -= half; }
+            if (c.z >= half) { octant |= 4u; c.z -= half; }
+            current = s.nodes[current].children[octant];
+            dim = half;
+        }
+        return current;
+    }
+}
+
+TEST(Svdag, DescentReturnsTheRecordedBrickHandleAtLeafLevel) {
+    constexpr int32_t kDim = 4;
+    std::vector<uint32_t> grid(static_cast<size_t>(kDim) * kDim * kDim, kEmptyBrick);
+    grid[0] = 7u;                     // (0,0,0) → brick handle 7
+    grid[(kDim * kDim * kDim) - 1] = 9u; // (3,3,3) → brick handle 9
+    const Svdag s = buildSvdag(grid.data(), IVec3(kDim, kDim, kDim));
+
+    int32_t skip = -1;
+    EXPECT_EQ(descend(s, IVec3(0, 0, 0), skip), 7u);
+    EXPECT_EQ(skip, 1);
+    EXPECT_EQ(descend(s, IVec3(3, 3, 3), skip), 9u);
+    EXPECT_EQ(skip, 1);
+}
+
+TEST(Svdag, EmptySubtreeSkipReportsItsActualSize) {
+    // 8³ grid with a single brick in one corner: descending into any of the other
+    // octants should report an empty subtree spanning the full 4 cells of that octant,
+    // and descending into smaller empty cells inside the populated octant should
+    // report smaller subtree sizes — the contract the outer DDA relies on for its
+    // multi-cell jump.
+    constexpr int32_t kDim = 8;
+    std::vector<uint32_t> grid(static_cast<size_t>(kDim) * kDim * kDim, kEmptyBrick);
+    grid[0] = 1u;
+    const Svdag s = buildSvdag(grid.data(), IVec3(kDim, kDim, kDim));
+
+    int32_t skip = 0;
+    // Far corner — entirely in the empty top-level octant.
+    EXPECT_EQ(descend(s, IVec3(7, 7, 7), skip), 0u);
+    EXPECT_EQ(skip, 4);   // half of paddedDim — the top-level empty octant.
+
+    // Inside the populated octant but past the brick — empty at a smaller subtree.
+    EXPECT_EQ(descend(s, IVec3(1, 0, 0), skip), 0u);
+    EXPECT_LT(skip, 4);
+    EXPECT_GT(skip, 0);
+}
+
+TEST(Svdag, OutOfBoundsCoordReportsEmptyButSize1) {
+    constexpr int32_t kDim = 4;
+    std::vector<uint32_t> grid(static_cast<size_t>(kDim) * kDim * kDim, 1u);
+    const Svdag s = buildSvdag(grid.data(), IVec3(kDim, kDim, kDim));
+
+    int32_t skip = 0;
+    EXPECT_EQ(descend(s, IVec3(-1, 0, 0), skip), 0u);
+    EXPECT_EQ(skip, 1);
+    EXPECT_EQ(descend(s, IVec3(s.paddedDim, 0, 0), skip), 0u);
+    EXPECT_EQ(skip, 1);
+}

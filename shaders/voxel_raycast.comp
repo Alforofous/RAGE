@@ -233,11 +233,20 @@ uint svdagBrickAt(ivec3 brickCoord, out int emptySubtreeSize) {
     return current;
 }
 
-// SVDAG path: structurally identical to the flat-grid outer DDA, but reads brick handles
-// from the SVDAG via `svdagBrickAt(cell)` instead of the dense `brickHandleAt(cell)` array.
-// Loses the empty-subtree-skip optimization vs the position-based descent, but is provably
-// correct (integer-coord lookup, identical control flow to the flat-grid path). The
-// skip-empty-subtree optimization can be layered back on top later as a separate concern.
+// SVDAG path: integer-coord descent + empty-subtree skip.
+//
+// The outer DDA walks brick cells over the padded SVDAG cube, but at each cell it asks
+// `svdagBrickAt(cell, out emptySubtreeSize)`. On a non-empty leaf this returns the brick
+// handle (size=1). On an empty subtree it returns 0 plus the subtree's edge length in
+// cells; the DDA then jumps past the whole subtree in a single t-based AABB-exit step
+// rather than stepping cell-by-cell. Sky rays through a kilometre-scale world thus take
+// O(log paddedDim) outer iterations instead of O(paddedDim).
+//
+// Integer-coord descent (vs position-based with float midplane comparisons) is chosen
+// for boundary robustness — shadow rays are particularly sensitive to the
+// just-past-the-face floating-point bookkeeping the position-based variant requires. The
+// skip mechanism is functionally equivalent to ESVO's POP-to-common-ancestor pattern;
+// see Dubiousconst282's 2024 sparse-64-tree guide for the integer-DDA framing.
 OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
     OuterTrace out_;
     out_.hit = false;

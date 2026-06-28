@@ -30,6 +30,14 @@ namespace RAGE {
     /** Reserved "empty subtree" sentinel for inner-node child slots. */
     inline constexpr uint32_t kEmptySvdagNode = 0u;
 
+    // Load-bearing coincidence: the empty-brick sentinel at leaf level and the
+    // empty-subtree sentinel at inner levels share the literal value `0u`, which is
+    // how cross-level dedup collapses both into a single physical node (index 0). If
+    // this ever diverges, the builder's `nodeIsEmpty` check and the shader's
+    // `current == 0u` early-exit both silently misclassify entire subtrees.
+    static_assert(kEmptyBrick == kEmptySvdagNode,
+                  "SVDAG cross-level dedup requires the empty-brick and empty-subtree sentinels to share a value");
+
     /**
      * Build output: the deduplicated octree-as-DAG over a brick grid.
      *
