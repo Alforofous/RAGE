@@ -66,26 +66,12 @@ namespace RAGE {
             if (p.data == nullptr) {
                 continue;
             }
-            const IVec3 bd = p.data->brickDims();
-            const std::span<const BrickHandle> srcHandles = p.data->handles();
-            for (int32_t bz = 0; bz < bd.z; ++bz) {
-                for (int32_t by = 0; by < bd.y; ++by) {
-                    for (int32_t bx = 0; bx < bd.x; ++bx) {
-                        const size_t srcIdx = (static_cast<size_t>(bz) * static_cast<size_t>(bd.x)
-                                                * static_cast<size_t>(bd.y))
-                                              + (static_cast<size_t>(by) * static_cast<size_t>(bd.x))
-                                              + static_cast<size_t>(bx);
-                        const BrickHandle h = srcHandles[srcIdx];
-                        if (h == kEmptyBrick) {
-                            continue;
-                        }
-                        const IVec3 dst{ (p.worldBrickOrigin.x + bx) - worldBrickOrigin_.x,
-                                          (p.worldBrickOrigin.y + by) - worldBrickOrigin_.y,
-                                          (p.worldBrickOrigin.z + bz) - worldBrickOrigin_.z };
-                        handles_[flatIndex(dst)] = h;
-                    }
-                }
-            }
+            p.data->forEachOccupiedBrick([&](IVec3 brickCoord, BrickHandle h) {
+                const IVec3 dst{ (p.worldBrickOrigin.x + brickCoord.x) - worldBrickOrigin_.x,
+                                  (p.worldBrickOrigin.y + brickCoord.y) - worldBrickOrigin_.y,
+                                  (p.worldBrickOrigin.z + brickCoord.z) - worldBrickOrigin_.z };
+                handles_[flatIndex(dst)] = h;
+            });
         }
     }
 }

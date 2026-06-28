@@ -155,6 +155,21 @@ namespace RAGE {
         }
     }
 
+    void VoxelData::forEachOccupiedBrick(
+        const std::function<void(IVec3, BrickHandle)> &fn) const {
+        for (int32_t bz = 0; bz < brickDims_.z; ++bz) {
+            for (int32_t by = 0; by < brickDims_.y; ++by) {
+                for (int32_t bx = 0; bx < brickDims_.x; ++bx) {
+                    const BrickHandle h = handles_[brickFlatIndex({ bx, by, bz })];
+                    if (h == kEmptyBrick) {
+                        continue;
+                    }
+                    fn(IVec3{ bx, by, bz }, h);
+                }
+            }
+        }
+    }
+
     void VoxelData::rebuildBricks() {
         for (size_t i = 0; i < handles_.size(); ++i) {
             if (handles_[i] == kEmptyBrick) {

@@ -72,6 +72,17 @@ namespace RAGE {
         std::span<const BrickHandle> handles() const { return handles_; }
 
         /**
+         * Invoke `fn(brickCoord, handle)` for every non-empty cell in this VoxelData's
+         * handle grid. The order is implementation-defined; callers must not depend on
+         * it (today: z-major, y-mid, x-fastest). Decouples consumers (WorldBrickGrid,
+         * future LOD streaming) from the underlying storage layout — a hashed-sparse
+         * implementation of VoxelData can ship the same callback without touching its
+         * consumers.
+         */
+        void forEachOccupiedBrick(
+            const std::function<void(IVec3 brickCoord, BrickHandle handle)> &fn) const;
+
+        /**
          * Re-acquire every currently-occupied brick under the pool's current dedup
          * setting. Walks each handle, snapshots its content, calls `pool.acquireBrick`
          * (which dedups or duplicates depending on `isDedupEnabled()`), updates the
