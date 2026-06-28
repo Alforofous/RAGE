@@ -119,13 +119,20 @@ namespace RAGE {
         return refCount_[h];
     }
 
-    void BrickPool::removeBrickFromDedup(BrickHandle h) {
+    BrickHandle BrickPool::prepareForWrite(BrickHandle h) {
         if (h == kEmptyBrick) {
-            return;
+            return kEmptyBrick;
         }
         std::lock_guard lock(mutex_);
         throwIfInvalid(h, bricks_.size());
+        if (refCount_[h] > 1u) {
+            const BrickHandle newH = allocateSlotLocked_();
+            bricks_[newH] = bricks_[h];
+            --refCount_[h];
+            return newH;
+        }
         removeFromDedupLocked_(h);
+        return h;
     }
 
     void BrickPool::removeFromDedupLocked_(BrickHandle h) {

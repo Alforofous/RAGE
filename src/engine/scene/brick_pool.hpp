@@ -27,11 +27,12 @@ namespace RAGE {
      * collapse to a single physical brick in the pool. When dedup is disabled,
      * `acquireBrick` always allocates a fresh slot — the diagnostic A/B counterpart.
      *
-     * Mutation of a deduplicated brick is **copy-on-write**: `VoxelData::setVoxel`
-     * detects shared bricks (refcount > 1) and clones to a private slot before
-     * writing. Bricks owned by exactly one VoxelData can be mutated in place after
-     * being removed from the dedup table (callers use `removeBrickFromDedup` before
-     * mutating).
+     * Mutation of a deduplicated brick goes through `prepareForWrite(h)` which
+     * atomically (under one mutex hold) detects shared bricks and clones, or detaches
+     * an exclusive brick from the dedup table — returning a private handle ready to
+     * mutate. This is the only sanctioned write path; callers do not check refcount
+     * themselves (the check-then-act pattern races against concurrent acquireBrick /
+     * release from the asset-loader thread).
      *
      * Dirty tracking: per-handle boolean flags + a compact dirty-handle list. Callers
      * mutate bricks via `brick(h)` and call `markDirty(h)`. The renderer drains
@@ -87,18 +88,24 @@ namespace RAGE {
         Brick &brick(BrickHandle h);
         const Brick &brick(BrickHandle h) const;
 
-        /** Current refcount on `h`. Used by `VoxelData::setVoxel` to detect shared
-         *  bricks that need copy-on-write before in-place mutation. */
+        /** Current refcount on `h`. Read-only diagnostic — never key control flow off
+         *  this value (the result is stale the moment it's returned). To mutate a
+         *  brick, use `prepareForWrite` which atomically handles sharing. */
         uint32_t refCount(BrickHandle h) const;
 
         /**
-         * Remove the brick at `h` from the dedup-map (if it was registered there) and
-         * mark it as "private" — future `acquireBrick` calls with the same content
-         * will allocate fresh rather than returning this handle. Callers invoke this
-         * before mutating a refcount-1 brick that was previously deduped, to keep the
-         * map's content invariants honest.
+         * Return a handle whose pool slot is privately-owned by the caller and detached
+         * from the dedup table, safe to mutate. If `h` was shared (refcount > 1) the
+         * pool clones to a fresh slot and decrements the old refcount; the returned
+         * handle is then *new*. If `h` was exclusive (refcount == 1) the pool detaches
+         * it from the dedup table and returns the same handle. Both cases run under a
+         * single mutex hold, so concurrent acquireBrick / release from other threads
+         * cannot wedge the dedup invariants.
+         *
+         * Returns `kEmptyBrick` unchanged. Callers writing to a previously-empty cell
+         * should call `allocate()` first.
          */
-        void removeBrickFromDedup(BrickHandle h);
+        BrickHandle prepareForWrite(BrickHandle h);
 
         /**
          * Mark a brick as needing GPU re-upload. Cheap to call repeatedly per frame

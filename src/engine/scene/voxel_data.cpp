@@ -72,20 +72,16 @@ namespace RAGE {
         BrickHandle h = handles_[flat];
         if (h == kEmptyBrick) {
             if (packed == 0u) {
-                return;     // no-op: zero into empty region
+                return;
             }
             h = pool_->allocate();
             handles_[flat] = h;
-        } else if (pool_->refCount(h) > 1u) {
-            // Copy-on-write: shared with other VoxelData entries, must clone.
-            const BrickHandle newH = pool_->allocate();
-            pool_->brick(newH) = pool_->brick(h);
-            pool_->release(h);
-            h = newH;
-            handles_[flat] = h;
         } else {
-            // Exclusive use; remove from dedup map (about to mutate its content).
-            pool_->removeBrickFromDedup(h);
+            const BrickHandle writable = pool_->prepareForWrite(h);
+            if (writable != h) {
+                handles_[flat] = writable;
+                h = writable;
+            }
         }
         const int32_t lx = c.x % Brick::kDim;
         const int32_t ly = c.y % Brick::kDim;

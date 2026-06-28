@@ -161,17 +161,41 @@ TEST(BrickPool, ReleaseDecrementsRefcountAndFreesAtZero) {
     EXPECT_EQ(pool.allocated(), 0u);
 }
 
-TEST(BrickPool, RemoveBrickFromDedupPreventsFutureDedupHits) {
+TEST(BrickPool, PrepareForWriteOnExclusiveBrickDetachesFromDedup) {
     BrickPool pool;
     Brick contents{};
     contents.voxels[0] = 0xCAFEBABEu;
 
     const BrickHandle a = pool.acquireBrick(contents);
-    pool.removeBrickFromDedup(a);
+    ASSERT_EQ(pool.refCount(a), 1u);
+
+    const BrickHandle writable = pool.prepareForWrite(a);
+    EXPECT_EQ(writable, a);
 
     const BrickHandle b = pool.acquireBrick(contents);
     EXPECT_NE(a, b);
     EXPECT_EQ(pool.allocated(), 2u);
+}
+
+TEST(BrickPool, PrepareForWriteOnSharedBrickClones) {
+    BrickPool pool;
+    Brick contents{};
+    contents.voxels[0] = 0xDEADBEEFu;
+
+    const BrickHandle a = pool.acquireBrick(contents);
+    const BrickHandle b = pool.acquireBrick(contents);
+    ASSERT_EQ(a, b);
+    ASSERT_EQ(pool.refCount(a), 2u);
+
+    const BrickHandle writable = pool.prepareForWrite(a);
+    EXPECT_NE(writable, a);
+    EXPECT_EQ(pool.refCount(a), 1u);
+    EXPECT_EQ(pool.refCount(writable), 1u);
+}
+
+TEST(BrickPool, PrepareForWriteOnEmptyHandleIsNoop) {
+    BrickPool pool;
+    EXPECT_EQ(pool.prepareForWrite(kEmptyBrick), kEmptyBrick);
 }
 
 TEST(BrickPool, LogicalBricksMatchesAllocatedWhenDedupOff) {
