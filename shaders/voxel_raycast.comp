@@ -352,35 +352,54 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
             ivec3 subOriginCell = (cell / lookup.emptySubtreeSize) * lookup.emptySubtreeSize;
             vec3 subMinW = gridOrigin + vec3(subOriginCell) * cs;
             vec3 subMaxW = subMinW + vec3(lookup.emptySubtreeSize) * cs;
-            // invDir is already clamped to a finite cap at the top of tracePrimarySvdag,
-            // so axis-parallel rays land here without the 0 × ∞ NaN that previously
-            // produced one-pixel-wide line artifacts on the screen.
-            vec3 st0 = (subMinW - worldOrigin) * invDir;
-            vec3 st1 = (subMaxW - worldOrigin) * invDir;
-            vec3 sthi = max(st0, st1);
-            float tSubExit = min(min(sthi.x, sthi.y), sthi.z);
+            // Per-axis box-exit t. For axes the ray is exactly parallel to we deliberately
+            // skip the division entirely — relying on clamped/huge invDir there is fragile
+            // (different GLSL implementations handle ∞-in-min/max differently, and the
+            // box-distance product of 0 × huge isn't reliably tiny on every GPU). Setting
+            // the parallel axis's t to a huge sentinel makes the min() naturally ignore
+            // it. The artifact lines came from this exact case — perfectly axis-aligned
+            // rays where the per-axis dance went wrong.
+            const float kBoxParallelEps = 1e-12;
+            const float kBigT = 1e30;
+            vec3 axisExit;
+            axisExit.x = abs(worldDir.x) > kBoxParallelEps
+                ? max((subMinW.x - worldOrigin.x) / worldDir.x, (subMaxW.x - worldOrigin.x) / worldDir.x)
+                : kBigT;
+            axisExit.y = abs(worldDir.y) > kBoxParallelEps
+                ? max((subMinW.y - worldOrigin.y) / worldDir.y, (subMaxW.y - worldOrigin.y) / worldDir.y)
+                : kBigT;
+            axisExit.z = abs(worldDir.z) > kBoxParallelEps
+                ? max((subMinW.z - worldOrigin.z) / worldDir.z, (subMaxW.z - worldOrigin.z) / worldDir.z)
+                : kBigT;
+            float tSubExit = min(min(axisExit.x, axisExit.y), axisExit.z);
             // Epsilon scales with t — float32 ULP grows with magnitude, so a fixed eps
             // becomes ineffective at the ~100 m ranges this engine targets.
             float tNew = tSubExit + max(1e-4, tSubExit * 4e-6);
             vec3 posNew = worldOrigin + worldDir * tNew;
             vec3 cellFNew = (posNew - gridOrigin) / cs;
-            cell = ivec3(floor(cellFNew));
-            // Re-seed the DDA at the new cell. sideDist needs to be the t at which the
-            // ray crosses the *next* face along each axis from the new position.
-            for (int i = 0; i < 3; ++i) {
-                if (worldDir[i] < 0.0) {
-                    sideDist[i] = tNew + (cellFNew[i] - float(cell[i])) * deltaDist[i];
-                } else {
-                    sideDist[i] = tNew + (float(cell[i] + 1) - cellFNew[i]) * deltaDist[i];
+            ivec3 newCell = ivec3(floor(cellFNew));
+            // Belt-and-suspenders: if the skip math didn't actually advance the cell
+            // (subtree-exit landed within the same brick somehow — e.g. extreme float
+            // precision loss at large t), bail out of the skip and let the normal DDA
+            // step do its job. Otherwise the loop spins on the same cell until kMax,
+            // which is what produced the bright-yellow line artifacts.
+            if (newCell == cell) {
+                // Fall through to normal step — don't continue.
+            } else {
+                cell = newCell;
+                for (int i = 0; i < 3; ++i) {
+                    if (worldDir[i] < 0.0) {
+                        sideDist[i] = tNew + (cellFNew[i] - float(cell[i])) * deltaDist[i];
+                    } else {
+                        sideDist[i] = tNew + (float(cell[i] + 1) - cellFNew[i]) * deltaDist[i];
+                    }
                 }
+                tCellEnter = tNew;
+                if (axisExit.x <= axisExit.y && axisExit.x <= axisExit.z) entryAxis = 0;
+                else if (axisExit.y <= axisExit.z) entryAxis = 1;
+                else entryAxis = 2;
+                continue;
             }
-            tCellEnter = tNew;
-            // entryAxis is which axis face we crossed to leave the subtree (axis with
-            // min sthi). The next brick is entered through that same axis.
-            if (sthi.x <= sthi.y && sthi.x <= sthi.z) entryAxis = 0;
-            else if (sthi.y <= sthi.z) entryAxis = 1;
-            else entryAxis = 2;
-            continue;
         }
         if (sideDist.x < sideDist.y) {
             if (sideDist.x < sideDist.z) {
