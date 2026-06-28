@@ -6,6 +6,7 @@
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/frame_uniforms.hpp"
 #include "engine/rendering/pixel_debug.hpp"
+#include "engine/rendering/svdag_params.hpp"
 #include "engine/scene/camera.hpp"
 #include "engine/scene/directional_light.hpp"
 #include "engine/scene/node3d.hpp"
@@ -402,25 +403,15 @@ namespace RAGE {
                     }
                 }
             }
-            struct SvdagParamsLayout {
-                float originX;
-                float originY;
-                float originZ;
-                float brickWorldSize;
-                int32_t rootIdx;
-                int32_t levels;
-                int32_t paddedDim;
-                int32_t pad;
-            };
-            const SvdagParamsLayout sparams{
-                .originX = static_cast<float>(origBrick.x) * brickWorldSize,
-                .originY = static_cast<float>(origBrick.y) * brickWorldSize,
-                .originZ = static_cast<float>(origBrick.z) * brickWorldSize,
-                .brickWorldSize = brickWorldSize,
-                .rootIdx = static_cast<int32_t>(svdag_.rootIndex),
+            const SvdagParamsUbo sparams{
+                .originWorld_brickSize = Vec4(static_cast<float>(origBrick.x) * brickWorldSize,
+                                              static_cast<float>(origBrick.y) * brickWorldSize,
+                                              static_cast<float>(origBrick.z) * brickWorldSize,
+                                              brickWorldSize),
+                .rootIndex = static_cast<int32_t>(svdag_.rootIndex),
                 .levels = svdag_.levels,
                 .paddedDim = svdag_.paddedDim,
-                .pad = 0,
+                ._pad = 0,
             };
             std::memcpy(svdagParamsBuffer_->mappedData(), &sparams, sizeof(sparams));
         }
