@@ -355,8 +355,11 @@ namespace RAGE::App {
         if (overlayFmt != nullptr) {
             std::snprintf(overlay, sizeof(overlay), overlayFmt, samples[latestIdx]);
         }
-        ImGui::PlotLines(label, samples, static_cast<int>(count), static_cast<int>(offset),
-                         overlay, yMin, yMax, ImVec2(0, 48));
+        // PlotHistogram renders as vertical bars (one bar per sample) instead of a
+        // connected line. Easier to read at a glance for the ~128-sample windows
+        // we use here, and matches the look of the historical RAGE_gui FPS bar.
+        ImGui::PlotHistogram(label, samples, static_cast<int>(count), static_cast<int>(offset),
+                             overlay, yMin, yMax, ImVec2(0, 80));
     }
 
     bool DebugUi::wantsMouse() const {
