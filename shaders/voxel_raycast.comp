@@ -273,27 +273,35 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
     vec3 gridMin = gridOrigin;
     vec3 gridMax = gridOrigin + vec3(paddedDim) * cs;
 
-    // Compute invDir without ever evaluating 1/0. Axis-parallel rays (dir component
-    // exactly 0) would otherwise produce ±∞ from raw division, and any subsequent
-    // box-intersection on that same axis (cube face or any empty-subtree face
-    // during the skip below) where origin matches the face evaluates to 0 × ∞ =
-    // NaN — which propagates through min/max and lands the traversal in garbage.
-    // Shows up on screen as a one-pixel-wide line along the row/column where the
-    // camera math gives a perfectly axis-aligned ray (centre column → dirX=0;
-    // horizon row → dirY=0). clamp() applied to inf is implementation-defined on
-    // some GPUs (the previous fix relied on it and still leaked NaN through),
-    // so we substitute a huge finite invDir before any division can fire.
-    const float kAxisEps = 1e-20;
-    const float kInvDirCap = 1e20;
-    vec3 safeDir;
-    safeDir.x = abs(worldDir.x) > kAxisEps ? worldDir.x : (worldDir.x >= 0.0 ? kAxisEps : -kAxisEps);
-    safeDir.y = abs(worldDir.y) > kAxisEps ? worldDir.y : (worldDir.y >= 0.0 ? kAxisEps : -kAxisEps);
-    safeDir.z = abs(worldDir.z) > kAxisEps ? worldDir.z : (worldDir.z >= 0.0 ? kAxisEps : -kAxisEps);
-    vec3 invDir = clamp(1.0 / safeDir, vec3(-kInvDirCap), vec3(kInvDirCap));
-    vec3 t0 = (gridMin - worldOrigin) * invDir;
-    vec3 t1 = (gridMax - worldOrigin) * invDir;
-    vec3 tlo = min(t0, t1);
-    vec3 thi = max(t0, t1);
+    // Per-axis cube entry/exit t. Axes the ray is parallel to (|worldDir[a]| ≤ eps)
+    // are excluded from the slab intersection entirely — substituting a huge
+    // sentinel so the min/max naturally ignore them. Reasoning: a parallel ray
+    // never crosses that axis's face, so its t-interval there is (-∞, +∞); the
+    // ray's intersection with the cube is determined by the other axes. The
+    // previous attempt at "huge finite invDir" relied on 0 × huge being tiny,
+    // which is implementation-defined in GLSL — different GPUs handle this
+    // differently, and the artifact was a one-pixel-wide line where the camera
+    // math gave a perfectly axis-aligned ray (centre column → dirX=0; horizon
+    // row → dirY=0). Explicit exclusion says what we mean.
+    const float kBoxParallelEps = 1e-12;
+    const float kBigT = 1e30;
+    vec3 invDir = 1.0 / worldDir;     // safe to compute; only used on non-parallel axes below.
+    vec3 tlo, thi;
+    if (abs(worldDir.x) > kBoxParallelEps) {
+        float a = (gridMin.x - worldOrigin.x) * invDir.x;
+        float b = (gridMax.x - worldOrigin.x) * invDir.x;
+        tlo.x = min(a, b); thi.x = max(a, b);
+    } else { tlo.x = -kBigT; thi.x = kBigT; }
+    if (abs(worldDir.y) > kBoxParallelEps) {
+        float a = (gridMin.y - worldOrigin.y) * invDir.y;
+        float b = (gridMax.y - worldOrigin.y) * invDir.y;
+        tlo.y = min(a, b); thi.y = max(a, b);
+    } else { tlo.y = -kBigT; thi.y = kBigT; }
+    if (abs(worldDir.z) > kBoxParallelEps) {
+        float a = (gridMin.z - worldOrigin.z) * invDir.z;
+        float b = (gridMax.z - worldOrigin.z) * invDir.z;
+        tlo.z = min(a, b); thi.z = max(a, b);
+    } else { tlo.z = -kBigT; thi.z = kBigT; }
     float tEnter = max(max(tlo.x, tlo.y), tlo.z);
     float tExit  = min(min(thi.x,  thi.y),  thi.z);
     if (tEnter > tExit || tExit < 0.0) return out_;
@@ -349,27 +357,20 @@ OuterTrace tracePrimarySvdag(vec3 worldOrigin, vec3 worldDir) {
             // Jump past the whole empty subtree in one step instead of doing
             // emptySubtreeSize-many single-cell DDA advances. This is the SVDAG win:
             // sky rays traverse the cube in O(log) outer steps rather than O(paddedDim).
+            // Per-axis box-exit t uses the same axis-parallel-aware pattern as the cube
+            // entry above — parallel axes contribute kBigT and the min() ignores them.
             ivec3 subOriginCell = (cell / lookup.emptySubtreeSize) * lookup.emptySubtreeSize;
             vec3 subMinW = gridOrigin + vec3(subOriginCell) * cs;
             vec3 subMaxW = subMinW + vec3(lookup.emptySubtreeSize) * cs;
-            // Per-axis box-exit t. For axes the ray is exactly parallel to we deliberately
-            // skip the division entirely — relying on clamped/huge invDir there is fragile
-            // (different GLSL implementations handle ∞-in-min/max differently, and the
-            // box-distance product of 0 × huge isn't reliably tiny on every GPU). Setting
-            // the parallel axis's t to a huge sentinel makes the min() naturally ignore
-            // it. The artifact lines came from this exact case — perfectly axis-aligned
-            // rays where the per-axis dance went wrong.
-            const float kBoxParallelEps = 1e-12;
-            const float kBigT = 1e30;
             vec3 axisExit;
             axisExit.x = abs(worldDir.x) > kBoxParallelEps
-                ? max((subMinW.x - worldOrigin.x) / worldDir.x, (subMaxW.x - worldOrigin.x) / worldDir.x)
+                ? max((subMinW.x - worldOrigin.x) * invDir.x, (subMaxW.x - worldOrigin.x) * invDir.x)
                 : kBigT;
             axisExit.y = abs(worldDir.y) > kBoxParallelEps
-                ? max((subMinW.y - worldOrigin.y) / worldDir.y, (subMaxW.y - worldOrigin.y) / worldDir.y)
+                ? max((subMinW.y - worldOrigin.y) * invDir.y, (subMaxW.y - worldOrigin.y) * invDir.y)
                 : kBigT;
             axisExit.z = abs(worldDir.z) > kBoxParallelEps
-                ? max((subMinW.z - worldOrigin.z) / worldDir.z, (subMaxW.z - worldOrigin.z) / worldDir.z)
+                ? max((subMinW.z - worldOrigin.z) * invDir.z, (subMaxW.z - worldOrigin.z) * invDir.z)
                 : kBigT;
             float tSubExit = min(min(axisExit.x, axisExit.y), axisExit.z);
             // Epsilon scales with t — float32 ULP grows with magnitude, so a fixed eps
