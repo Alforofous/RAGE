@@ -379,7 +379,9 @@ int main(int argc, char **argv) {
             bool brickDedup = renderer.brickPool().isDedupEnabled();
 
             Core::Histogram<float, 128> frameMsHistory;
+            Core::Histogram<float, 128> renderMsHistory;
             Core::Histogram<float, 128> brickmapMBHistory;
+            Core::Histogram<float, 128> gpuMemoryMBHistory;
             Core::Histogram<float, 128> processRSSMBHistory;
             debugUi.setBuilder([&]() {
                 debugUi.beginPanel("RAGE Debug");
@@ -471,9 +473,15 @@ int main(int argc, char **argv) {
                 debugUi.plot("Frame", frameMsHistory.data(), frameMsHistory.capacity(),
                              frameMsHistory.size(), frameMsHistory.oldestOffset(), "%.2f ms",
                              0.0f, FLT_MAX);
+                debugUi.plot("Render", renderMsHistory.data(), renderMsHistory.capacity(),
+                             renderMsHistory.size(), renderMsHistory.oldestOffset(), "%.2f ms",
+                             0.0f, FLT_MAX);
                 debugUi.plot("Brickmap", brickmapMBHistory.data(), brickmapMBHistory.capacity(),
                              brickmapMBHistory.size(), brickmapMBHistory.oldestOffset(), "%.2f MB",
                              0.0f, FLT_MAX);
+                debugUi.plot("GPU memory", gpuMemoryMBHistory.data(),
+                             gpuMemoryMBHistory.capacity(), gpuMemoryMBHistory.size(),
+                             gpuMemoryMBHistory.oldestOffset(), "%.1f MB", 0.0f, FLT_MAX);
                 debugUi.plot("Process RSS", processRSSMBHistory.data(),
                              processRSSMBHistory.capacity(), processRSSMBHistory.size(),
                              processRSSMBHistory.oldestOffset(), "%.0f MB", 0.0f, FLT_MAX);
@@ -516,6 +524,8 @@ int main(int argc, char **argv) {
                 lastTime = now;
 
                 frameMsHistory.push(dt * 1000.0f);
+                gpuMemoryMBHistory.push(static_cast<float>(allocator.stats().usedBytes)
+                                        / (1024.0f * 1024.0f));
                 const float brickPoolMB =
                     static_cast<float>(renderer.brickPool().allocatedBytes()) / (1024.0f * 1024.0f);
                 const float handleGridMB = static_cast<float>(renderer.worldBrickGrid().handles().size()
@@ -574,7 +584,9 @@ int main(int argc, char **argv) {
                 }
                 prevRight = rightDown;
 
+                const double renderStart = glfwGetTime();
                 renderer.render(root, camera, FrameExtent{ .width = w, .height = h });
+                renderMsHistory.push(static_cast<float>((glfwGetTime() - renderStart) * 1000.0));
 
                 PixelDebug pd;
                 if (renderer.tryReadPick(pd)) {
