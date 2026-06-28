@@ -3,7 +3,10 @@
 #include <memory>
 #include <numbers>
 #include <utility>
+#include <vector>
+#include "engine/scene/brick_pool.hpp"
 #include "engine/scene/node3d.hpp"
+#include "engine/scene/voxel3d.hpp"
 #include "math/quat.hpp"
 #include "math/vec.hpp"
 
@@ -149,4 +152,73 @@ TEST(Node3D, MatrixCachingReusesValue) {
     const Mat4 *first = &n.localMatrix();
     const Mat4 *second = &n.localMatrix();
     EXPECT_EQ(first, second);
+}
+
+TEST(Node3D, ClearChildrenDestroysAllChildrenInReverseInsertionOrder) {
+    Node3D root;
+    Node3D &a = root.add(std::make_unique<Node3D>());
+    Node3D &b = root.add(std::make_unique<Node3D>());
+    (void)a;
+    (void)b;
+    ASSERT_EQ(root.childCount(), 2u);
+    root.clearChildren();
+    EXPECT_EQ(root.childCount(), 0u);
+}
+
+// Scene-reset cycle: this is the host-side mirror of the orchestration the
+// debug-panel "Restart with no dedup" button drives in main.cpp. The Vulkan
+// renderer is out of scope here — we exercise the brick-pool + Voxel3D layer
+// where the actual handle-ownership lives. The sequence:
+//
+//   1. Build a Node3D root with Voxel3D children whose VoxelData refers to
+//      the current pool.
+//   2. root.clearChildren() destroys every Voxel3D → VoxelData → releases every
+//      brick back to the (still-alive) pool. RAII ordering matters: handles
+//      must outlive their pool.
+//   3. Reset the pool unique_ptr and construct a fresh one. The new policy
+//      (dedup on vs off) takes effect from this point.
+//   4. Repopulate root with new Voxel3D children backed by the new pool.
+//
+// Repeat N times; after each iteration, the *previous* pool must report a
+// fully-empty steady state before being destroyed (a leak there means we'd
+// be tearing down a pool with live handles in production — UB the moment
+// the next Voxel3D destructor runs against the wrong pool).
+TEST(Node3D, ResetCycle_PoolStaysLeakCleanAcrossPolicyFlips) {
+    constexpr int32_t kCycles = 8;
+    constexpr int32_t kDim = 8;       // 1×1×1 brick per Voxel3D
+    constexpr int32_t kChildren = 4;
+
+    auto pool = std::make_unique<BrickPool>(true);
+    Node3D root;
+
+    const auto populate = [&](bool /*ignored*/) {
+        for (int32_t i = 0; i < kChildren; ++i) {
+            auto vox = std::make_unique<Voxel3D>(*pool, IVec3{ kDim, kDim, kDim }, 0.05f);
+            vox->setVoxel(IVec3{ 0, 0, 0 }, Color(1.0f, 0.0f, 0.0f, 1.0f));
+            root.add(std::move(vox));
+        }
+    };
+
+    populate(true);
+    ASSERT_GT(pool->allocated(), 0u);
+
+    for (int32_t cycle = 0; cycle < kCycles; ++cycle) {
+        SCOPED_TRACE("cycle " + std::to_string(cycle));
+        const bool enableDedup = (cycle % 2) == 1;     // flip policy each cycle
+
+        // Step 1+2: tear down the scene before touching the pool.
+        root.clearChildren();
+        EXPECT_EQ(pool->allocated(), 0u) << "old pool must drain before being destroyed";
+        EXPECT_EQ(pool->logicalBricks(), 0u);
+        EXPECT_EQ(pool->drainDirty().size(), 0u);
+
+        // Step 3: replace the pool (RAII destructor on the old one fires here).
+        pool.reset();
+        pool = std::make_unique<BrickPool>(enableDedup);
+
+        // Step 4: rebuild the scene against the new pool.
+        populate(enableDedup);
+        EXPECT_GT(pool->allocated(), 0u) << "new pool should have allocations after rebuild";
+        EXPECT_EQ(pool->isDedupEnabled(), enableDedup);
+    }
 }

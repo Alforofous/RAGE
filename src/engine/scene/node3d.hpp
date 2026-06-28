@@ -52,6 +52,15 @@ namespace RAGE {
         Node3D &add(std::unique_ptr<Node3D> child);
         std::unique_ptr<Node3D> remove(Node3D *child);
 
+        /**
+         * Detach and destroy every child of this node. Each child's destructor runs in
+         * reverse insertion order (vector's standard destruction order). Used by
+         * lifecycle events that need to rebuild the scene cleanly — `Voxel3D` children
+         * release their pool handles in the destructor chain, so calling this before
+         * replacing the renderer's `BrickPool` keeps that release ordering correct.
+         */
+        void clearChildren();
+
         Node3D *parent() const { return parent_; }
         std::span<const std::unique_ptr<Node3D>> children() const { return children_; }
         size_t childCount() const { return children_.size(); }

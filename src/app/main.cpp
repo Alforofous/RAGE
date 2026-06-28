@@ -162,6 +162,12 @@ int main(int argc, char **argv) {
             };
 
             Node3D root;
+
+            // Scene construction lifted into a callable so the "Restart with no dedup"
+            // path can invoke it again after recreating the brick pool. All scene-state
+            // (loadJobs, root, the renderer's pool) is captured by reference; the
+            // lambda has no return value, mutates root + loadJobs in place.
+            const auto buildScene = [&]() {
             if (scene == SceneKind::Cubes) {
                 // Procedural cube-grid scene — hundreds of identical solid cubes, every brick
                 // bit-identical. Designed to demonstrate brick dedup (M4): no-dedup gives
@@ -295,6 +301,8 @@ int main(int argc, char **argv) {
                 root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
                 root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
             }
+            };   // end of buildScene lambda
+            buildScene();
 
             std::atomic<bool> loaderDone{ false };
             App::Profiler profiler;
@@ -311,10 +319,21 @@ int main(int argc, char **argv) {
             }
 
             std::atomic<bool> loaderCancel{ false };
-            for (const auto &job : loadJobs) {
-                job->target->onLoadShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
-            }
-            std::thread loaderThread([&]() {
+
+            // Wire the cancel poll onto every load job's target. Called once on initial
+            // setup and again from resetScene after re-running buildScene, so any
+            // freshly-created Voxel3D picks up the same cancel signal.
+            const auto wireCancelHooks = [&]() {
+                for (const auto &job : loadJobs) {
+                    job->target->onLoadShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
+                }
+            };
+            wireCancelHooks();
+
+            // The loader thread body. Extracted so resetScene can spawn a fresh
+            // thread on its own loadJobs without duplicating the profiler setup
+            // and cancel-aware iteration.
+            const auto runLoader = [&]() {
                 profiler.setThreadName("AssetLoader");
                 App::Profiler::Zone outerZone(profiler, "LoaderThread");
                 for (const auto &job : loadJobs) {
@@ -327,7 +346,39 @@ int main(int argc, char **argv) {
                     job->model.voxels.shrink_to_fit();
                 }
                 loaderDone.store(true);
-            });
+            };
+            std::thread loaderThread(runLoader);
+
+            // Scene reset orchestrator. Used by the debug-panel "Restart with [no] dedup"
+            // buttons. Sequence is RAII-strict: every owner of brick handles must be
+            // destroyed BEFORE the pool it issued them from. Specifically:
+            //   1. Signal loader to stop; join. After this, no other thread is reading
+            //      or writing the pool / scene tree.
+            //   2. Clear the scene tree. Voxel3D destructors fire, each VoxelData
+            //      releases every non-empty handle back to the (still-alive) old pool.
+            //   3. Clear the loadJobs vector (it owns the staged VoxModel data, but
+            //      its dangling Voxel3D* would now be dangling — drop the vector).
+            //   4. Recreate the renderer's pool with the new policy. The old pool is
+            //      destroyed; the new one starts fresh. The renderer drains GPU work
+            //      and vkDeviceWaitIdle's internally before the swap.
+            //   5. Rebuild the scene against the new pool.
+            //   6. Re-wire cancel hooks (new Voxel3Ds) and spawn a fresh loader thread.
+            // If any step throws, we leak the partial state but the program stays in a
+            // consistent state — the next reset attempt starts from whatever was left.
+            const auto resetScene = [&](bool enableDedup) {
+                loaderCancel.store(true);
+                if (loaderThread.joinable()) {
+                    loaderThread.join();
+                }
+                root.clearChildren();
+                loadJobs.clear();
+                renderer.recreateBrickPool(enableDedup);
+                loaderCancel.store(false);
+                loaderDone.store(false);
+                buildScene();
+                wireCancelHooks();
+                loaderThread = std::thread(runLoader);
+            };
 
             App::DebugUi debugUi(ctx, window.glfwHandle());
             debugUi.attach(renderer);
@@ -381,6 +432,10 @@ int main(int argc, char **argv) {
 
                 debugUi.separatorText("Memory");
                 debugUi.text("Brick dedup:    %s", brickDedup ? "on" : "off");
+                if (debugUi.button(brickDedup ? "Restart with no dedup" : "Restart with dedup")) {
+                    resetScene(!brickDedup);
+                    brickDedup = !brickDedup;
+                }
                 const auto bricksUnique = renderer.brickPool().allocated();
                 const auto bricksLogical = renderer.brickPool().logicalBricks();
                 const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())

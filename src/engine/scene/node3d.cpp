@@ -59,6 +59,10 @@ namespace RAGE {
         return *children_.back();
     }
 
+    void Node3D::clearChildren() {
+        children_.clear();
+    }
+
     std::unique_ptr<Node3D> Node3D::remove(Node3D *child) {
         if (child == nullptr) {
             throw std::runtime_error("Node3D::remove: null child");
