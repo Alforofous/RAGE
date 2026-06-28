@@ -97,6 +97,11 @@ namespace RAGE {
         --refCount_[h.id];
         if (refCount_[h.id] == 0u) {
             removeFromDedupLocked_(h);
+            // Clear the dirty flag — any pending upload for this slot is moot now
+            // (the brick's contents are gone). drainDirty filters stale entries by
+            // checking the flag, so the dirtyHandles_ vector self-cleans on drain
+            // rather than paying O(n) per release to remove from the middle.
+            dirtyFlags_[h.id] = 0u;
             freeList_.push_back(h);
         }
     }
@@ -177,11 +182,18 @@ namespace RAGE {
 
     std::vector<BrickHandle> BrickPool::drainDirty() {
         std::lock_guard lock(mutex_);
-        for (BrickHandle h : dirtyHandles_) {
-            dirtyFlags_[h.id] = 0u;
-        }
         std::vector<BrickHandle> out;
-        std::swap(out, dirtyHandles_);
+        out.reserve(dirtyHandles_.size());
+        for (BrickHandle h : dirtyHandles_) {
+            // Filter out stale entries — release() clears the flag when a slot's
+            // refcount hits zero, so a "dirty" handle whose slot was subsequently
+            // freed is no longer interesting to upload.
+            if (dirtyFlags_[h.id] != 0u) {
+                out.push_back(h);
+                dirtyFlags_[h.id] = 0u;
+            }
+        }
+        dirtyHandles_.clear();
         return out;
     }
 
