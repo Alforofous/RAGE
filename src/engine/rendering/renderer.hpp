@@ -82,6 +82,8 @@ namespace RAGE {
      */
     class Renderer {
     public:
+        static constexpr size_t kMaxWorldBrickHandles = 2ull * 1024ull * 1024ull;
+
         Renderer() = delete;
         Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain);
         ~Renderer();

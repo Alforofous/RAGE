@@ -114,10 +114,8 @@ namespace RAGE {
         }
 
         if (!brickPoolBuffer_.has_value()) {
-            // Capacity for ~16K bricks (32 MB). Sufficient for the test scene's ~3K
-            // bricks; M5 streaming will replace this with dynamic growth.
-            constexpr uint64_t kBricks = 16384;
-            constexpr uint64_t kBrickPoolBytes = kBricks * sizeof(Brick);
+            constexpr uint64_t kBrickPoolBytes =
+                static_cast<uint64_t>(BrickPool::kMaxBricks) * sizeof(Brick);
             brickPoolBuffer_.emplace(allocator_.createBuffer({
                 .size = kBrickPoolBytes,
                 .usage = BufferUsage::Storage,
@@ -127,9 +125,7 @@ namespace RAGE {
         }
 
         if (!worldBrickGridHandlesBuffer_.has_value()) {
-            // Capacity for 256K handles = 64³ brick cells (~25 m³ at voxelSize=0.05).
-            constexpr uint64_t kHandleCount = 256u * 1024u;
-            constexpr uint64_t kBytes = kHandleCount * sizeof(BrickHandle);
+            constexpr uint64_t kBytes = kMaxWorldBrickHandles * sizeof(BrickHandle);
             worldBrickGridHandlesBuffer_.emplace(allocator_.createBuffer({
                 .size = kBytes,
                 .usage = BufferUsage::Storage,
@@ -339,8 +335,12 @@ namespace RAGE {
             };
             std::memcpy(worldBrickGridParamsBuffer_->mappedData(), &params, sizeof(params));
 
-            // Upload handles (whole array — small and rebuilt every frame anyway).
             const auto handles = worldBrickGrid_.handles();
+            if (handles.size() > kMaxWorldBrickHandles) {
+                throw std::runtime_error(
+                    "Renderer: world brick grid handle count " + std::to_string(handles.size())
+                    + " exceeds buffer capacity " + std::to_string(kMaxWorldBrickHandles));
+            }
             if (!handles.empty()) {
                 std::memcpy(worldBrickGridHandlesBuffer_->mappedData(), handles.data(),
                             handles.size() * sizeof(BrickHandle));

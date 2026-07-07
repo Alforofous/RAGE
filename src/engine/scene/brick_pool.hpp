@@ -17,8 +17,7 @@ namespace RAGE {
      */
     class BrickPool {
     public:
-        /// Slots are reserved up-front so `brick()` references stay stable across allocates.
-        static constexpr size_t kMaxBricks = 16384;
+        static constexpr size_t kMaxBricks = 131072;
 
         /// `enableDedup` is fixed for the pool's lifetime; replace the whole pool to flip policy.
         explicit BrickPool(bool enableDedup = true);
