@@ -203,3 +203,63 @@ TEST(Node3D, ResetCycle_PoolStaysLeakCleanAcrossPolicyFlips) {
         EXPECT_EQ(pool->isDedupEnabled(), enableDedup);
     }
 }
+
+TEST(Node3DTreeVersion, StartsAtZeroAndBumpsOnStructuralMutations) {
+    Node3D root;
+    EXPECT_EQ(root.treeVersion(), 0u);
+
+    Node3D &child = root.add(std::make_unique<Node3D>());
+    const uint64_t afterAdd = root.treeVersion();
+    EXPECT_GT(afterAdd, 0u);
+
+    root.remove(&child);
+    EXPECT_GT(root.treeVersion(), afterAdd);
+
+    const uint64_t beforeClear = root.treeVersion();
+    root.add(std::make_unique<Node3D>());
+    root.clearChildren();
+    EXPECT_GT(root.treeVersion(), beforeClear + 1);
+}
+
+TEST(Node3DTreeVersion, DescendantMutationsPropagateToRoot) {
+    Node3D root;
+    Node3D &mid = root.add(std::make_unique<Node3D>());
+    Node3D &leaf = mid.add(std::make_unique<Node3D>());
+    const uint64_t before = root.treeVersion();
+
+    leaf.setPosition(Vec3(1.0f, 2.0f, 3.0f));
+    EXPECT_GT(root.treeVersion(), before);
+    EXPECT_GT(mid.treeVersion(), 0u);
+
+    const uint64_t beforeGrandchild = root.treeVersion();
+    leaf.add(std::make_unique<Node3D>());
+    EXPECT_GT(root.treeVersion(), beforeGrandchild);
+}
+
+TEST(Node3DTreeVersion, TransformSettersBumpVersion) {
+    Node3D node;
+    uint64_t last = node.treeVersion();
+
+    node.setPosition(Vec3(1.0f, 0.0f, 0.0f));
+    EXPECT_GT(node.treeVersion(), last);
+    last = node.treeVersion();
+
+    node.setRotation(Quat::identity());
+    EXPECT_GT(node.treeVersion(), last);
+    last = node.treeVersion();
+
+    node.setScale(Vec3(2.0f, 2.0f, 2.0f));
+    EXPECT_GT(node.treeVersion(), last);
+}
+
+TEST(Node3DTreeVersion, ReadsDoNotBumpVersion) {
+    Node3D root;
+    root.add(std::make_unique<Node3D>());
+    const uint64_t before = root.treeVersion();
+
+    (void)root.worldMatrix();
+    (void)root.localMatrix();
+    (void)root.children();
+    (void)root.childCount();
+    EXPECT_EQ(root.treeVersion(), before);
+}

@@ -7,16 +7,19 @@ namespace RAGE {
     void Node3D::setPosition(const Vec3 &p) {
         position_ = p;
         markLocalDirty();
+        bumpTreeVersion();
     }
 
     void Node3D::setRotation(const Quat &q) {
         rotation_ = q;
         markLocalDirty();
+        bumpTreeVersion();
     }
 
     void Node3D::setScale(const Vec3 &s) {
         scale_ = s;
         markLocalDirty();
+        bumpTreeVersion();
     }
 
     const Mat4 &Node3D::localMatrix() const {
@@ -55,12 +58,14 @@ namespace RAGE {
         child->parent_ = this;
         child->invalidateWorldRecursive();
         children_.push_back(std::move(child));
+        bumpTreeVersion();
 
         return *children_.back();
     }
 
     void Node3D::clearChildren() {
         children_.clear();
+        bumpTreeVersion();
     }
 
     std::unique_ptr<Node3D> Node3D::remove(Node3D *child) {
@@ -78,6 +83,7 @@ namespace RAGE {
         children_.erase(it);
         detached->parent_ = nullptr;
         detached->invalidateWorldRecursive();
+        bumpTreeVersion();
 
         return detached;
     }
@@ -85,6 +91,12 @@ namespace RAGE {
     void Node3D::markLocalDirty() noexcept {
         localDirty_ = true;
         invalidateWorldRecursive();
+    }
+
+    void Node3D::bumpTreeVersion() noexcept {
+        for (Node3D *n = this; n != nullptr; n = n->parent_) {
+            ++n->treeVersion_;
+        }
     }
 
     void Node3D::invalidateWorldRecursive() noexcept {

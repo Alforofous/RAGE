@@ -58,14 +58,24 @@ namespace RAGE {
         std::span<const std::unique_ptr<Node3D>> children() const { return children_; }
         size_t childCount() const { return children_.size(); }
 
+        /**
+         * @brief Monotonic counter incremented on every mutation of this node or its
+         *        subtree — child add/remove/clear and transform changes all bump it,
+         *        propagating up the parent chain. Poll on the root to cheaply detect
+         *        "did the scene change since last frame". Main-thread only.
+         */
+        uint64_t treeVersion() const { return treeVersion_; }
+
     private:
         void markLocalDirty() noexcept;
         void invalidateWorldRecursive() noexcept;
+        void bumpTreeVersion() noexcept;
 
         Vec3 position_ = Vec3::zero();
         Quat rotation_ = Quat::identity();
         Vec3 scale_ = Vec3::one();
 
+        uint64_t treeVersion_ = 0;
         mutable Mat4 localMatrix_ = Mat4::identity();
         mutable Mat4 worldMatrix_ = Mat4::identity();
         mutable bool localDirty_ = false;
