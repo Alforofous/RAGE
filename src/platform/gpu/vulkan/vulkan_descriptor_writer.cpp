@@ -4,6 +4,7 @@
 #include "vulkan_buffer.hpp"
 #include "vulkan_image.hpp"
 #include "vulkan_render_target.hpp"
+#include "vulkan_sampler.hpp"
 #include "vulkan_type_map.hpp"
 
 namespace RAGE {
@@ -35,6 +36,26 @@ namespace RAGE {
                                                                       const VulkanRenderTarget &target,
                                                                       ImageLayout layout) {
         return writeStorageImage(set, binding, target.view(), layout);
+    }
+
+    VulkanDescriptorWriter &VulkanDescriptorWriter::writeCombinedImageSampler(VkDescriptorSet set, uint32_t binding,
+                                                                              const VulkanImageView &view,
+                                                                              const VulkanSampler &sampler,
+                                                                              ImageLayout layout) {
+        VkDescriptorImageInfo info{};
+        info.sampler = sampler.sampler_;
+        info.imageView = view.view_;
+        info.imageLayout = toVkImageLayout(layout);
+
+        imageInfos_.push_back(info);
+        pending_.push_back({ .set = set,
+                             .binding = binding,
+                             .arrayElement = 0,
+                             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                             .kind = InfoKind::Image,
+                             .infoIndex = static_cast<uint32_t>(imageInfos_.size() - 1) });
+
+        return *this;
     }
 
     VulkanDescriptorWriter &VulkanDescriptorWriter::pushBufferWrite(VkDescriptorSet set, uint32_t binding,

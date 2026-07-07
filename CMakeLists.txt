@@ -57,6 +57,7 @@ set(ENGINE_SOURCES
     src/platform/gpu/vulkan/vulkan_pipeline.cpp
     src/platform/gpu/vulkan/vulkan_render_target.cpp
     src/platform/gpu/vulkan/vulkan_semaphore_pool.cpp
+    src/platform/gpu/vulkan/vulkan_sampler.cpp
     src/platform/gpu/vulkan/vulkan_shader_module.cpp
     src/platform/gpu/vulkan/vulkan_swapchain.cpp
     src/engine/content/chunk_generators.cpp

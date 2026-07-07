@@ -9,6 +9,7 @@ namespace RAGE {
     class VulkanBuffer;
     class VulkanImageView;
     class VulkanRenderTarget;
+    class VulkanSampler;
 
     /**
      * A fluent batcher for vkUpdateDescriptorSets.
@@ -38,6 +39,9 @@ namespace RAGE {
                                                   ImageLayout layout);
         VulkanDescriptorWriter &writeStorageImage(VkDescriptorSet set, uint32_t binding,
                                                   const VulkanRenderTarget &target, ImageLayout layout);
+        VulkanDescriptorWriter &writeCombinedImageSampler(VkDescriptorSet set, uint32_t binding,
+                                                          const VulkanImageView &view,
+                                                          const VulkanSampler &sampler, ImageLayout layout);
         VulkanDescriptorWriter &writeUniformBuffer(VkDescriptorSet set, uint32_t binding, const VulkanBuffer &buffer,
                                                    uint64_t offset = 0, uint64_t range = 0);
         VulkanDescriptorWriter &writeStorageBuffer(VkDescriptorSet set, uint32_t binding, const VulkanBuffer &buffer,
