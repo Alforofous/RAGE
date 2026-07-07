@@ -98,17 +98,13 @@ namespace {
 
 int main(int argc, char **argv) {
     bool autoLaunchTracy = false;
-    enum class SceneKind { Sphere, Cubes, Terrain, BigWorld, Streamed };
+    enum class SceneKind { Sphere, Cubes, Streamed };
     SceneKind scene = SceneKind::Sphere;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--profile") == 0) {
             autoLaunchTracy = true;
         } else if (std::strcmp(argv[i], "--scene=cubes") == 0) {
             scene = SceneKind::Cubes;
-        } else if (std::strcmp(argv[i], "--scene=terrain") == 0) {
-            scene = SceneKind::Terrain;
-        } else if (std::strcmp(argv[i], "--scene=bigworld") == 0) {
-            scene = SceneKind::BigWorld;
         } else if (std::strcmp(argv[i], "--scene=streamed") == 0) {
             scene = SceneKind::Streamed;
         }
@@ -200,10 +196,6 @@ int main(int argc, char **argv) {
                 std::unique_ptr<Content::Generator> generator;
                 if (scene == SceneKind::Cubes) {
                     generator = std::make_unique<Content::CubeGridGenerator>();
-                } else if (scene == SceneKind::Terrain) {
-                    generator = std::make_unique<Content::TerrainGenerator>();
-                } else if (scene == SceneKind::BigWorld) {
-                    generator = std::make_unique<Content::BigWorldGenerator>();
                 }
 
                 if (generator) {
