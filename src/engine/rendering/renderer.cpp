@@ -305,15 +305,38 @@ namespace RAGE {
 
         const VulkanSemaphoreHandle &renderDone = renderDoneByImage_[acq.imageIndex];
 
-        std::vector<Renderable *> visible;
+        // Dirty-brick upload doubles as the content-change signal: brick allocation marks
+        // dirty, and a fresh brick can change the chunk handle grids the world grid indexes.
+        std::vector<BrickHandle> dirtyBricks;
         {
-            const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
-            collectVisible(root, visible);
-            shadowCasters_.clear();
-            collectShadowCasters(root);
+            const PhaseScope brickUpload(phaseBegin_, phaseEnd_, "Render.DirtyBrickUpload");
+            auto *poolDst = static_cast<Brick *>(brickPoolBuffer_->mappedData());
+            dirtyBricks = brickPool_->drainDirty();
+            for (const BrickHandle h : dirtyBricks) {
+                poolDst[h.id] = brickPool_->brick(h);
+            }
         }
 
-        {
+        const bool gridTextureJustEnabled = useGridTexture_ && !prevUseGridTexture_;
+        prevUseGridTexture_ = useGridTexture_;
+        const bool svdagJustEnabled = useSvdag_ && !prevUseSvdag_;
+        prevUseSvdag_ = useSvdag_;
+        const uint64_t sceneVersion = root.treeVersion();
+        const bool sceneChanged = sceneVersion != lastSceneTreeVersion_ || !dirtyBricks.empty()
+                                  || gridTextureJustEnabled || svdagJustEnabled;
+        lastSceneTreeVersion_ = sceneVersion;
+
+        std::vector<Renderable *> visible;
+        if (!sceneChanged) {
+            worldGridUploadDims_ = IVec3{ 0, 0, 0 };
+        } else {
+            {
+                const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
+                collectVisible(root, visible);
+                shadowCasters_.clear();
+                collectShadowCasters(root);
+            }
+
             const PhaseScope brickRebuild(phaseBegin_, phaseEnd_, "Render.WorldBrickGridRebuild");
             brickPlacementsScratch_.clear();
             brickPlacementsScratch_.reserve(shadowCasters_.size());
@@ -382,13 +405,6 @@ namespace RAGE {
                 std::memcpy(worldGridStagingBuffer_->mappedData(), handles.data(),
                             handles.size() * sizeof(BrickHandle));
                 worldGridUploadDims_ = dims;
-            }
-
-            // Upload dirty bricks into the brick pool buffer.
-            auto *poolDst = static_cast<Brick *>(brickPoolBuffer_->mappedData());
-            const std::vector<BrickHandle> dirty = brickPool_->drainDirty();
-            for (BrickHandle h : dirty) {
-                poolDst[h.id] = brickPool_->brick(h);
             }
 
             if (useSvdag_) {

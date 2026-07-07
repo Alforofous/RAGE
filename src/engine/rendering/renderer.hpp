@@ -249,6 +249,9 @@ namespace RAGE {
         int32_t heatmapMaxSteps_ = 1024;
         bool useSvdag_ = false;
         bool useGridTexture_ = false;
+        bool prevUseSvdag_ = false;
+        bool prevUseGridTexture_ = false;
+        uint64_t lastSceneTreeVersion_ = UINT64_MAX;
         std::vector<Voxel3D *> shadowCasters_;
         std::optional<BrickPool> brickPool_;
         WorldBrickGrid worldBrickGrid_;
