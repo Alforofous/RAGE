@@ -60,6 +60,8 @@ set(ENGINE_SOURCES
     src/platform/gpu/vulkan/vulkan_shader_module.cpp
     src/platform/gpu/vulkan/vulkan_swapchain.cpp
     src/engine/content/chunk_generators.cpp
+    src/engine/content/file_chunk_store.cpp
+    src/engine/content/hybrid_chunk_store.cpp
     src/engine/content/procedural_chunk_store.cpp
     src/engine/content/streamer.cpp
     src/engine/content/scene_generators.cpp
