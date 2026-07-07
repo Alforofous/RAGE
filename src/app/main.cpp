@@ -98,11 +98,14 @@ namespace {
 
 int main(int argc, char **argv) {
     bool autoLaunchTracy = false;
+    bool vsync = true;
     enum class SceneKind { Sphere, Cubes, Streamed };
     SceneKind scene = SceneKind::Sphere;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--profile") == 0) {
             autoLaunchTracy = true;
+        } else if (std::strcmp(argv[i], "--no-vsync") == 0) {
+            vsync = false;
         } else if (std::strcmp(argv[i], "--scene=cubes") == 0) {
             scene = SceneKind::Cubes;
         } else if (std::strcmp(argv[i], "--scene=streamed") == 0) {
@@ -157,7 +160,7 @@ int main(int argc, char **argv) {
                                         .graphicsQueueFamily = ctx.graphicsQueue().queueFamily(),
                                         .width = initW,
                                         .height = initH,
-                                        .vsync = true });
+                                        .vsync = vsync });
 
             Renderer renderer(ctx, allocator, swapchain);
 
@@ -288,6 +291,7 @@ int main(int argc, char **argv) {
             int heatmapMode = renderer.heatmapMode();
             int heatmapMaxSteps = renderer.heatmapMaxSteps();
             bool useSvdag = renderer.useSvdag();
+            bool gridTexture = renderer.useGridTexture();
             bool brickDedup = renderer.brickPool().isDedupEnabled();
 
             Core::Histogram<float, 128> frameMsHistory;
@@ -432,6 +436,9 @@ int main(int argc, char **argv) {
                     }
                     if (debugUi.checkbox("SVDAG traversal", &useSvdag)) {
                         renderer.setUseSvdag(useSvdag);
+                    }
+                    if (debugUi.checkbox("Grid 3D texture", &gridTexture)) {
+                        renderer.setUseGridTexture(gridTexture);
                     }
                     static const char *const kHeatmapOpts[] = { "Off", "Step count" };
                     if (debugUi.radio("Heatmap", &heatmapMode,
