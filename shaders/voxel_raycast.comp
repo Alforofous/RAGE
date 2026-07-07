@@ -13,6 +13,7 @@ layout(set = 0, binding = 2, std140) uniform FrameUniforms {
     vec4 dirLightColor[4];
     ivec4 debugPixel_pad;
     ivec4 debugFlags;
+    ivec4 debugFlags2;   // .x = useGridTexture (world grid via usampler3D vs SSBO)
 } frame;
 
 layout(set = 0, binding = 3, std430) readonly buffer BrickPool {
@@ -22,6 +23,11 @@ layout(set = 0, binding = 3, std430) readonly buffer BrickPool {
 layout(set = 0, binding = 4, std430) readonly buffer WorldBrickGridHandles {
     uint handles[];
 } worldHandles;
+
+// Same data as WorldBrickGridHandles in a swizzled-layout 3D texture. The optimal
+// tiling keeps XYZ-neighbouring cells on the same cache line, which the linear SSBO
+// cannot do for Z neighbours. Selected by frame.debugFlags2.x.
+layout(set = 0, binding = 11) uniform usampler3D worldHandlesTex;
 
 layout(set = 0, binding = 6, std140) uniform WorldBrickGridParams {
     vec4 origin_cellSize;       // .xyz = world coords of grid (0,0,0), .w = cellSize
@@ -88,6 +94,9 @@ uint brickHandleAt(ivec3 cell) {
     ivec3 dims = worldGrid.dims_voxelDim.xyz;
     if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) {
         return 0u;
+    }
+    if (frame.debugFlags2.x != 0) {
+        return texelFetch(worldHandlesTex, cell, 0).r;
     }
     uint idx = (uint(cell.z) * uint(dims.x) * uint(dims.y))
              + (uint(cell.y) * uint(dims.x))

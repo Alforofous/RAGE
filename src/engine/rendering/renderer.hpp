@@ -20,6 +20,8 @@
 #include "gpu/gpu_queue_kind.hpp"
 #include "gpu/vulkan/vulkan_allocator.hpp"
 #include "gpu/vulkan/vulkan_command_buffer.hpp"
+#include "gpu/vulkan/vulkan_image.hpp"
+#include "gpu/vulkan/vulkan_sampler.hpp"
 #include "gpu/vulkan/vulkan_command_pool.hpp"
 #include "gpu/vulkan/vulkan_context.hpp"
 #include "gpu/vulkan/vulkan_descriptor_pool.hpp"
@@ -84,6 +86,11 @@ namespace RAGE {
     public:
         static constexpr size_t kMaxWorldBrickHandles = 2ull * 1024ull * 1024ull;
 
+        /// Fixed capacity of the world-grid 3D texture (bricks per axis). The grid's
+        /// per-frame dims must fit inside; `render` throws otherwise.
+        static constexpr uint32_t kWorldGridTexDimXZ = 320;
+        static constexpr uint32_t kWorldGridTexDimY = 64;
+
         Renderer() = delete;
         Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain);
         ~Renderer();
@@ -116,6 +123,8 @@ namespace RAGE {
         int32_t heatmapMaxSteps() const { return heatmapMaxSteps_; }
         void setUseSvdag(bool enabled) { useSvdag_ = enabled; }
         bool useSvdag() const { return useSvdag_; }
+        void setUseGridTexture(bool enabled) { useGridTexture_ = enabled; }
+        bool useGridTexture() const { return useGridTexture_; }
         const Svdag &svdag() const { return svdagCache_.svdag(); }
 
         /**
@@ -215,6 +224,12 @@ namespace RAGE {
         std::optional<VulkanBuffer> brickPoolBuffer_;
         std::optional<VulkanBuffer> worldBrickGridHandlesBuffer_;
         std::optional<VulkanBuffer> worldBrickGridParamsBuffer_;
+        std::optional<VulkanImage> worldGridImage_;
+        std::optional<VulkanImageView> worldGridImageView_;
+        std::optional<VulkanBuffer> worldGridStagingBuffer_;
+        VulkanSampler worldGridSampler_;
+        IVec3 worldGridUploadDims_{};
+        bool worldGridImageInitialized_ = false;
         GpuSvdagCache svdagCache_;
         std::optional<VulkanBuffer> pixelDebugBuffer_;
         std::optional<VulkanBuffer> thumbnailStaging_;
@@ -233,6 +248,7 @@ namespace RAGE {
         int32_t heatmapMode_ = 0;
         int32_t heatmapMaxSteps_ = 1024;
         bool useSvdag_ = false;
+        bool useGridTexture_ = false;
         std::vector<Voxel3D *> shadowCasters_;
         std::optional<BrickPool> brickPool_;
         WorldBrickGrid worldBrickGrid_;

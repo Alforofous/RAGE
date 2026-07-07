@@ -134,6 +134,29 @@ namespace RAGE {
             std::memset(worldBrickGridHandlesBuffer_->mappedData(), 0, kBytes);
         }
 
+        if (!worldGridImage_.has_value()) {
+            worldGridImage_.emplace(allocator_.createImage({
+                .width = kWorldGridTexDimXZ,
+                .height = kWorldGridTexDimY,
+                .depth = kWorldGridTexDimXZ,
+                .format = ImageFormat::R32_UINT,
+                .usage = ImageUsage::Sampled | ImageUsage::TransferDst,
+                .memory = MemoryLocation::GpuOnly,
+            }));
+            worldGridImageView_.emplace(
+                worldGridImage_->createView({ .viewType = ImageViewType::Type3D }));
+            worldGridSampler_ = VulkanSampler::createNearestClamp(ctx_.vkDevice());
+
+            constexpr uint64_t kStagingBytes = static_cast<uint64_t>(kWorldGridTexDimXZ)
+                                               * kWorldGridTexDimY * kWorldGridTexDimXZ
+                                               * sizeof(BrickHandle);
+            worldGridStagingBuffer_.emplace(allocator_.createBuffer({
+                .size = kStagingBytes,
+                .usage = BufferUsage::TransferSrc,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+        }
+
         if (!worldBrickGridParamsBuffer_.has_value()) {
             worldBrickGridParamsBuffer_.emplace(allocator_.createBuffer({
                 .size = 32,                  // 2 × vec4 in std140
@@ -346,6 +369,21 @@ namespace RAGE {
                             handles.size() * sizeof(BrickHandle));
             }
 
+            worldGridUploadDims_ = IVec3{ 0, 0, 0 };
+            if (useGridTexture_ && !handles.empty()) {
+                if (static_cast<uint32_t>(dims.x) > kWorldGridTexDimXZ
+                    || static_cast<uint32_t>(dims.y) > kWorldGridTexDimY
+                    || static_cast<uint32_t>(dims.z) > kWorldGridTexDimXZ) {
+                    throw std::runtime_error(
+                        "Renderer: world brick grid dims exceed 3D texture capacity ("
+                        + std::to_string(dims.x) + "x" + std::to_string(dims.y) + "x"
+                        + std::to_string(dims.z) + ")");
+                }
+                std::memcpy(worldGridStagingBuffer_->mappedData(), handles.data(),
+                            handles.size() * sizeof(BrickHandle));
+                worldGridUploadDims_ = dims;
+            }
+
             // Upload dirty bricks into the brick pool buffer.
             auto *poolDst = static_cast<Brick *>(brickPoolBuffer_->mappedData());
             const std::vector<BrickHandle> dirty = brickPool_->drainDirty();
@@ -397,6 +435,7 @@ namespace RAGE {
             uniforms.heatmapMode = heatmapMode_;
             uniforms.heatmapMaxSteps = heatmapMaxSteps_;
             uniforms.useSvdag = useSvdag_ ? 1 : 0;
+            uniforms.useGridTexture = (useGridTexture_ && worldGridUploadDims_.x > 0) ? 1 : 0;
 
             std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
         }
@@ -490,6 +529,8 @@ namespace RAGE {
         writer.writeUniformBuffer(set, 2, *frameUniformBuffer_);
         writer.writeStorageBuffer(set, 3, *brickPoolBuffer_);
         writer.writeStorageBuffer(set, 4, *worldBrickGridHandlesBuffer_);
+        writer.writeCombinedImageSampler(set, 11, *worldGridImageView_, worldGridSampler_,
+                                         ImageLayout::ShaderReadOnlyOptimal);
         writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
         writer.writeUniformBuffer(set, 6, *worldBrickGridParamsBuffer_);
         writer.writeStorageBuffer(set, 9, *svdagCache_.nodesBuffer());
@@ -521,6 +562,55 @@ namespace RAGE {
     void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage,
                                uint32_t swapImageIndex, uint32_t swapW, uint32_t swapH,
                                std::span<Renderable *const> renderables, const FrameContext &frame) {
+        if (worldGridUploadDims_.x == 0 && !worldGridImageInitialized_) {
+            // The descriptor set always references the grid texture, so it must sit in
+            // ShaderReadOnlyOptimal even on frames that never sample it.
+            const std::array<VulkanImageBarrier, 1> init{ { {
+                .image = worldGridImage_->handle(),
+                .oldLayout = ImageLayout::Undefined,
+                .newLayout = ImageLayout::ShaderReadOnlyOptimal,
+                .srcStage = PipelineStage::TopOfPipe,
+                .dstStage = PipelineStage::ComputeShader,
+                .srcAccess = AccessFlags::None,
+                .dstAccess = AccessFlags::ShaderRead,
+            } } };
+            rec.pipelineBarrier(init);
+            worldGridImageInitialized_ = true;
+        }
+
+        if (worldGridUploadDims_.x > 0) {
+            worldGridImageInitialized_ = true;
+            const std::array<VulkanImageBarrier, 1> toTransfer{ { {
+                .image = worldGridImage_->handle(),
+                .oldLayout = ImageLayout::Undefined,
+                .newLayout = ImageLayout::TransferDstOptimal,
+                .srcStage = PipelineStage::ComputeShader,
+                .dstStage = PipelineStage::Transfer,
+                .srcAccess = AccessFlags::None,
+                .dstAccess = AccessFlags::TransferWrite,
+            } } };
+            rec.pipelineBarrier(toTransfer);
+
+            const std::array<BufferImageCopy, 1> region{ { {
+                .imageWidth = static_cast<uint32_t>(worldGridUploadDims_.x),
+                .imageHeight = static_cast<uint32_t>(worldGridUploadDims_.y),
+                .imageDepth = static_cast<uint32_t>(worldGridUploadDims_.z),
+            } } };
+            rec.copyBufferToImage(*worldGridStagingBuffer_, *worldGridImage_,
+                                  ImageLayout::TransferDstOptimal, region);
+
+            const std::array<VulkanImageBarrier, 1> toSampled{ { {
+                .image = worldGridImage_->handle(),
+                .oldLayout = ImageLayout::TransferDstOptimal,
+                .newLayout = ImageLayout::ShaderReadOnlyOptimal,
+                .srcStage = PipelineStage::Transfer,
+                .dstStage = PipelineStage::ComputeShader,
+                .srcAccess = AccessFlags::TransferWrite,
+                .dstAccess = AccessFlags::ShaderRead,
+            } } };
+            rec.pipelineBarrier(toSampled);
+        }
+
         recordPass(rec, *renderTarget_, renderables, frame, true, true);
 
         VulkanRenderTarget &mainTarget = *renderTarget_;

@@ -51,6 +51,10 @@ namespace RAGE {
         int32_t heatmapMode = 0;
         int32_t heatmapMaxSteps = 1024;
         int32_t useSvdag = 0;
+        int32_t useGridTexture = 0;
+        int32_t _pad5 = 0;
+        int32_t _pad6 = 0;
+        int32_t _pad7 = 0;
     };
-    static_assert(sizeof(FrameUniforms) == 240, "FrameUniforms layout must match shader expectation");
+    static_assert(sizeof(FrameUniforms) == 256, "FrameUniforms layout must match shader expectation");
 }
