@@ -13,7 +13,6 @@ namespace RAGE::Content {
         constexpr uint32_t kDirt  = 0xFF354E6Eu;
         constexpr uint32_t kGrass = 0xFF3D8A4Au;
 
-        /// World-space heightmap in voxels. Same shape as TerrainGenerator's.
         int32_t heightAt(int32_t worldVoxelX, int32_t worldVoxelZ) {
             const float fx = static_cast<float>(worldVoxelX);
             const float fz = static_cast<float>(worldVoxelZ);

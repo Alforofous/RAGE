@@ -1,6 +1,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -9,6 +10,7 @@
 #include <string>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -16,7 +18,10 @@
 #include <GLFW/glfw3.h>
 #include "app/build_paths.hpp"
 #include "debug_ui.hpp"
+#include "engine/content/chunk_generators.hpp"
+#include "engine/content/procedural_chunk_store.hpp"
 #include "engine/content/scene_generators.hpp"
+#include "engine/content/streamer.hpp"
 #include "engine/content/vox_loader.hpp"
 #include "engine/materials/material.hpp"
 #include "engine/rendering/pixel_debug.hpp"
@@ -93,7 +98,7 @@ namespace {
 
 int main(int argc, char **argv) {
     bool autoLaunchTracy = false;
-    enum class SceneKind { Sphere, Cubes, Terrain, BigWorld };
+    enum class SceneKind { Sphere, Cubes, Terrain, BigWorld, Streamed };
     SceneKind scene = SceneKind::Sphere;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--profile") == 0) {
@@ -104,6 +109,8 @@ int main(int argc, char **argv) {
             scene = SceneKind::Terrain;
         } else if (std::strcmp(argv[i], "--scene=bigworld") == 0) {
             scene = SceneKind::BigWorld;
+        } else if (std::strcmp(argv[i], "--scene=streamed") == 0) {
+            scene = SceneKind::Streamed;
         }
     }
 
@@ -175,7 +182,21 @@ int main(int argc, char **argv) {
 
             Node3D root;
 
+            std::optional<Content::ProceduralChunkStore> chunkStore;
+            std::optional<Content::Streamer> streamer;
+            constexpr int32_t kStreamHRadius = 30;
+            constexpr Content::ChunkStore::YRange kTerrainYRange{ .min = -1, .max = 2 };
+
             const auto buildScene = [&]() {
+                if (scene == SceneKind::Streamed) {
+                    auto gen = std::make_unique<Content::TerrainChunkGenerator>();
+                    chunkStore.emplace(std::move(gen), renderer.brickPool(), kVoxelSize, kTerrainYRange);
+                    streamer.emplace(*chunkStore, root);
+                    streamer->setOnChunkPrepare(
+                        [&voxelMaterial](Voxel3D &v, IVec3) { v.setMaterial(voxelMaterial); });
+                    return;
+                }
+
                 std::unique_ptr<Content::Generator> generator;
                 if (scene == SceneKind::Cubes) {
                     generator = std::make_unique<Content::CubeGridGenerator>();
@@ -244,6 +265,8 @@ int main(int argc, char **argv) {
                 if (loaderThread.joinable()) {
                     loaderThread.join();
                 }
+                streamer.reset();
+                chunkStore.reset();
                 root.clearChildren();
                 loadJobs.clear();
                 renderer.recreateBrickPool(enableDedup);
@@ -316,6 +339,14 @@ int main(int argc, char **argv) {
                 float speedMult = controller.speedMultiplier();
                 if (debugUi.sliderFloat("Speed (x)", &speedMult, 0.1f, 10.0f)) {
                     controller.setSpeedMultiplier(speedMult);
+                }
+
+                if (streamer.has_value()) {
+                    debugUi.separatorText("Streaming");
+                    debugUi.text("Loaded:  %zu chunks", streamer->loadedCount());
+                    debugUi.text("Skipped: %zu chunks", streamer->skippedCount());
+                    debugUi.text("Radius:  h=%d  Y=[%d,%d]", kStreamHRadius, kTerrainYRange.min,
+                                 kTerrainYRange.max);
                 }
 
                 debugUi.separatorText("Memory");
@@ -456,6 +487,18 @@ int main(int argc, char **argv) {
 
                 controller.applyScrollDelta(debugUi.scrollDelta());
                 controller.update(dt);
+
+                if (streamer.has_value()) {
+                    const float chunkWorldExtent =
+                        static_cast<float>(chunkStore->chunkBrickDims().x) * 8.0f * kVoxelSize;
+                    const Vec3 camPos = camera.position();
+                    const IVec3 focus{
+                        static_cast<int32_t>(std::floor(camPos.x / chunkWorldExtent)),
+                        static_cast<int32_t>(std::floor(camPos.y / chunkWorldExtent)),
+                        static_cast<int32_t>(std::floor(camPos.z / chunkWorldExtent)),
+                    };
+                    streamer->update(focus, kStreamHRadius);
+                }
 
                 const auto [w, h] = window.framebufferExtent();
                 window.clearResized();

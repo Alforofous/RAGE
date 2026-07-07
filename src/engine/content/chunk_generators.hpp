@@ -3,12 +3,7 @@
 #include "engine/content/chunk_generator.hpp"
 
 namespace RAGE::Content {
-    /**
-     * @brief Chunked sin-based heightmap terrain. Same world-space heightmap as
-     *        `TerrainGenerator` but evaluated per-chunk on demand — usable from a
-     *        `ProceduralChunkStore` for streaming. Default chunk is 32×32×32 voxels
-     *        (4×4×4 bricks).
-     */
+    /** @brief Sin-based heightmap terrain, evaluated per-chunk on demand. */
     class TerrainChunkGenerator : public ChunkGenerator {
     public:
         explicit TerrainChunkGenerator(IVec3 chunkBrickDims = IVec3{ 4, 4, 4 })
