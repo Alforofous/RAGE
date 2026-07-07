@@ -580,6 +580,9 @@ namespace RAGE {
 
         if (worldGridUploadDims_.x > 0) {
             worldGridImageInitialized_ = true;
+            if (beforeGpuPass_) {
+                beforeGpuPass_("world_grid_upload", rec.rawHandle());
+            }
             const std::array<VulkanImageBarrier, 1> toTransfer{ { {
                 .image = worldGridImage_->handle(),
                 .oldLayout = ImageLayout::Undefined,
@@ -609,6 +612,9 @@ namespace RAGE {
                 .dstAccess = AccessFlags::ShaderRead,
             } } };
             rec.pipelineBarrier(toSampled);
+            if (afterGpuPass_) {
+                afterGpuPass_("world_grid_upload", rec.rawHandle());
+            }
         }
 
         recordPass(rec, *renderTarget_, renderables, frame, true, true);
@@ -636,10 +642,19 @@ namespace RAGE {
                                                             .dstAccess = AccessFlags::TransferWrite } } };
         rec.pipelineBarrier(toBlit);
 
+        if (beforeGpuPass_) {
+            beforeGpuPass_("blit_to_swapchain", rec.rawHandle());
+        }
         rec.blitImage(mainTargetImage, ImageLayout::TransferSrcOptimal, rtW, rtH, swapImage,
                       ImageLayout::TransferDstOptimal, swapW, swapH);
+        if (afterGpuPass_) {
+            afterGpuPass_("blit_to_swapchain", rec.rawHandle());
+        }
 
         if (frameImage_ && thumbnailTarget_.has_value() && thumbnailStaging_.has_value()) {
+            if (beforeGpuPass_) {
+                beforeGpuPass_("thumbnail_readback", rec.rawHandle());
+            }
             VkImage thumbImage = thumbnailTarget_->image().handle();
             const std::array<VulkanImageBarrier, 1> thumbToDst{ { { .image = thumbImage,
                                                                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -679,6 +694,9 @@ namespace RAGE {
             rec.copyImageToBuffer(thumbImage, ImageLayout::TransferSrcOptimal, *thumbnailStaging_, regions);
 
             thumbnailQueued_ = true;
+            if (afterGpuPass_) {
+                afterGpuPass_("thumbnail_readback", rec.rawHandle());
+            }
         }
 
         if (uiRender_) {
@@ -692,11 +710,17 @@ namespace RAGE {
                                                                   .dstAccess = AccessFlags::ColorAttachmentWrite } } };
             rec.pipelineBarrier(toColor);
 
+            if (beforeGpuPass_) {
+                beforeGpuPass_("debug_ui", rec.rawHandle());
+            }
             uiRender_(UiRenderContext{ .cmd = rec.rawHandle(),
                                        .swapImage = swapImage,
                                        .swapImageIndex = swapImageIndex,
                                        .width = swapW,
                                        .height = swapH });
+            if (afterGpuPass_) {
+                afterGpuPass_("debug_ui", rec.rawHandle());
+            }
 
             const std::array<VulkanImageBarrier, 1> toPresent{ { { .image = swapImage,
                                                                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
