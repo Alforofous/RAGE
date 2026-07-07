@@ -69,7 +69,6 @@ namespace RAGE::Content {
         };
 
         void workerMain_();
-        void drainReady_(IVec3 focusChunk, int32_t hRadius);
         void evictOutOfRange_(IVec3 focusChunk, int32_t hRadius);
         void repopulatePending_(IVec3 focusChunk, int32_t hRadius);
         void applyResult_(IVec3 coord, ChunkResult result);
@@ -81,6 +80,9 @@ namespace RAGE::Content {
         std::unordered_map<IVec3, Voxel3D *, IVec3Hash> loaded_;
         std::unordered_map<IVec3, ChunkStatus, IVec3Hash> skipped_;
         std::unordered_set<IVec3, IVec3Hash> deferred_;
+        IVec3 lastFocus_{};
+        int32_t lastRadius_ = -1;
+        bool hasUpdated_ = false;
 
         mutable std::mutex mtx_;
         std::condition_variable workerCv_;

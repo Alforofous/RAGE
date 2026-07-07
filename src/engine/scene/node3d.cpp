@@ -93,6 +93,17 @@ namespace RAGE {
         invalidateWorldRecursive();
     }
 
+    size_t Node3D::removeChildrenIf(const std::function<bool(const Node3D &)> &pred) {
+        const auto keepEnd = std::ranges::stable_partition(
+            children_, [&pred](const std::unique_ptr<Node3D> &c) { return !pred(*c); }).begin();
+        const size_t removed = static_cast<size_t>(children_.end() - keepEnd);
+        if (removed > 0) {
+            children_.erase(keepEnd, children_.end());
+            bumpTreeVersion();
+        }
+        return removed;
+    }
+
     void Node3D::bumpTreeVersion() noexcept {
         for (Node3D *n = this; n != nullptr; n = n->parent_) {
             ++n->treeVersion_;

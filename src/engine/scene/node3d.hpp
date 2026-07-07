@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <vector>
@@ -51,6 +53,13 @@ namespace RAGE {
 
         Node3D &add(std::unique_ptr<Node3D> child);
         std::unique_ptr<Node3D> remove(Node3D *child);
+
+        /**
+         * @brief Destroy every direct child matching `pred` in one pass. O(children)
+         *        total regardless of match count — use over repeated `remove` when
+         *        evicting in bulk. Returns the number destroyed.
+         */
+        size_t removeChildrenIf(const std::function<bool(const Node3D &)> &pred);
 
         void clearChildren();
 

@@ -516,6 +516,7 @@ int main(int argc, char **argv) {
                 controller.update(dt);
 
                 if (streamer.has_value()) {
+                    const App::Profiler::Zone streamerZone(profiler, "Streamer.Update");
                     const float chunkWorldExtent =
                         static_cast<float>(chunkStore->chunkBrickDims().x) * 8.0f * kVoxelSize;
                     const Vec3 camPos = camera.position();

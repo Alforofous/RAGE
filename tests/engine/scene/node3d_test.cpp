@@ -263,3 +263,20 @@ TEST(Node3DTreeVersion, ReadsDoNotBumpVersion) {
     (void)root.childCount();
     EXPECT_EQ(root.treeVersion(), before);
 }
+
+TEST(Node3DRemoveChildrenIf, DestroysMatchesInOnePassAndBumpsVersion) {
+    Node3D root;
+    Node3D &a = root.add(std::make_unique<Node3D>());
+    root.add(std::make_unique<Node3D>());
+    Node3D &c = root.add(std::make_unique<Node3D>());
+    const uint64_t before = root.treeVersion();
+
+    const size_t removed = root.removeChildrenIf(
+        [&a, &c](const Node3D &n) { return &n == &a || &n == &c; });
+
+    EXPECT_EQ(removed, 2u);
+    EXPECT_EQ(root.childCount(), 1u);
+    EXPECT_GT(root.treeVersion(), before);
+
+    EXPECT_EQ(root.removeChildrenIf([](const Node3D &) { return false; }), 0u);
+}

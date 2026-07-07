@@ -69,25 +69,36 @@ namespace RAGE::Content {
     }
 
     void Streamer::update(IVec3 focusChunk, int32_t horizontalRadius) {
-        deferred_.clear();
-        drainReady_(focusChunk, horizontalRadius);
-        evictOutOfRange_(focusChunk, horizontalRadius);
-        repopulatePending_(focusChunk, horizontalRadius);
-    }
-
-    void Streamer::drainReady_(IVec3 focusChunk, int32_t hRadius) {
         std::deque<ReadyEntry> drained;
+        bool queuesIdle = false;
         {
             std::lock_guard lock(mtx_);
             drained.swap(ready_);
+            queuesIdle = pending_.empty() && inFlight_.empty();
         }
+
+        // Settled: nothing arrived, nothing in flight, no Pending retries owed, focus
+        // unmoved — the cylinder scan would be a no-op, skip the whole pass.
+        const bool quiet = drained.empty() && queuesIdle && deferred_.empty()
+                           && hasUpdated_ && focusChunk == lastFocus_
+                           && horizontalRadius == lastRadius_;
+        lastFocus_ = focusChunk;
+        lastRadius_ = horizontalRadius;
+        hasUpdated_ = true;
+        if (quiet) {
+            return;
+        }
+
+        deferred_.clear();
         const ChunkStore::YRange y = store_.yRange();
         for (auto &entry : drained) {
-            if (!inCylinder(entry.coord, focusChunk, hRadius, y)) {
+            if (!inCylinder(entry.coord, focusChunk, horizontalRadius, y)) {
                 continue;
             }
             applyResult_(entry.coord, std::move(entry.result));
         }
+        evictOutOfRange_(focusChunk, horizontalRadius);
+        repopulatePending_(focusChunk, horizontalRadius);
     }
 
     void Streamer::applyResult_(IVec3 coord, ChunkResult result) {
@@ -110,13 +121,18 @@ namespace RAGE::Content {
 
     void Streamer::evictOutOfRange_(IVec3 focusChunk, int32_t hRadius) {
         const ChunkStore::YRange y = store_.yRange();
+        std::unordered_set<const Node3D *> evicted;
         for (auto it = loaded_.begin(); it != loaded_.end();) {
             if (!inCylinder(it->first, focusChunk, hRadius, y)) {
-                parent_.remove(it->second);
+                evicted.insert(it->second);
                 it = loaded_.erase(it);
             } else {
                 ++it;
             }
+        }
+        if (!evicted.empty()) {
+            parent_.removeChildrenIf(
+                [&evicted](const Node3D &c) { return evicted.contains(&c); });
         }
         for (auto it = skipped_.begin(); it != skipped_.end();) {
             if (!inCylinder(it->first, focusChunk, hRadius, y)) {
