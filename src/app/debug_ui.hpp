@@ -78,6 +78,12 @@ namespace RAGE::App {
         bool radio(const char *label, int *current, std::span<const char *const> options);
         bool sliderInt(const char *label, int *value, int min, int max);
         bool sliderFloat(const char *label, float *value, float min, float max);
+        /**
+         * @brief Collapsible section header; returns true while expanded. For labels that
+         *        change per frame (live values), append a "###id" suffix so the widget ID
+         *        stays stable across relabels.
+         */
+        bool collapsingHeader(const char *label, bool defaultOpen = false);
         void separatorText(const char *label);
         void separator();
         void text(const char *fmt, ...);

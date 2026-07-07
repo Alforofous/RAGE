@@ -303,6 +303,8 @@ int main(int argc, char **argv) {
             Core::Histogram<float, 128> brickmapMBHistory;
             Core::Histogram<float, 128> gpuMemoryMBHistory;
             Core::Histogram<float, 128> processRSSMBHistory;
+            double uiFps = 0.0;
+            double uiFrameMs = 0.0;
             debugUi.setBuilder([&]() {
                 debugUi.beginPanel("RAGE Debug");
                 if (!loaderDone.load()) {
@@ -312,124 +314,148 @@ int main(int argc, char **argv) {
                                      job->loadProgress.load() * 100.0f);
                     }
                 }
-                if constexpr (App::kIsDevBuild) {
-                    if (App::Profiler::isLinked()) {
-                        if (profiler.isProfilerGuiRunning()) {
-                            debugUi.text("Tracy: running (close to relaunch)");
-                        } else if (debugUi.button("Launch Tracy")) {
-                            profiler.launchProfilerGui();
-                        }
-                    }
-                }
-                if (debugUi.checkbox("Mip skip", &mipSkipEnabled)) {
-                    renderer.setMipSkipEnabled(mipSkipEnabled);
-                }
-                if (debugUi.checkbox("SVDAG traversal", &useSvdag)) {
-                    renderer.setUseSvdag(useSvdag);
-                }
-                static const char *const kHeatmapOpts[] = { "Off", "Step count" };
-                if (debugUi.radio("Heatmap", &heatmapMode,
-                                  std::span<const char *const>(kHeatmapOpts, std::size(kHeatmapOpts)))) {
-                    renderer.setHeatmapMode(heatmapMode);
-                }
-                if (heatmapMode != 0 && debugUi.sliderInt("Heatmap max steps", &heatmapMaxSteps, 32, 4096)) {
-                    renderer.setHeatmapMaxSteps(heatmapMaxSteps);
-                }
-                debugUi.separatorText("Camera");
-                float speedMult = controller.speedMultiplier();
-                if (debugUi.sliderFloat("Speed (x)", &speedMult, 0.1f, 10.0f)) {
-                    controller.setSpeedMultiplier(speedMult);
-                }
-
-                if (streamer.has_value()) {
-                    debugUi.separatorText("Streaming");
-                    debugUi.text("Loaded:  %zu chunks", streamer->loadedCount());
-                    debugUi.text("Skipped: %zu chunks", streamer->skippedCount());
-                    debugUi.text("Radius:  h=%d  Y=[%d,%d]", kStreamHRadius, kTerrainYRange.min,
-                                 kTerrainYRange.max);
-                }
-
-                debugUi.separatorText("Memory");
-                debugUi.text("Brick dedup:    %s", brickDedup ? "on" : "off");
-                if (debugUi.button(brickDedup ? "Restart with no dedup" : "Restart with dedup")) {
-                    resetScene(!brickDedup);
-                    brickDedup = !brickDedup;
-                }
                 {
                     std::lock_guard lock(loaderErrorMutex);
                     if (!loaderError.empty()) {
                         debugUi.text("! %s", loaderError.c_str());
                     }
                 }
-                const auto bricksUnique = renderer.brickPool().allocated();
-                const auto bricksLogical = renderer.brickPool().logicalBricks();
-                const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())
-                                      / (1024.0 * 1024.0);
-                size_t handleGridBytes = 0;
-                size_t denseBytes = 0;
-                std::function<void(const Node3D &)> walkScene = [&](const Node3D &node) {
-                    if (const auto *v = dynamic_cast<const Voxel3D *>(&node)) {
-                        if (const VoxelData *vd = v->voxelData()) {
-                            handleGridBytes += vd->handleGridBytes();
-                            denseBytes += vd->denseEquivalentBytes();
+
+                std::array<char, 64> header{};
+                std::snprintf(header.data(), header.size(), "FPS %.0f  (%.2f ms)###fps", uiFps,
+                              uiFrameMs);
+                if (debugUi.collapsingHeader(header.data())) {
+                    debugUi.plot("Frame", frameMsHistory.data(), frameMsHistory.capacity(),
+                                 frameMsHistory.size(), frameMsHistory.oldestOffset(), "%.2f ms",
+                                 0.0f, FLT_MAX);
+                    debugUi.plot("Render", renderMsHistory.data(), renderMsHistory.capacity(),
+                                 renderMsHistory.size(), renderMsHistory.oldestOffset(), "%.2f ms",
+                                 0.0f, FLT_MAX);
+                }
+
+                const double rssMB = static_cast<double>(Platform::processResidentBytes())
+                                     / (1024.0 * 1024.0);
+                std::snprintf(header.data(), header.size(), "Memory %.0f MB###mem", rssMB);
+                if (debugUi.collapsingHeader(header.data())) {
+                    debugUi.text("Brick dedup:    %s", brickDedup ? "on" : "off");
+                    if (debugUi.button(brickDedup ? "Restart with no dedup" : "Restart with dedup")) {
+                        resetScene(!brickDedup);
+                        brickDedup = !brickDedup;
+                    }
+                    const auto bricksUnique = renderer.brickPool().allocated();
+                    const auto bricksLogical = renderer.brickPool().logicalBricks();
+                    const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())
+                                          / (1024.0 * 1024.0);
+                    size_t handleGridBytes = 0;
+                    size_t denseBytes = 0;
+                    std::function<void(const Node3D &)> walkScene = [&](const Node3D &node) {
+                        if (const auto *v = dynamic_cast<const Voxel3D *>(&node)) {
+                            if (const VoxelData *vd = v->voxelData()) {
+                                handleGridBytes += vd->handleGridBytes();
+                                denseBytes += vd->denseEquivalentBytes();
+                            }
+                        }
+                        for (const auto &child : node.children()) {
+                            walkScene(*child);
+                        }
+                    };
+                    walkScene(root);
+                    const double handleGridKB = static_cast<double>(handleGridBytes) / 1024.0;
+                    const double brickmapTotalMB = poolMB + (handleGridKB / 1024.0);
+                    const double denseMB = static_cast<double>(denseBytes) / (1024.0 * 1024.0);
+                    const double savingsMB = denseMB - brickmapTotalMB;
+                    const double savingsPct = denseMB > 0.0 ? (savingsMB / denseMB) * 100.0 : 0.0;
+                    const double dedupRatio = bricksUnique > 0
+                        ? static_cast<double>(bricksLogical) / static_cast<double>(bricksUnique)
+                        : 1.0;
+
+                    debugUi.text("Pool:           %.2f MB", poolMB);
+                    debugUi.text("Handle grids:   %.2f KB", handleGridKB);
+                    debugUi.text("Bricks unique:  %zu / %zu", bricksUnique, BrickPool::kMaxBricks);
+                    debugUi.text("Bricks logical: %zu", bricksLogical);
+                    debugUi.text("Dedup ratio:    %.2fx", dedupRatio);
+                    debugUi.text("Dense:          %.2f MB", denseMB);
+                    debugUi.separator();
+                    debugUi.text("Total:          %.2f MB  (saved %.2f MB / %.0f%%)",
+                                 brickmapTotalMB, savingsMB, savingsPct);
+                    debugUi.plot("Brickmap", brickmapMBHistory.data(), brickmapMBHistory.capacity(),
+                                 brickmapMBHistory.size(), brickmapMBHistory.oldestOffset(),
+                                 "%.2f MB", 0.0f, FLT_MAX);
+                    debugUi.plot("Process RSS", processRSSMBHistory.data(),
+                                 processRSSMBHistory.capacity(), processRSSMBHistory.size(),
+                                 processRSSMBHistory.oldestOffset(), "%.0f MB", 0.0f, FLT_MAX);
+                }
+
+                const double gpuMB = static_cast<double>(allocator.stats().usedBytes)
+                                     / (1024.0 * 1024.0);
+                std::snprintf(header.data(), header.size(), "GPU %.0f MB###gpu", gpuMB);
+                if (debugUi.collapsingHeader(header.data())) {
+                    debugUi.plot("GPU memory", gpuMemoryMBHistory.data(),
+                                 gpuMemoryMBHistory.capacity(), gpuMemoryMBHistory.size(),
+                                 gpuMemoryMBHistory.oldestOffset(), "%.1f MB", 0.0f, FLT_MAX);
+                    if (renderer.useSvdag() && !renderer.svdag().nodes.empty()) {
+                        debugUi.separatorText("SVDAG (live)");
+                        const Svdag &sv = renderer.svdag();
+                        const size_t flatGridBytes =
+                            renderer.worldBrickGrid().handles().size() * sizeof(BrickHandle);
+                        const double svdagMB =
+                            static_cast<double>(svdagBytes(sv)) / (1024.0 * 1024.0);
+                        const double flatGridMB =
+                            static_cast<double>(flatGridBytes) / (1024.0 * 1024.0);
+                        const double svdagSavedMB = flatGridMB - svdagMB;
+                        const double svdagSavedPct =
+                            flatGridMB > 0.0 ? (svdagSavedMB / flatGridMB) * 100.0 : 0.0;
+                        debugUi.text("Nodes:          %zu", sv.nodes.size());
+                        debugUi.text("Levels:         %d (paddedDim=%d)", sv.levels, sv.paddedDim);
+                        debugUi.text("SVDAG size:     %.3f MB", svdagMB);
+                        debugUi.text("Flat grid:      %.3f MB", flatGridMB);
+                        debugUi.text("Saved vs grid:  %.3f MB (%.0f%%)", svdagSavedMB,
+                                     svdagSavedPct);
+                    }
+                }
+
+                if (streamer.has_value()) {
+                    std::snprintf(header.data(), header.size(), "Streaming  %zu chunks###stream",
+                                  streamer->loadedCount());
+                    if (debugUi.collapsingHeader(header.data())) {
+                        debugUi.text("Loaded:  %zu chunks", streamer->loadedCount());
+                        debugUi.text("Skipped: %zu chunks", streamer->skippedCount());
+                        debugUi.text("Radius:  h=%d  Y=[%d,%d]", kStreamHRadius, kTerrainYRange.min,
+                                     kTerrainYRange.max);
+                    }
+                }
+
+                if (debugUi.collapsingHeader("Controls")) {
+                    if constexpr (App::kIsDevBuild) {
+                        if (App::Profiler::isLinked()) {
+                            if (profiler.isProfilerGuiRunning()) {
+                                debugUi.text("Tracy: running (close to relaunch)");
+                            } else if (debugUi.button("Launch Tracy")) {
+                                profiler.launchProfilerGui();
+                            }
                         }
                     }
-                    for (const auto &child : node.children()) {
-                        walkScene(*child);
+                    if (debugUi.checkbox("Mip skip", &mipSkipEnabled)) {
+                        renderer.setMipSkipEnabled(mipSkipEnabled);
                     }
-                };
-                walkScene(root);
-                const double handleGridKB = static_cast<double>(handleGridBytes) / 1024.0;
-                const double brickmapTotalMB = poolMB + (handleGridKB / 1024.0);
-                const double denseMB = static_cast<double>(denseBytes) / (1024.0 * 1024.0);
-                const double savingsMB = denseMB - brickmapTotalMB;
-                const double savingsPct = denseMB > 0.0 ? (savingsMB / denseMB) * 100.0 : 0.0;
-                const double dedupRatio =
-                    bricksUnique > 0 ? static_cast<double>(bricksLogical) / static_cast<double>(bricksUnique) : 1.0;
-
-                debugUi.text("Pool:           %.2f MB", poolMB);
-                debugUi.text("Handle grids:   %.2f KB", handleGridKB);
-                debugUi.text("Bricks unique:  %zu / %zu", bricksUnique, BrickPool::kMaxBricks);
-                debugUi.text("Bricks logical: %zu", bricksLogical);
-                debugUi.text("Dedup ratio:    %.2fx", dedupRatio);
-                debugUi.text("Dense:          %.2f MB", denseMB);
-                debugUi.separator();
-                debugUi.text("Total:          %.2f MB  (saved %.2f MB / %.0f%%)",
-                             brickmapTotalMB, savingsMB, savingsPct);
-
-                debugUi.separatorText("History");
-                debugUi.plot("Frame", frameMsHistory.data(), frameMsHistory.capacity(),
-                             frameMsHistory.size(), frameMsHistory.oldestOffset(), "%.2f ms",
-                             0.0f, FLT_MAX);
-                debugUi.plot("Render", renderMsHistory.data(), renderMsHistory.capacity(),
-                             renderMsHistory.size(), renderMsHistory.oldestOffset(), "%.2f ms",
-                             0.0f, FLT_MAX);
-                debugUi.plot("Brickmap", brickmapMBHistory.data(), brickmapMBHistory.capacity(),
-                             brickmapMBHistory.size(), brickmapMBHistory.oldestOffset(), "%.2f MB",
-                             0.0f, FLT_MAX);
-                debugUi.plot("GPU memory", gpuMemoryMBHistory.data(),
-                             gpuMemoryMBHistory.capacity(), gpuMemoryMBHistory.size(),
-                             gpuMemoryMBHistory.oldestOffset(), "%.1f MB", 0.0f, FLT_MAX);
-                debugUi.plot("Process RSS", processRSSMBHistory.data(),
-                             processRSSMBHistory.capacity(), processRSSMBHistory.size(),
-                             processRSSMBHistory.oldestOffset(), "%.0f MB", 0.0f, FLT_MAX);
-
-                if (renderer.useSvdag() && !renderer.svdag().nodes.empty()) {
-                    debugUi.separatorText("SVDAG (live)");
-                    const Svdag &sv = renderer.svdag();
-                    const size_t flatGridBytes =
-                        renderer.worldBrickGrid().handles().size() * sizeof(BrickHandle);
-                    const double svdagMB = static_cast<double>(svdagBytes(sv)) / (1024.0 * 1024.0);
-                    const double flatGridMB =
-                        static_cast<double>(flatGridBytes) / (1024.0 * 1024.0);
-                    const double svdagSavedMB = flatGridMB - svdagMB;
-                    const double svdagSavedPct =
-                        flatGridMB > 0.0 ? (svdagSavedMB / flatGridMB) * 100.0 : 0.0;
-                    debugUi.text("Nodes:          %zu", sv.nodes.size());
-                    debugUi.text("Levels:         %d (paddedDim=%d)", sv.levels, sv.paddedDim);
-                    debugUi.text("SVDAG size:     %.3f MB", svdagMB);
-                    debugUi.text("Flat grid:      %.3f MB", flatGridMB);
-                    debugUi.text("Saved vs grid:  %.3f MB (%.0f%%)", svdagSavedMB, svdagSavedPct);
+                    if (debugUi.checkbox("SVDAG traversal", &useSvdag)) {
+                        renderer.setUseSvdag(useSvdag);
+                    }
+                    static const char *const kHeatmapOpts[] = { "Off", "Step count" };
+                    if (debugUi.radio("Heatmap", &heatmapMode,
+                                      std::span<const char *const>(kHeatmapOpts,
+                                                                   std::size(kHeatmapOpts)))) {
+                        renderer.setHeatmapMode(heatmapMode);
+                    }
+                    if (heatmapMode != 0
+                        && debugUi.sliderInt("Heatmap max steps", &heatmapMaxSteps, 32, 4096)) {
+                        renderer.setHeatmapMaxSteps(heatmapMaxSteps);
+                    }
+                    debugUi.separatorText("Camera");
+                    float speedMult = controller.speedMultiplier();
+                    if (debugUi.sliderFloat("Speed (x)", &speedMult, 0.1f, 10.0f)) {
+                        controller.setSpeedMultiplier(speedMult);
+                    }
                 }
 
                 debugUi.endPanel();
@@ -470,6 +496,8 @@ int main(int argc, char **argv) {
                 if (now - fpsLastUpdate > 0.25) {
                     const double avgMs = (fpsAccumDt / static_cast<double>(fpsAccumFrames)) * 1000.0;
                     const double fps = static_cast<double>(fpsAccumFrames) / (now - fpsLastUpdate);
+                    uiFps = fps;
+                    uiFrameMs = avgMs;
                     std::array<char, 128> titleBuf{};
                     std::snprintf(titleBuf.data(), titleBuf.size(), "RAGE Smoke | FPS %.1f | %.2f ms", fps, avgMs);
                     window.setTitle(titleBuf.data());

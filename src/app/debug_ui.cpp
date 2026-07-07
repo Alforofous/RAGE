@@ -295,7 +295,13 @@ namespace RAGE::App {
         ImGui::End();
     }
 
-    void DebugUi::beginPanel(const char *title) { ImGui::Begin(title); }
+    void DebugUi::beginPanel(const char *title) {
+        const ImGuiViewport *viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x * 0.25f, viewport->WorkSize.y),
+                                 ImGuiCond_FirstUseEver);
+        ImGui::Begin(title);
+    }
 
     void DebugUi::endPanel() { ImGui::End(); }
 
@@ -309,6 +315,11 @@ namespace RAGE::App {
 
     bool DebugUi::sliderFloat(const char *label, float *value, float min, float max) {
         return ImGui::SliderFloat(label, value, min, max);
+    }
+
+    bool DebugUi::collapsingHeader(const char *label, bool defaultOpen) {
+        return ImGui::CollapsingHeader(label, defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen
+                                                          : ImGuiTreeNodeFlags_None);
     }
 
     void DebugUi::separatorText(const char *label) { ImGui::SeparatorText(label); }
