@@ -26,6 +26,7 @@
 
 #ifdef RAGE_PROFILING_TRACY
     #include <cstring>
+    #include <memory>
     #include <vector>
     #include <tracy/Tracy.hpp>
     #include <tracy/TracyC.h>
@@ -38,6 +39,12 @@ namespace {
     // begin/end callbacks; we push the Tracy ctx on begin and pop+end on the matching end.
     // Thread-local because zones nest only within a single thread's call stack.
     thread_local std::vector<TracyCZoneCtx> g_zoneStack;
+
+    // GPU zone stack for the paired onBeforeGpuPass / onAfterGpuPass hooks. VkCtxScope
+    // writes its begin timestamp into the command buffer at construction and the end
+    // timestamp at destruction, so the scope must stay alive across the pass recording —
+    // heap-held here, destroyed on the matching after-hook.
+    std::vector<std::unique_ptr<tracy::VkCtxScope>> g_gpuZoneStack;
 #endif
 }
 
@@ -74,7 +81,9 @@ namespace RAGE::App {
         renderer.onBeforeGpuPass([this](const char *passName, VkCommandBuffer cmd) {
 #ifdef RAGE_PROFILING_TRACY
             if (gpuContext_ != nullptr) {
-                TracyVkZoneTransient(static_cast<TracyVkCtx>(gpuContext_), _gpuZone, cmd, passName, true);
+                g_gpuZoneStack.push_back(std::make_unique<tracy::VkCtxScope>(
+                    static_cast<TracyVkCtx>(gpuContext_), TracyLine, TracyFile, strlen(TracyFile),
+                    TracyFunction, strlen(TracyFunction), passName, strlen(passName), cmd, true));
             }
 #else
             (void)passName;
@@ -82,9 +91,14 @@ namespace RAGE::App {
 #endif
         });
 
-        renderer.onAfterGpuPass([](const char *passName, VkCommandBuffer cmd) {
+        renderer.onAfterGpuPass([this](const char *passName, VkCommandBuffer cmd) {
             (void)passName;
             (void)cmd;
+#ifdef RAGE_PROFILING_TRACY
+            if (gpuContext_ != nullptr && !g_gpuZoneStack.empty()) {
+                g_gpuZoneStack.pop_back();
+            }
+#endif
         });
 
         renderer.onFrameImage([](const void *rgbaBytes, uint16_t width, uint16_t height) {
