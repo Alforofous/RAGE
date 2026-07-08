@@ -39,6 +39,15 @@ namespace RAGE::Content {
     public:
         using ChunkPrepareHook = std::function<void(Voxel3D &, IVec3 chunkCoord)>;
 
+        /**
+         * @brief Placement events, fired on the `update()` caller's thread. `Placed`
+         *        fires after the chunk is attached to the scene tree; `Evicted` fires
+         *        while the chunk is still alive, just before it is destroyed. Consumers
+         *        (e.g. an incremental world grid) patch instead of re-deriving the world.
+         */
+        using ChunkPlacedHook = std::function<void(IVec3 chunkCoord, Voxel3D &chunk)>;
+        using ChunkEvictedHook = std::function<void(IVec3 chunkCoord, Voxel3D &chunk)>;
+
         Streamer(ChunkStore &store, Node3D &parent);
         ~Streamer();
 
@@ -48,6 +57,8 @@ namespace RAGE::Content {
         Streamer &operator=(Streamer &&) = delete;
 
         void setOnChunkPrepare(ChunkPrepareHook hook) { onPrepare_ = std::move(hook); }
+        void setOnChunkPlaced(ChunkPlacedHook hook) { onPlaced_ = std::move(hook); }
+        void setOnChunkEvicted(ChunkEvictedHook hook) { onEvicted_ = std::move(hook); }
 
         void update(IVec3 focusChunk, int32_t horizontalRadius);
 
@@ -76,6 +87,8 @@ namespace RAGE::Content {
         ChunkStore &store_;
         Node3D &parent_;
         ChunkPrepareHook onPrepare_;
+        ChunkPlacedHook onPlaced_;
+        ChunkEvictedHook onEvicted_;
 
         std::unordered_map<IVec3, Voxel3D *, IVec3Hash> loaded_;
         std::unordered_map<IVec3, ChunkStatus, IVec3Hash> skipped_;

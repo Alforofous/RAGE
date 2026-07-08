@@ -112,6 +112,9 @@ namespace RAGE::Content {
             Voxel3D *raw = result.chunk.get();
             parent_.add(std::move(result.chunk));
             loaded_.emplace(coord, raw);
+            if (onPlaced_) {
+                onPlaced_(coord, *raw);
+            }
         } else if (result.status == ChunkStatus::Empty || result.status == ChunkStatus::Missing) {
             skipped_.emplace(coord, result.status);
         } else if (result.status == ChunkStatus::Pending) {
@@ -124,6 +127,9 @@ namespace RAGE::Content {
         std::unordered_set<const Node3D *> evicted;
         for (auto it = loaded_.begin(); it != loaded_.end();) {
             if (!inCylinder(it->first, focusChunk, hRadius, y)) {
+                if (onEvicted_) {
+                    onEvicted_(it->first, *it->second);
+                }
                 evicted.insert(it->second);
                 it = loaded_.erase(it);
             } else {

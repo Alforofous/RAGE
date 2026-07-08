@@ -279,3 +279,49 @@ TEST(Streamer, DestructorCleansUpWorkerWhileChunksInFlight) {
     Streamer s(store, root);
     s.update(IVec3{ 0, 0, 0 }, 1);
 }
+
+TEST(Streamer, PlacedEventFiresPerAttachedChunkWithCoord) {
+    BrickPool pool;
+    Node3D root;
+    Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
+    store.setDefault(ChunkStatus::Ready);
+
+    std::mutex mtx;
+    std::unordered_map<IVec3, const Voxel3D *, Content::IVec3Hash> placed;
+    Streamer s(store, root);
+    s.setOnChunkPlaced([&mtx, &placed](IVec3 c, Voxel3D &v) {
+        std::lock_guard lock(mtx);
+        placed.emplace(c, &v);
+    });
+    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+
+    std::lock_guard lock(mtx);
+    EXPECT_EQ(placed.size(), 5u);
+    ASSERT_TRUE(placed.contains(IVec3{ 0, 0, 0 }));
+    EXPECT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
+}
+
+TEST(Streamer, EvictedEventFiresForOutOfRangeChunksBeforeDestruction) {
+    BrickPool pool;
+    Node3D root;
+    Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
+    store.setDefault(ChunkStatus::Ready);
+
+    Streamer s(store, root);
+    s.flushAsync(IVec3{ 0, 0, 0 }, 0);
+    ASSERT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
+
+    std::mutex mtx;
+    std::vector<IVec3> evicted;
+    s.setOnChunkEvicted([&mtx, &evicted](IVec3 c, Voxel3D &v) {
+        std::lock_guard lock(mtx);
+        evicted.push_back(c);
+        EXPECT_EQ(v.dimensions(), kChunkDims * 8);
+    });
+    s.flushAsync(IVec3{ 10, 0, 0 }, 0);
+
+    std::lock_guard lock(mtx);
+    ASSERT_EQ(evicted.size(), 1u);
+    EXPECT_EQ(evicted[0], (IVec3{ 0, 0, 0 }));
+    EXPECT_FALSE(s.isLoaded(IVec3{ 0, 0, 0 }));
+}
