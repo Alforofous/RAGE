@@ -85,6 +85,65 @@ namespace {
         VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     };
 
+    int32_t nextPow2(int32_t v) {
+        int32_t p = 1;
+        while (p < v) {
+            p *= 2;
+        }
+        return p;
+    }
+
+    /**
+     * @brief Top-level world sizing — the single place capacities originate. Everything
+     *        below (brick pool size, grid SSBO capacity, grid texture dims) is DERIVED
+     *        here and injected into engine components via constructors; engine code owns
+     *        no capacity constants and validates what it is given at the seams.
+     */
+    struct WorldPipelineConfig {
+        int32_t streamRadius = 30;
+        Content::ChunkStore::YRange yRange{ .min = -1, .max = 2 };
+        IVec3 chunkBrickDims{ 4, 4, 4 };
+
+        /// Bricks per axis the loaded window can span (XZ diameter × chunk, Y from yRange).
+        IVec3 windowBrickExtent() const {
+            const int32_t diameter = (2 * streamRadius) + 1;
+            const int32_t yChunks = yRange.max - yRange.min + 1;
+            return IVec3{ diameter * chunkBrickDims.x, yChunks * chunkBrickDims.y,
+                          diameter * chunkBrickDims.z };
+        }
+
+        /// Grid capacity: window extent rounded to the next power of two per axis —
+        /// headroom now, cheap wrap masks once the grid goes toroidal.
+        IVec3 gridDims() const {
+            const IVec3 w = windowBrickExtent();
+            return IVec3{ nextPow2(w.x), nextPow2(w.y), nextPow2(w.z) };
+        }
+
+        size_t maxWorldBrickHandles() const {
+            const IVec3 g = gridDims();
+            return static_cast<size_t>(g.x) * static_cast<size_t>(g.y)
+                   * static_cast<size_t>(g.z);
+        }
+
+        /// Statistical, unlike the geometric bounds above: sized from measured occupancy
+        /// of the streamed terrain (~110K unique bricks at radius 30) plus headroom.
+        /// BrickPool throws loudly on exhaustion.
+        size_t maxBricks() const {
+            const IVec3 w = windowBrickExtent();
+            const size_t windowCells = static_cast<size_t>(w.x) * static_cast<size_t>(w.y)
+                                       * static_cast<size_t>(w.z);
+            return (windowCells * 3) / 20;
+        }
+
+        Renderer::WorldLimits rendererLimits(bool brickDedup) const {
+            return Renderer::WorldLimits{
+                .brickPool = { .maxBricks = maxBricks(), .enableDedup = brickDedup },
+                .maxWorldBrickHandles = maxWorldBrickHandles(),
+                .worldGridTexDims = gridDims(),
+            };
+        }
+    };
+
     std::filesystem::path executableDir(const char *argv0) {
         std::error_code ec;
         const std::filesystem::path exePath = std::filesystem::weakly_canonical(argv0, ec);
@@ -162,7 +221,8 @@ int main(int argc, char **argv) {
                                         .height = initH,
                                         .vsync = vsync });
 
-            Renderer renderer(ctx, allocator, swapchain);
+            const WorldPipelineConfig kWorld{};
+            Renderer renderer(ctx, allocator, swapchain, kWorld.rendererLimits(true));
 
             const auto stageVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
                 auto job = std::make_unique<VoxelLoadJob>();
@@ -183,12 +243,16 @@ int main(int argc, char **argv) {
 
             std::optional<Content::ProceduralChunkStore> chunkStore;
             std::optional<Content::Streamer> streamer;
-            constexpr int32_t kStreamHRadius = 30;
-            constexpr Content::ChunkStore::YRange kTerrainYRange{ .min = -1, .max = 2 };
+            const int32_t kStreamHRadius = kWorld.streamRadius;
+            const Content::ChunkStore::YRange kTerrainYRange = kWorld.yRange;
 
             const auto buildScene = [&]() {
                 if (scene == SceneKind::Streamed) {
                     auto gen = std::make_unique<Content::TerrainChunkGenerator>();
+                    if (gen->chunkBrickDims() != kWorld.chunkBrickDims) {
+                        throw std::runtime_error(
+                            "WorldPipelineConfig.chunkBrickDims does not match the terrain generator");
+                    }
                     chunkStore.emplace(std::move(gen), renderer.brickPool(), kVoxelSize, kTerrainYRange);
                     streamer.emplace(*chunkStore, root);
                     streamer->setOnChunkPrepare(
@@ -367,7 +431,8 @@ int main(int argc, char **argv) {
 
                     debugUi.text("Pool:           %.2f MB", poolMB);
                     debugUi.text("Handle grids:   %.2f KB", handleGridKB);
-                    debugUi.text("Bricks unique:  %zu / %zu", bricksUnique, BrickPool::kMaxBricks);
+                    debugUi.text("Bricks unique:  %zu / %zu", bricksUnique,
+                                 renderer.brickPool().maxBricks());
                     debugUi.text("Bricks logical: %zu", bricksLogical);
                     debugUi.text("Dedup ratio:    %.2fx", dedupRatio);
                     debugUi.text("Dense:          %.2f MB", denseMB);

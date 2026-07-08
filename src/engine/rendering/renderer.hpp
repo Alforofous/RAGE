@@ -84,15 +84,24 @@ namespace RAGE {
      */
     class Renderer {
     public:
-        static constexpr size_t kMaxWorldBrickHandles = 2ull * 1024ull * 1024ull;
-
-        /// Fixed capacity of the world-grid 3D texture (bricks per axis). The grid's
-        /// per-frame dims must fit inside; `render` throws otherwise.
-        static constexpr uint32_t kWorldGridTexDimXZ = 320;
-        static constexpr uint32_t kWorldGridTexDimY = 64;
+        /**
+         * @brief GPU-side capacity budget, injected by the application alongside the
+         *        brick-pool config it derives from the same world settings (view
+         *        distance, chunk dims). The renderer sizes its buffers/texture from
+         *        this and throws when a frame's world grid exceeds it — it never
+         *        decides capacities itself.
+         */
+        struct WorldLimits {
+            BrickPoolConfig brickPool{};
+            /// Flat handle-SSBO capacity (cells). The per-frame grid dims product must fit.
+            size_t maxWorldBrickHandles = 256ull * 1024ull;
+            /// 3D-texture capacity in bricks per axis; per-frame grid dims must fit per axis.
+            IVec3 worldGridTexDims{ 64, 64, 64 };
+        };
 
         Renderer() = delete;
-        Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain);
+        Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain,
+                 WorldLimits limits);
         ~Renderer();
 
         Renderer(const Renderer &) = delete;
@@ -213,6 +222,7 @@ namespace RAGE {
         VulkanContext &ctx_;
         VulkanAllocator &allocator_;
         VulkanSwapchain &swapchain_;
+        WorldLimits limits_;
 
         VulkanCommandPool<queue_kind::Graphics> cmdPool_;
         VulkanDescriptorPool descPool_;

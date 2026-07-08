@@ -104,7 +104,7 @@ TEST(BrickPool, GrowsBeyondInitialCapacity) {
 }
 
 TEST(BrickPool, DedupOffAlwaysAllocatesFresh) {
-    BrickPool pool(false);
+    BrickPool pool({ .enableDedup = false });
     Brick contents{};
     contents.voxels[0] = 0xDEADBEEFu;
 
@@ -198,7 +198,7 @@ TEST(BrickPool, PrepareForWriteOnEmptyHandleIsNoop) {
 }
 
 TEST(BrickPool, LogicalBricksMatchesAllocatedWhenDedupOff) {
-    BrickPool pool(false);
+    BrickPool pool({ .enableDedup = false });
     Brick contents{};
     contents.voxels[0] = 0x1u;
 

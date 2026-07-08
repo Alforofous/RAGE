@@ -47,22 +47,26 @@ namespace RAGE {
         };
     }
 
-    Renderer::Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain)
+    Renderer::Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain,
+                       WorldLimits limits)
         : ctx_(ctx)
         , allocator_(allocator)
         , swapchain_(swapchain)
+        , limits_(limits)
         , cmdPool_(ctx.vkDevice(), ctx.graphicsQueue().queueFamily())
         , descPool_(ctx.vkDevice(), {})
         , pipelineCache_(ctx.vkDevice())
         , svdagCache_(allocator) {
-        brickPool_.emplace();   // default policy: dedup on
+        brickPool_.emplace(limits_.brickPool);
     }
 
     void Renderer::recreateBrickPool(bool enableDedup) {
         drainInFlight();
         vkDeviceWaitIdle(ctx_.vkDevice());
         brickPool_.reset();
-        brickPool_.emplace(enableDedup);
+        BrickPoolConfig cfg = limits_.brickPool;
+        cfg.enableDedup = enableDedup;
+        brickPool_.emplace(cfg);
     }
 
     Renderer::~Renderer() {
@@ -114,8 +118,8 @@ namespace RAGE {
         }
 
         if (!brickPoolBuffer_.has_value()) {
-            constexpr uint64_t kBrickPoolBytes =
-                static_cast<uint64_t>(BrickPool::kMaxBricks) * sizeof(Brick);
+            const uint64_t kBrickPoolBytes =
+                static_cast<uint64_t>(limits_.brickPool.maxBricks) * sizeof(Brick);
             brickPoolBuffer_.emplace(allocator_.createBuffer({
                 .size = kBrickPoolBytes,
                 .usage = BufferUsage::Storage,
@@ -125,7 +129,7 @@ namespace RAGE {
         }
 
         if (!worldBrickGridHandlesBuffer_.has_value()) {
-            constexpr uint64_t kBytes = kMaxWorldBrickHandles * sizeof(BrickHandle);
+            const uint64_t kBytes = limits_.maxWorldBrickHandles * sizeof(BrickHandle);
             worldBrickGridHandlesBuffer_.emplace(allocator_.createBuffer({
                 .size = kBytes,
                 .usage = BufferUsage::Storage,
@@ -136,9 +140,9 @@ namespace RAGE {
 
         if (!worldGridImage_.has_value()) {
             worldGridImage_.emplace(allocator_.createImage({
-                .width = kWorldGridTexDimXZ,
-                .height = kWorldGridTexDimY,
-                .depth = kWorldGridTexDimXZ,
+                .width = static_cast<uint32_t>(limits_.worldGridTexDims.x),
+                .height = static_cast<uint32_t>(limits_.worldGridTexDims.y),
+                .depth = static_cast<uint32_t>(limits_.worldGridTexDims.z),
                 .format = ImageFormat::R32_UINT,
                 .usage = ImageUsage::Sampled | ImageUsage::TransferDst,
                 .memory = MemoryLocation::GpuOnly,
@@ -147,9 +151,10 @@ namespace RAGE {
                 worldGridImage_->createView({ .viewType = ImageViewType::Type3D }));
             worldGridSampler_ = VulkanSampler::createNearestClamp(ctx_.vkDevice());
 
-            constexpr uint64_t kStagingBytes = static_cast<uint64_t>(kWorldGridTexDimXZ)
-                                               * kWorldGridTexDimY * kWorldGridTexDimXZ
-                                               * sizeof(BrickHandle);
+            const uint64_t kStagingBytes = static_cast<uint64_t>(limits_.worldGridTexDims.x)
+                                           * static_cast<uint64_t>(limits_.worldGridTexDims.y)
+                                           * static_cast<uint64_t>(limits_.worldGridTexDims.z)
+                                           * sizeof(BrickHandle);
             worldGridStagingBuffer_.emplace(allocator_.createBuffer({
                 .size = kStagingBytes,
                 .usage = BufferUsage::TransferSrc,
@@ -382,10 +387,10 @@ namespace RAGE {
             std::memcpy(worldBrickGridParamsBuffer_->mappedData(), &params, sizeof(params));
 
             const auto handles = worldBrickGrid_.handles();
-            if (handles.size() > kMaxWorldBrickHandles) {
+            if (handles.size() > limits_.maxWorldBrickHandles) {
                 throw std::runtime_error(
                     "Renderer: world brick grid handle count " + std::to_string(handles.size())
-                    + " exceeds buffer capacity " + std::to_string(kMaxWorldBrickHandles));
+                    + " exceeds buffer capacity " + std::to_string(limits_.maxWorldBrickHandles));
             }
             if (!handles.empty()) {
                 std::memcpy(worldBrickGridHandlesBuffer_->mappedData(), handles.data(),
@@ -394,9 +399,8 @@ namespace RAGE {
 
             worldGridUploadDims_ = IVec3{ 0, 0, 0 };
             if (useGridTexture_ && !handles.empty()) {
-                if (static_cast<uint32_t>(dims.x) > kWorldGridTexDimXZ
-                    || static_cast<uint32_t>(dims.y) > kWorldGridTexDimY
-                    || static_cast<uint32_t>(dims.z) > kWorldGridTexDimXZ) {
+                if (dims.x > limits_.worldGridTexDims.x || dims.y > limits_.worldGridTexDims.y
+                    || dims.z > limits_.worldGridTexDims.z) {
                     throw std::runtime_error(
                         "Renderer: world brick grid dims exceed 3D texture capacity ("
                         + std::to_string(dims.x) + "x" + std::to_string(dims.y) + "x"

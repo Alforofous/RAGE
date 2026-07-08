@@ -28,12 +28,13 @@ namespace RAGE {
         }
     }
 
-    BrickPool::BrickPool(bool enableDedup)
-        : dedupEnabled_(enableDedup) {
-        bricks_.reserve(kMaxBricks);
-        refCount_.reserve(kMaxBricks);
-        dirtyFlags_.reserve(kMaxBricks);
-        dirtyHandles_.reserve(kMaxBricks);
+    BrickPool::BrickPool(BrickPoolConfig config)
+        : maxBricks_(config.maxBricks)
+        , dedupEnabled_(config.enableDedup) {
+        bricks_.reserve(maxBricks_);
+        refCount_.reserve(maxBricks_);
+        dirtyFlags_.reserve(maxBricks_);
+        dirtyHandles_.reserve(maxBricks_);
         bricks_.emplace_back();
         refCount_.push_back(0u);
         dirtyFlags_.push_back(0u);
@@ -46,8 +47,8 @@ namespace RAGE {
             freeList_.pop_back();
             bricks_[h.id] = Brick{};
         } else {
-            if (bricks_.size() >= kMaxBricks) {
-                throw std::runtime_error("BrickPool: exhausted (max bricks = " + std::to_string(kMaxBricks) + ")");
+            if (bricks_.size() >= maxBricks_) {
+                throw std::runtime_error("BrickPool: exhausted (max bricks = " + std::to_string(maxBricks_) + ")");
             }
             h = BrickHandle{ static_cast<uint32_t>(bricks_.size()) };
             bricks_.emplace_back();

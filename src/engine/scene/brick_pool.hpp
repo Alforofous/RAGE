@@ -15,12 +15,20 @@ namespace RAGE {
      *        With dedup on, identical content collapses to one slot via content hash.
      *        Thread-safe; the renderer reads while the asset-loader thread allocates.
      */
+    /**
+     * @brief Pool sizing + policy, injected by the application ("configure the pipeline").
+     *        The engine owns no capacity constants — see the app's world config for how
+     *        `maxBricks` is derived from view distance. Both fields are fixed for the
+     *        pool's lifetime; replace the whole pool to change them.
+     */
+    struct BrickPoolConfig {
+        size_t maxBricks = 16384;
+        bool enableDedup = true;
+    };
+
     class BrickPool {
     public:
-        static constexpr size_t kMaxBricks = 131072;
-
-        /// `enableDedup` is fixed for the pool's lifetime; replace the whole pool to flip policy.
-        explicit BrickPool(bool enableDedup = true);
+        explicit BrickPool(BrickPoolConfig config = {});
 
         /// Fresh exclusively-owned brick, NOT in the dedup map. For in-place mutation.
         BrickHandle allocate();
@@ -55,11 +63,13 @@ namespace RAGE {
         /// Sum of refcounts across allocated bricks. `logicalBricks / allocated` = dedup ratio.
         size_t logicalBricks() const;
         size_t allocatedBytes() const { return allocated() * sizeof(Brick); }
-        size_t reservedBytes() const { return kMaxBricks * sizeof(Brick); }
+        size_t maxBricks() const { return maxBricks_; }
+        size_t reservedBytes() const { return maxBricks_ * sizeof(Brick); }
         bool isDedupEnabled() const { return dedupEnabled_; }
 
     private:
         mutable std::mutex mutex_;
+        size_t maxBricks_ = 0;
         std::vector<Brick> bricks_;
         std::vector<BrickHandle> freeList_;
         std::vector<uint32_t> refCount_;

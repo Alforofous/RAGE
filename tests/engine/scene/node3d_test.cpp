@@ -172,7 +172,7 @@ TEST(Node3D, ResetCycle_PoolStaysLeakCleanAcrossPolicyFlips) {
     constexpr int32_t kDim = 8;       // 1×1×1 brick per Voxel3D
     constexpr int32_t kChildren = 4;
 
-    auto pool = std::make_unique<BrickPool>(true);
+    auto pool = std::make_unique<BrickPool>(BrickPoolConfig{ .enableDedup = true });
     Node3D root;
 
     const auto populate = [&](bool /*ignored*/) {
@@ -196,7 +196,7 @@ TEST(Node3D, ResetCycle_PoolStaysLeakCleanAcrossPolicyFlips) {
         EXPECT_EQ(pool->drainDirty().size(), 0u);
 
         pool.reset();
-        pool = std::make_unique<BrickPool>(enableDedup);
+        pool = std::make_unique<BrickPool>(BrickPoolConfig{ .enableDedup = enableDedup });
 
         populate(enableDedup);
         EXPECT_GT(pool->allocated(), 0u) << "new pool should have allocations after rebuild";
