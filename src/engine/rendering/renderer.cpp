@@ -56,7 +56,8 @@ namespace RAGE {
         , cmdPool_(ctx.vkDevice(), ctx.graphicsQueue().queueFamily())
         , descPool_(ctx.vkDevice(), {})
         , pipelineCache_(ctx.vkDevice())
-        , svdagCache_(allocator) {
+        , svdagCache_(allocator)
+        , worldBrickGrid_(limits.worldGridDims) {
         brickPool_.emplace(limits_.brickPool);
     }
 
@@ -83,6 +84,25 @@ namespace RAGE {
             std::move(*inFlight_).wait();
             inFlight_.reset();
         }
+    }
+
+    void Renderer::worldGridWriteChunk(IVec3 worldBrickOrigin, const VoxelData &data) {
+        worldBrickGrid_.writeChunk(worldBrickOrigin, data);
+        worldGridGpuDirty_ = true;
+    }
+
+    void Renderer::worldGridClearChunk(IVec3 worldBrickOrigin, IVec3 brickDims) {
+        worldBrickGrid_.clearChunk(worldBrickOrigin, brickDims);
+        worldGridGpuDirty_ = true;
+    }
+
+    void Renderer::setWorldGridWindow(IVec3 windowMinBrick, IVec3 windowExtent) {
+        if (windowMinBrick == worldBrickGrid_.windowMinBrick()
+            && windowExtent == worldBrickGrid_.windowExtent()) {
+            return;
+        }
+        worldBrickGrid_.setWindow(windowMinBrick, windowExtent);
+        worldGridGpuDirty_ = true;
     }
 
     void Renderer::addLight(std::shared_ptr<DirectionalLight> light) { directionalLights_.push_back(std::move(light)); }
@@ -129,7 +149,10 @@ namespace RAGE {
         }
 
         if (!worldBrickGridHandlesBuffer_.has_value()) {
-            const uint64_t kBytes = limits_.maxWorldBrickHandles * sizeof(BrickHandle);
+            const uint64_t kBytes = static_cast<uint64_t>(limits_.worldGridDims.x)
+                                    * static_cast<uint64_t>(limits_.worldGridDims.y)
+                                    * static_cast<uint64_t>(limits_.worldGridDims.z)
+                                    * sizeof(BrickHandle);
             worldBrickGridHandlesBuffer_.emplace(allocator_.createBuffer({
                 .size = kBytes,
                 .usage = BufferUsage::Storage,
@@ -140,9 +163,9 @@ namespace RAGE {
 
         if (!worldGridImage_.has_value()) {
             worldGridImage_.emplace(allocator_.createImage({
-                .width = static_cast<uint32_t>(limits_.worldGridTexDims.x),
-                .height = static_cast<uint32_t>(limits_.worldGridTexDims.y),
-                .depth = static_cast<uint32_t>(limits_.worldGridTexDims.z),
+                .width = static_cast<uint32_t>(limits_.worldGridDims.x),
+                .height = static_cast<uint32_t>(limits_.worldGridDims.y),
+                .depth = static_cast<uint32_t>(limits_.worldGridDims.z),
                 .format = ImageFormat::R32_UINT,
                 .usage = ImageUsage::Sampled | ImageUsage::TransferDst,
                 .memory = MemoryLocation::GpuOnly,
@@ -151,9 +174,9 @@ namespace RAGE {
                 worldGridImage_->createView({ .viewType = ImageViewType::Type3D }));
             worldGridSampler_ = VulkanSampler::createNearestClamp(ctx_.vkDevice());
 
-            const uint64_t kStagingBytes = static_cast<uint64_t>(limits_.worldGridTexDims.x)
-                                           * static_cast<uint64_t>(limits_.worldGridTexDims.y)
-                                           * static_cast<uint64_t>(limits_.worldGridTexDims.z)
+            const uint64_t kStagingBytes = static_cast<uint64_t>(limits_.worldGridDims.x)
+                                           * static_cast<uint64_t>(limits_.worldGridDims.y)
+                                           * static_cast<uint64_t>(limits_.worldGridDims.z)
                                            * sizeof(BrickHandle);
             worldGridStagingBuffer_.emplace(allocator_.createBuffer({
                 .size = kStagingBytes,
@@ -164,11 +187,11 @@ namespace RAGE {
 
         if (!worldBrickGridParamsBuffer_.has_value()) {
             worldBrickGridParamsBuffer_.emplace(allocator_.createBuffer({
-                .size = 32,                  // 2 × vec4 in std140
+                .size = 64,                  // 4 × vec4 in std140
                 .usage = BufferUsage::Uniform,
                 .memory = MemoryLocation::CpuToGpu,
             }));
-            std::memset(worldBrickGridParamsBuffer_->mappedData(), 0, 32);
+            std::memset(worldBrickGridParamsBuffer_->mappedData(), 0, 64);
         }
 
         if (!pixelDebugBuffer_.has_value()) {
@@ -330,40 +353,54 @@ namespace RAGE {
         const bool sceneChanged = sceneVersion != lastSceneTreeVersion_ || !dirtyBricks.empty()
                                   || gridTextureJustEnabled || svdagJustEnabled;
         lastSceneTreeVersion_ = sceneVersion;
+        if (gridTextureJustEnabled || svdagJustEnabled) {
+            // These paths read GPU-side copies of the grid that only refresh in the
+            // upload block — force it even when no chunk was patched this frame.
+            worldGridGpuDirty_ = true;
+        }
 
         std::vector<Renderable *> visible;
-        if (!sceneChanged) {
-            worldGridUploadDims_ = IVec3{ 0, 0, 0 };
-        } else {
-            {
-                const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
-                collectVisible(root, visible);
-                shadowCasters_.clear();
-                collectShadowCasters(root);
-            }
+        if (sceneChanged) {
+            const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
+            collectVisible(root, visible);
+            shadowCasters_.clear();
+            collectShadowCasters(root);
+        }
 
+        if (sceneChanged && !worldGridStreaming_) {
             const PhaseScope brickRebuild(phaseBegin_, phaseEnd_, "Render.WorldBrickGridRebuild");
             brickPlacementsScratch_.clear();
             brickPlacementsScratch_.reserve(shadowCasters_.size());
-            float brickWorldSize = 0.0f;
+            float placeBrickWorldSize = 0.0f;
             for (const Voxel3D *v : shadowCasters_) {
-                if (brickWorldSize == 0.0f) {
-                    brickWorldSize = v->voxelSize() * static_cast<float>(Brick::kDim);
+                if (placeBrickWorldSize == 0.0f) {
+                    placeBrickWorldSize = v->voxelSize() * static_cast<float>(Brick::kDim);
                 }
                 const Vec3 p = v->worldMatrix().transformPoint(Vec3::zero());
                 const IVec3 worldBrickOrigin{
-                    static_cast<int32_t>(std::floor(p.x / brickWorldSize)),
-                    static_cast<int32_t>(std::floor(p.y / brickWorldSize)),
-                    static_cast<int32_t>(std::floor(p.z / brickWorldSize)),
+                    static_cast<int32_t>(std::floor(p.x / placeBrickWorldSize)),
+                    static_cast<int32_t>(std::floor(p.y / placeBrickWorldSize)),
+                    static_cast<int32_t>(std::floor(p.z / placeBrickWorldSize)),
                 };
                 brickPlacementsScratch_.push_back(
                     VoxelDataWorldPlacement{ .data = v->voxelData(), .worldBrickOrigin = worldBrickOrigin });
             }
             worldBrickGrid_.rebuild(brickPlacementsScratch_);
+            worldGridGpuDirty_ = true;
+        }
 
-            // Upload params UBO: vec4(origin_xyz, cellSize), ivec4(dims_xyz, _).
-            const IVec3 dims = worldBrickGrid_.dims();
-            const IVec3 origBrick = worldBrickGrid_.worldBrickOrigin();
+        worldGridUploadDims_ = IVec3{ 0, 0, 0 };
+        if (worldGridGpuDirty_ && !shadowCasters_.empty()) {
+            worldGridGpuDirty_ = false;
+            const PhaseScope gridUpload(phaseBegin_, phaseEnd_, "Render.WorldGridUpload");
+            const float brickWorldSize =
+                shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
+
+            // Params UBO: window origin/extent for the DDA, window min brick + wrap
+            // mask for toroidal slot addressing.
+            const IVec3 dims = worldBrickGrid_.windowExtent();
+            const IVec3 origBrick = worldBrickGrid_.windowMinBrick();
+            const IVec3 fixedDims = worldBrickGrid_.fixedDims();
             struct WorldBrickGridParamsLayout {
                 float originX;
                 float originY;
@@ -373,6 +410,14 @@ namespace RAGE {
                 int32_t dimsY;
                 int32_t dimsZ;
                 int32_t voxelDim;
+                int32_t winMinX;
+                int32_t winMinY;
+                int32_t winMinZ;
+                int32_t _pad0;
+                int32_t wrapMaskX;
+                int32_t wrapMaskY;
+                int32_t wrapMaskZ;
+                int32_t _pad1;
             };
             const WorldBrickGridParamsLayout params{
                 .originX = static_cast<float>(origBrick.x) * brickWorldSize,
@@ -383,32 +428,25 @@ namespace RAGE {
                 .dimsY = dims.y,
                 .dimsZ = dims.z,
                 .voxelDim = Brick::kDim,
+                .winMinX = origBrick.x,
+                .winMinY = origBrick.y,
+                .winMinZ = origBrick.z,
+                ._pad0 = 0,
+                .wrapMaskX = fixedDims.x - 1,
+                .wrapMaskY = fixedDims.y - 1,
+                .wrapMaskZ = fixedDims.z - 1,
+                ._pad1 = 0,
             };
             std::memcpy(worldBrickGridParamsBuffer_->mappedData(), &params, sizeof(params));
 
             const auto handles = worldBrickGrid_.handles();
-            if (handles.size() > limits_.maxWorldBrickHandles) {
-                throw std::runtime_error(
-                    "Renderer: world brick grid handle count " + std::to_string(handles.size())
-                    + " exceeds buffer capacity " + std::to_string(limits_.maxWorldBrickHandles));
-            }
-            if (!handles.empty()) {
-                std::memcpy(worldBrickGridHandlesBuffer_->mappedData(), handles.data(),
-                            handles.size() * sizeof(BrickHandle));
-            }
+            std::memcpy(worldBrickGridHandlesBuffer_->mappedData(), handles.data(),
+                        handles.size() * sizeof(BrickHandle));
 
-            worldGridUploadDims_ = IVec3{ 0, 0, 0 };
-            if (useGridTexture_ && !handles.empty()) {
-                if (dims.x > limits_.worldGridTexDims.x || dims.y > limits_.worldGridTexDims.y
-                    || dims.z > limits_.worldGridTexDims.z) {
-                    throw std::runtime_error(
-                        "Renderer: world brick grid dims exceed 3D texture capacity ("
-                        + std::to_string(dims.x) + "x" + std::to_string(dims.y) + "x"
-                        + std::to_string(dims.z) + ")");
-                }
+            if (useGridTexture_) {
                 std::memcpy(worldGridStagingBuffer_->mappedData(), handles.data(),
                             handles.size() * sizeof(BrickHandle));
-                worldGridUploadDims_ = dims;
+                worldGridUploadDims_ = fixedDims;
             }
 
             if (useSvdag_) {
@@ -416,7 +454,20 @@ namespace RAGE {
                 const Vec3 originWorld(static_cast<float>(origBrick.x) * brickWorldSize,
                                        static_cast<float>(origBrick.y) * brickWorldSize,
                                        static_cast<float>(origBrick.z) * brickWorldSize);
-                const auto result = svdagCache_.update(handles, dims, originWorld, brickWorldSize);
+                // The SVDAG builder wants a window-linear layout; the grid stores
+                // wrapped slots, so extract the window before handing it over.
+                svdagScratch_.clear();
+                svdagScratch_.reserve(static_cast<size_t>(dims.x) * static_cast<size_t>(dims.y)
+                                      * static_cast<size_t>(dims.z));
+                for (int32_t z = 0; z < dims.z; ++z) {
+                    for (int32_t yy = 0; yy < dims.y; ++yy) {
+                        for (int32_t x = 0; x < dims.x; ++x) {
+                            svdagScratch_.push_back(worldBrickGrid_.handleAt(
+                                IVec3{ origBrick.x + x, origBrick.y + yy, origBrick.z + z }));
+                        }
+                    }
+                }
+                const auto result = svdagCache_.update(svdagScratch_, dims, originWorld, brickWorldSize);
                 if (result.capacityExceeded) {
                     Core::log(Core::LogLevel::Warn,
                               "SVDAG node count exceeds GPU buffer capacity — falling back to flat grid");

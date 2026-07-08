@@ -30,8 +30,10 @@ layout(set = 0, binding = 4, std430) readonly buffer WorldBrickGridHandles {
 layout(set = 0, binding = 11) uniform usampler3D worldHandlesTex;
 
 layout(set = 0, binding = 6, std140) uniform WorldBrickGridParams {
-    vec4 origin_cellSize;       // .xyz = world coords of grid (0,0,0), .w = cellSize
-    ivec4 dims_voxelDim;        // .xyz = grid dims (bricks), .w = brick edge in voxels (8)
+    vec4 origin_cellSize;       // .xyz = world coords of window min, .w = cellSize
+    ivec4 dims_voxelDim;        // .xyz = window extent (bricks), .w = brick edge in voxels (8)
+    ivec4 winMinBrick_pad;      // .xyz = world brick coord of window min
+    ivec4 wrapMask_pad;         // .xyz = toroidal storage dims - 1 (dims are pow2)
 } worldGrid;
 
 layout(set = 0, binding = 9, std430) readonly buffer SvdagNodes {
@@ -90,17 +92,21 @@ vec4 unpackRGBA8(uint packed) {
     );
 }
 
+// `cell` is window-relative; storage is toroidal — wrap the world coord into the
+// fixed-size backing array (dims are pow2, so wrap is a bitmask).
 uint brickHandleAt(ivec3 cell) {
     ivec3 dims = worldGrid.dims_voxelDim.xyz;
     if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) {
         return 0u;
     }
+    ivec3 slot = (worldGrid.winMinBrick_pad.xyz + cell) & worldGrid.wrapMask_pad.xyz;
     if (frame.debugFlags2.x != 0) {
-        return texelFetch(worldHandlesTex, cell, 0).r;
+        return texelFetch(worldHandlesTex, slot, 0).r;
     }
-    uint idx = (uint(cell.z) * uint(dims.x) * uint(dims.y))
-             + (uint(cell.y) * uint(dims.x))
-             + uint(cell.x);
+    ivec3 storageDims = worldGrid.wrapMask_pad.xyz + ivec3(1);
+    uint idx = (uint(slot.z) * uint(storageDims.x) * uint(storageDims.y))
+             + (uint(slot.y) * uint(storageDims.x))
+             + uint(slot.x);
     return worldHandles.handles[idx];
 }
 

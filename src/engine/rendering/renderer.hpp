@@ -93,10 +93,9 @@ namespace RAGE {
          */
         struct WorldLimits {
             BrickPoolConfig brickPool{};
-            /// Flat handle-SSBO capacity (cells). The per-frame grid dims product must fit.
-            size_t maxWorldBrickHandles = 256ull * 1024ull;
-            /// 3D-texture capacity in bricks per axis; per-frame grid dims must fit per axis.
-            IVec3 worldGridTexDims{ 64, 64, 64 };
+            /// Toroidal world-grid dims in bricks per axis (power of two). Sizes the
+            /// handle SSBO, the 3D texture, and the streaming window ceiling alike.
+            IVec3 worldGridDims{ 64, 64, 64 };
         };
 
         Renderer() = delete;
@@ -151,10 +150,23 @@ namespace RAGE {
         void recreateBrickPool(bool enableDedup);
 
         /**
-         * Top-level sparse grid mapping world brick coords to handles into the brick pool.
-         * Rebuilt each frame from the scene's `VoxelData` placements.
+         * Top-level toroidal grid mapping world brick coords to handles into the brick
+         * pool. Non-streamed scenes re-derive it from scene placements on change;
+         * streamed scenes patch it through the calls below.
          */
         const WorldBrickGrid &worldBrickGrid() const { return worldBrickGrid_; }
+
+        /**
+         * @brief Streamed-world grid path: when enabled, render() stops re-deriving the
+         *        grid from the scene tree; the app patches it from streamer placement
+         *        events and slides the window with the camera. GPU re-upload happens on
+         *        the next frame after any patch.
+         */
+        void setWorldGridStreaming(bool enabled) { worldGridStreaming_ = enabled; }
+        void worldGridWriteChunk(IVec3 worldBrickOrigin, const VoxelData &data);
+        void worldGridClearChunk(IVec3 worldBrickOrigin, IVec3 brickDims);
+        /// No-op when the window is unchanged, so it is safe to call every frame.
+        void setWorldGridWindow(IVec3 windowMinBrick, IVec3 windowExtent);
 
         // Debug-only: pick a single pixel for shader-side introspection. setPickTarget queues
         // the request for the next render(); tryReadPick consumes the result after that frame
@@ -261,11 +273,14 @@ namespace RAGE {
         bool useGridTexture_ = false;
         bool prevUseSvdag_ = false;
         bool prevUseGridTexture_ = false;
+        bool worldGridStreaming_ = false;
+        bool worldGridGpuDirty_ = false;
         uint64_t lastSceneTreeVersion_ = UINT64_MAX;
         std::vector<Voxel3D *> shadowCasters_;
         std::optional<BrickPool> brickPool_;
         WorldBrickGrid worldBrickGrid_;
         std::vector<VoxelDataWorldPlacement> brickPlacementsScratch_;
+        std::vector<BrickHandle> svdagScratch_;
 
         FrameHook frameEnd_;
         GpuPassHook beforeGpuPass_;

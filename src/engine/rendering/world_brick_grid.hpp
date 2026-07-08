@@ -10,18 +10,23 @@ namespace RAGE {
     class VoxelData;
 
     /**
-     * Renderer-owned sparse top-level brick grid. Each cell stores either
-     * `kEmptyBrick` (empty) or a `BrickHandle` pointing into the shared `BrickPool`.
-     * The shader does its outer DDA over this grid: when a cell is non-empty, it
-     * follows the handle into the pool and does the inner 8³ DDA.
+     * Renderer-owned top-level brick grid. Each cell stores either `kEmptyBrick`
+     * (empty) or a `BrickHandle` into the shared `BrickPool`. The shader does its
+     * outer DDA over the current *window* of valid world cells; non-empty cells are
+     * followed into the pool for the inner 8³ DDA.
      *
-     * `rebuild(...)` is called every frame from the scene placements — cheap because
-     * it's just handle copies, no voxel data movement.
+     * Storage is **toroidal**: allocated once at fixed power-of-two dims (injected by
+     * the app), a world cell lives at `world & (dims - 1)` per axis. The window of
+     * valid coords slides over the fixed storage as the world streams; a chunk
+     * entering on one side reuses the slots a chunk vacated on the other, so nothing
+     * ever shifts or reallocates. Callers must clear cells they abandon
+     * (`clearChunk` on evict) — the streamer's eviction contract guarantees this.
      *
-     * Storage v1: dense `std::vector<BrickHandle>`, sized to enclose all placements'
-     * world-brick AABBs with one cell of margin. Fine sub-100 m worlds (a 128³ grid
-     * = ~2 MB). Kilometre-scale will need a sparse/hashed variant — tracked in the
-     * brickmap component plan, not this milestone.
+     * Two write paths:
+     *  - `writeChunk` / `clearChunk`: incremental patching driven by streamer
+     *    placement events. O(chunk cells).
+     *  - `rebuild`: full re-derivation from scene placements — fallback for
+     *    non-streamed scenes. Window becomes the placements' AABB (must fit dims).
      */
     struct VoxelDataWorldPlacement {
         const VoxelData *data = nullptr;
@@ -30,29 +35,43 @@ namespace RAGE {
 
     class WorldBrickGrid {
     public:
-        WorldBrickGrid();
+        /// `fixedDims` must be a power of two per axis (wrap is a bitmask); throws otherwise.
+        explicit WorldBrickGrid(IVec3 fixedDims);
 
         /**
-         * Rebuild the grid from the current frame's `VoxelData` placements. Computes
-         * world brick origin + dims from the union of placement AABBs (with one
-         * cell of margin) and writes each placement's brick handles into the right
-         * cells. Existing grid contents are discarded.
-         *
-         * Empty input clears the grid (`dims = (0,0,0)`).
+         * @brief Set the window of valid world cells (min brick coord + extent in
+         *        bricks). Cells outside it read as empty. Extent must fit within the
+         *        fixed dims per axis; throws otherwise.
          */
+        void setWindow(IVec3 windowMinBrick, IVec3 windowExtent);
+
+        /// Write `data`'s handles into the chunk box at `worldBrickOrigin` (clears the
+        /// box first, so holes inside the chunk read as empty).
+        void writeChunk(IVec3 worldBrickOrigin, const VoxelData &data);
+
+        /// Zero the chunk box at `worldBrickOrigin` spanning `brickDims` cells.
+        void clearChunk(IVec3 worldBrickOrigin, IVec3 brickDims);
+
+        /// Zero the whole storage, write every placement, window = placements' AABB.
         void rebuild(std::span<const VoxelDataWorldPlacement> placements);
 
-        IVec3 dims() const { return dims_; }
-        IVec3 worldBrickOrigin() const { return worldBrickOrigin_; }
+        IVec3 fixedDims() const { return fixedDims_; }
+        IVec3 windowMinBrick() const { return windowMinBrick_; }
+        IVec3 windowExtent() const { return windowExtent_; }
 
+        /// CPU mirror of the shader lookup: window bounds check, then wrapped fetch.
         BrickHandle handleAt(IVec3 worldCell) const;
+
+        /// Full fixed-size storage, in wrapped slot order (uploaded verbatim to GPU).
         std::span<const BrickHandle> handles() const { return handles_; }
 
     private:
-        size_t flatIndex(IVec3 worldCell) const;
+        size_t slotIndex(IVec3 worldCell) const;
 
-        IVec3 worldBrickOrigin_{ 0, 0, 0 };
-        IVec3 dims_{ 0, 0, 0 };
+        IVec3 fixedDims_{ 0, 0, 0 };
+        IVec3 wrapMask_{ 0, 0, 0 };
+        IVec3 windowMinBrick_{ 0, 0, 0 };
+        IVec3 windowExtent_{ 0, 0, 0 };
         std::vector<BrickHandle> handles_;
     };
 }

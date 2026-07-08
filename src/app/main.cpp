@@ -119,12 +119,6 @@ namespace {
             return IVec3{ nextPow2(w.x), nextPow2(w.y), nextPow2(w.z) };
         }
 
-        size_t maxWorldBrickHandles() const {
-            const IVec3 g = gridDims();
-            return static_cast<size_t>(g.x) * static_cast<size_t>(g.y)
-                   * static_cast<size_t>(g.z);
-        }
-
         /// Statistical, unlike the geometric bounds above: sized from measured occupancy
         /// of the streamed terrain (~110K unique bricks at radius 30) plus headroom.
         /// BrickPool throws loudly on exhaustion.
@@ -138,8 +132,7 @@ namespace {
         Renderer::WorldLimits rendererLimits(bool brickDedup) const {
             return Renderer::WorldLimits{
                 .brickPool = { .maxBricks = maxBricks(), .enableDedup = brickDedup },
-                .maxWorldBrickHandles = maxWorldBrickHandles(),
-                .worldGridTexDims = gridDims(),
+                .worldGridDims = gridDims(),
             };
         }
     };
@@ -257,8 +250,19 @@ int main(int argc, char **argv) {
                     streamer.emplace(*chunkStore, root);
                     streamer->setOnChunkPrepare(
                         [&voxelMaterial](Voxel3D &v, IVec3) { v.setMaterial(voxelMaterial); });
+                    const IVec3 cb = kWorld.chunkBrickDims;
+                    streamer->setOnChunkPlaced([&renderer, cb](IVec3 c, Voxel3D &v) {
+                        renderer.worldGridWriteChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
+                                                     *v.voxelData());
+                    });
+                    streamer->setOnChunkEvicted([&renderer, cb](IVec3 c, Voxel3D &v) {
+                        renderer.worldGridClearChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
+                                                     v.voxelData()->brickDims());
+                    });
+                    renderer.setWorldGridStreaming(true);
                     return;
                 }
+                renderer.setWorldGridStreaming(false);
 
                 std::unique_ptr<Content::Generator> generator;
                 if (scene == SceneKind::Cubes) {
@@ -591,6 +595,11 @@ int main(int argc, char **argv) {
                         static_cast<int32_t>(std::floor(camPos.z / chunkWorldExtent)),
                     };
                     streamer->update(focus, kStreamHRadius);
+                    const IVec3 cb = kWorld.chunkBrickDims;
+                    renderer.setWorldGridWindow(
+                        IVec3{ (focus.x - kStreamHRadius) * cb.x, kTerrainYRange.min * cb.y,
+                               (focus.z - kStreamHRadius) * cb.z },
+                        kWorld.windowBrickExtent());
                 }
 
                 const auto [w, h] = window.framebufferExtent();
