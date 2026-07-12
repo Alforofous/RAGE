@@ -52,7 +52,7 @@ namespace RAGE {
         int32_t heatmapMaxSteps = 1024;
         int32_t useSvdag = 0;
         int32_t useGridTexture = 0;
-        int32_t _pad5 = 0;
+        int32_t freeVolumeCount = 0;
         int32_t _pad6 = 0;
         int32_t _pad7 = 0;
     };

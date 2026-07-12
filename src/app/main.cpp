@@ -236,8 +236,30 @@ int main(int argc, char **argv) {
 
             std::optional<Content::ProceduralChunkStore> chunkStore;
             std::optional<Content::Streamer> streamer;
+            std::vector<Voxel3D *> spinners;
             const int32_t kStreamHRadius = kWorld.streamRadius;
             const Content::ChunkStore::YRange kTerrainYRange = kWorld.yRange;
+
+            // T1 demo: free-standing (full-TRS) volumes spinning above the terrain.
+            const auto addSpinners = [&]() {
+                constexpr int32_t kSpinnerDim = 24;
+                const std::array<uint32_t, 3> palette{ 0xFF4A6FE3u, 0xFF3DB57Bu, 0xFFD1583Fu };
+                for (size_t i = 0; i < palette.size(); ++i) {
+                    auto v = std::make_unique<Voxel3D>(
+                        renderer.brickPool(), IVec3{ kSpinnerDim, kSpinnerDim, kSpinnerDim },
+                        kVoxelSize);
+                    const uint32_t color = palette[i];
+                    v->fill([color](IVec3 c) {
+                        const bool checker = (((c.x / 6) + (c.y / 6) + (c.z / 6)) & 1) == 0;
+                        return Color::fromRGBA8(checker ? color : 0xFFE8E4DCu);
+                    });
+                    v->setMaterial(voxelMaterial);
+                    v->setRenderKind(VoxelRenderKind::FreeStanding);
+                    v->setPosition(Vec3(-3.0f + (3.0f * static_cast<float>(i)), 3.0f, -4.0f));
+                    spinners.push_back(v.get());
+                    root.add(std::move(v));
+                }
+            };
 
             const auto buildScene = [&]() {
                 if (scene == SceneKind::Streamed) {
@@ -260,6 +282,7 @@ int main(int argc, char **argv) {
                                                      v.voxelData()->brickDims());
                     });
                     renderer.setWorldGridStreaming(true);
+                    addSpinners();
                     return;
                 }
                 renderer.setWorldGridStreaming(false);
@@ -330,6 +353,7 @@ int main(int argc, char **argv) {
                 }
                 streamer.reset();
                 chunkStore.reset();
+                spinners.clear();
                 root.clearChildren();
                 loadJobs.clear();
                 renderer.recreateBrickPool(enableDedup);
@@ -583,6 +607,15 @@ int main(int argc, char **argv) {
 
                 controller.applyScrollDelta(debugUi.scrollDelta());
                 controller.update(dt);
+
+                for (size_t i = 0; i < spinners.size(); ++i) {
+                    const float speed = 0.4f + (0.3f * static_cast<float>(i));
+                    constexpr float kInvSqrt3 = std::numbers::inv_sqrt3_v<float>;
+                    const Vec3 axis = (i % 2 == 0) ? Vec3(0.0f, 1.0f, 0.0f)
+                                                   : Vec3(kInvSqrt3, kInvSqrt3, kInvSqrt3);
+                    spinners[i]->setRotation(
+                        Quat::fromAxisAngle(axis, static_cast<float>(now) * speed));
+                }
 
                 if (streamer.has_value()) {
                     const App::Profiler::Zone streamerZone(profiler, "Streamer.Update");

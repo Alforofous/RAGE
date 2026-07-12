@@ -75,16 +75,26 @@ namespace RAGE {
          */
         uint64_t treeVersion() const { return treeVersion_; }
 
+    protected:
+        /**
+         * @brief Opt this node's *transform* changes out of tree-version bumps.
+         *        For nodes whose transforms are consumed outside the change-detection
+         *        system (free-standing Voxel3Ds re-uploaded every frame) — animating
+         *        them must not dirty the scene. Structural changes always bump.
+         */
+        void setTransformBumpsTreeVersion(bool bumps) { transformBumpsVersion_ = bumps; }
+        void bumpTreeVersion() noexcept;
+
     private:
         void markLocalDirty() noexcept;
         void invalidateWorldRecursive() noexcept;
-        void bumpTreeVersion() noexcept;
 
         Vec3 position_ = Vec3::zero();
         Quat rotation_ = Quat::identity();
         Vec3 scale_ = Vec3::one();
 
         uint64_t treeVersion_ = 0;
+        bool transformBumpsVersion_ = true;
         mutable Mat4 localMatrix_ = Mat4::identity();
         mutable Mat4 worldMatrix_ = Mat4::identity();
         mutable bool localDirty_ = false;

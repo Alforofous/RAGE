@@ -7,19 +7,25 @@ namespace RAGE {
     void Node3D::setPosition(const Vec3 &p) {
         position_ = p;
         markLocalDirty();
-        bumpTreeVersion();
+        if (transformBumpsVersion_) {
+            bumpTreeVersion();
+        }
     }
 
     void Node3D::setRotation(const Quat &q) {
         rotation_ = q;
         markLocalDirty();
-        bumpTreeVersion();
+        if (transformBumpsVersion_) {
+            bumpTreeVersion();
+        }
     }
 
     void Node3D::setScale(const Vec3 &s) {
         scale_ = s;
         markLocalDirty();
-        bumpTreeVersion();
+        if (transformBumpsVersion_) {
+            bumpTreeVersion();
+        }
     }
 
     const Mat4 &Node3D::localMatrix() const {

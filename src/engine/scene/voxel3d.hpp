@@ -15,6 +15,18 @@ namespace RAGE {
     class BrickPool;
 
     /**
+     * @brief How a `Voxel3D` reaches the screen.
+     *        `GridResident` (default): tiles into the shared toroidal world brick grid;
+     *        only the transform's translation is honored (must stay axis-aligned).
+     *        `FreeStanding`: full TRS transform; traced per-object (ray transformed
+     *        into object space) and depth-composited against the world grid. Bricks
+     *        live in the same shared `BrickPool` either way. Free-standing transform
+     *        changes do NOT bump the scene tree version — the renderer re-uploads
+     *        free-standing volumes every frame, so animating them stays free.
+     */
+    enum class VoxelRenderKind : uint8_t { GridResident, FreeStanding };
+
+    /**
      * A grid of coloured voxels rendered via a compute raycaster.
      *
      * As of M3, storage is **sparse**: a `Voxel3D` holds a `VoxelData` that owns a list
@@ -52,6 +64,13 @@ namespace RAGE {
         IVec3 dimensions() const { return dims_; }
         float voxelSize() const { return voxelSize_; }
 
+        void setRenderKind(VoxelRenderKind kind) {
+            renderKind_ = kind;
+            setTransformBumpsTreeVersion(kind == VoxelRenderKind::GridResident);
+            bumpTreeVersion();
+        }
+        VoxelRenderKind renderKind() const { return renderKind_; }
+
         /** Storage backend. Renderer reads brick handles + placements through this. */
         const VoxelData *voxelData() const { return data_.get(); }
         VoxelData *voxelData() { return data_.get(); }
@@ -74,6 +93,7 @@ namespace RAGE {
     private:
         IVec3 dims_{};
         float voxelSize_ = 1.0f;
+        VoxelRenderKind renderKind_ = VoxelRenderKind::GridResident;
         std::unique_ptr<VoxelData> data_;
         LoadProgressHook loadProgress_;
         LoadCancelHook loadShouldCancel_;

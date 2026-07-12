@@ -13,7 +13,7 @@ layout(set = 0, binding = 2, std140) uniform FrameUniforms {
     vec4 dirLightColor[4];
     ivec4 debugPixel_pad;
     ivec4 debugFlags;
-    ivec4 debugFlags2;   // .x = useGridTexture (world grid via usampler3D vs SSBO)
+    ivec4 debugFlags2;   // .x = useGridTexture (usampler3D vs SSBO), .y = free volume count
 } frame;
 
 layout(set = 0, binding = 3, std430) readonly buffer BrickPool {
@@ -28,6 +28,22 @@ layout(set = 0, binding = 4, std430) readonly buffer WorldBrickGridHandles {
 // tiling keeps XYZ-neighbouring cells on the same cache line, which the linear SSBO
 // cannot do for Z neighbours. Selected by frame.debugFlags2.x.
 layout(set = 0, binding = 11) uniform usampler3D worldHandlesTex;
+
+// Free-standing volumes: full-TRS Voxel3Ds traced per object in their own local space,
+// sharing the brick pool. Count in frame.debugFlags2.y; handle grids are concatenated
+// in FreeVolumeHandles, per-volume offset in descs[i].brickDims_handleOffset.w.
+struct VolumeDesc {
+    mat4 invWorld;                 // world -> object
+    mat4 world;                    // object -> world (normals via mat3)
+    ivec4 brickDims_handleOffset;  // .xyz brick dims, .w offset into FreeVolumeHandles
+    vec4 voxelSize_pad;            // .x object-space voxel edge length
+};
+layout(set = 0, binding = 12, std430) readonly buffer FreeVolumes {
+    VolumeDesc descs[];
+} freeVolumes;
+layout(set = 0, binding = 13, std430) readonly buffer FreeVolumeHandles {
+    uint handles[];
+} freeVolHandles;
 
 layout(set = 0, binding = 6, std140) uniform WorldBrickGridParams {
     vec4 origin_cellSize;       // .xyz = world coords of window min, .w = cellSize
@@ -208,8 +224,10 @@ struct OuterTrace {
     ivec3 stepDir;
     uint packed;
     int totalSteps;      // outer + sum of inner; for heatmap
-    vec3 voxelWorldMin;  // world-space corner of the hit voxel
+    vec3 voxelWorldMin;  // hit-voxel corner — WORLD space for grid hits, OBJECT space for volume hits
     float voxelSize;
+    vec3 worldNormal;    // outward face normal in world space (filled by tracePrimary)
+    bool volumeHit;      // true when the hit came from a free-standing volume
 };
 
 // handle != 0  → leaf brick.
@@ -514,11 +532,144 @@ OuterTrace tracePrimaryFlat(vec3 worldOrigin, vec3 worldDir) {
     return out_;
 }
 
-OuterTrace tracePrimary(vec3 worldOrigin, vec3 worldDir) {
-    if (frame.debugFlags.w != 0) {
-        return tracePrimarySvdag(worldOrigin, worldDir);
+// Trace one free-standing volume. The ray is transformed into object space with an
+// UNNORMALIZED direction, so t values stay directly comparable with world-space hits.
+OuterTrace traceFreeVolume(int vi, vec3 worldOrigin, vec3 worldDir) {
+    OuterTrace out_;
+    out_.hit = false;
+    out_.tHit = 1e30;
+    out_.totalSteps = 0;
+    out_.volumeHit = true;
+    out_.worldNormal = vec3(0.0);
+
+    VolumeDesc vd = freeVolumes.descs[vi];
+    vec3 o = (vd.invWorld * vec4(worldOrigin, 1.0)).xyz;
+    vec3 d = (vd.invWorld * vec4(worldDir, 0.0)).xyz;
+
+    ivec3 dims = vd.brickDims_handleOffset.xyz;
+    float voxelSize = vd.voxelSize_pad.x;
+    float cs = voxelSize * 8.0;
+    vec3 gridMin = vec3(0.0);
+    vec3 gridMax = vec3(dims) * cs;
+
+    vec3 invDir = 1.0 / d;
+    vec3 t0 = (gridMin - o) * invDir;
+    vec3 t1 = (gridMax - o) * invDir;
+    vec3 tlo = min(t0, t1);
+    vec3 thi = max(t0, t1);
+    float tEnter = max(max(tlo.x, tlo.y), tlo.z);
+    float tExit  = min(min(thi.x,  thi.y),  thi.z);
+    if (tEnter > tExit || tExit < 0.0) return out_;
+
+    float tStart = max(tEnter, 0.0);
+    vec3 entryLocal = o + d * (tStart + 1e-4);
+    vec3 cellF = entryLocal / cs;
+    ivec3 cell = clamp(ivec3(floor(cellF)), ivec3(0), dims - ivec3(1));
+
+    vec3 deltaDist = abs(vec3(cs) * invDir);
+    ivec3 stepDir;
+    vec3 sideDist;
+    for (int i = 0; i < 3; ++i) {
+        if (d[i] < 0.0) {
+            stepDir[i] = -1;
+            sideDist[i] = tStart + (cellF[i] - float(cell[i])) * deltaDist[i];
+        } else {
+            stepDir[i] = 1;
+            sideDist[i] = tStart + (float(cell[i] + 1) - cellF[i]) * deltaDist[i];
+        }
     }
-    return tracePrimaryFlat(worldOrigin, worldDir);
+    float tCellEnter = tStart;
+
+    int entryAxis = 0;
+    if (tlo.y >= tlo.x && tlo.y >= tlo.z) {
+        entryAxis = 1;
+    } else if (tlo.z >= tlo.x) {
+        entryAxis = 2;
+    }
+
+    int offset = vd.brickDims_handleOffset.w;
+    for (int s = 0; s < kMaxOuterSteps; ++s) {
+        out_.totalSteps += 1;
+        if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, dims))) {
+            return out_;
+        }
+        uint idx = uint(offset)
+                 + (uint(cell.z) * uint(dims.x) * uint(dims.y))
+                 + (uint(cell.y) * uint(dims.x))
+                 + uint(cell.x);
+        uint handle = freeVolHandles.handles[idx];
+        if (handle != 0u) {
+            vec3 brickOrigin = vec3(cell) * cs;
+            InnerHit inner = innerTraceBrick(handle, o, d, brickOrigin, voxelSize, tCellEnter, entryAxis);
+            out_.totalSteps += inner.stepCount;
+            if (inner.hit) {
+                out_.hit = true;
+                out_.tHit = inner.tHit;
+                out_.packed = inner.packed;
+                out_.stepDir = inner.stepDir;
+                out_.voxelWorldMin = inner.voxelWorldMin;
+                out_.voxelSize = voxelSize;
+                for (int a = 0; a < 3; ++a) {
+                    if (inner.lastStepAxis[a] != 0) {
+                        out_.lastStepAxis = a;
+                    }
+                }
+                vec3 nLocal = vec3(0.0);
+                nLocal[out_.lastStepAxis] = float(-out_.stepDir[out_.lastStepAxis]);
+                out_.worldNormal = normalize(mat3(vd.world) * nLocal);
+                return out_;
+            }
+        }
+        if (sideDist.x < sideDist.y) {
+            if (sideDist.x < sideDist.z) {
+                tCellEnter = sideDist.x;
+                sideDist.x += deltaDist.x;
+                cell.x += stepDir.x;
+                entryAxis = 0;
+            } else {
+                tCellEnter = sideDist.z;
+                sideDist.z += deltaDist.z;
+                cell.z += stepDir.z;
+                entryAxis = 2;
+            }
+        } else if (sideDist.y < sideDist.z) {
+            tCellEnter = sideDist.y;
+            sideDist.y += deltaDist.y;
+            cell.y += stepDir.y;
+            entryAxis = 1;
+        } else {
+            tCellEnter = sideDist.z;
+            sideDist.z += deltaDist.z;
+            cell.z += stepDir.z;
+            entryAxis = 2;
+        }
+    }
+    return out_;
+}
+
+OuterTrace tracePrimary(vec3 worldOrigin, vec3 worldDir) {
+    OuterTrace best;
+    if (frame.debugFlags.w != 0) {
+        best = tracePrimarySvdag(worldOrigin, worldDir);
+    } else {
+        best = tracePrimaryFlat(worldOrigin, worldDir);
+    }
+    best.volumeHit = false;
+    best.worldNormal = vec3(0.0);
+    if (best.hit) {
+        best.worldNormal[best.lastStepAxis] = float(-best.stepDir[best.lastStepAxis]);
+    }
+
+    int volumeCount = frame.debugFlags2.y;
+    for (int i = 0; i < volumeCount; ++i) {
+        OuterTrace v = traceFreeVolume(i, worldOrigin, worldDir);
+        int steps = best.totalSteps + v.totalSteps;
+        if (v.hit && (!best.hit || v.tHit < best.tHit)) {
+            best = v;
+        }
+        best.totalSteps = steps;
+    }
+    return best;
 }
 
 bool sceneShadow(vec3 worldOrigin, vec3 worldDir) {
@@ -592,19 +743,24 @@ void main() {
         return;
     }
 
-    vec3 worldNormal = vec3(0.0);
-    worldNormal[prim.lastStepAxis] = float(-prim.stepDir[prim.lastStepAxis]);
+    vec3 worldNormal = prim.worldNormal;
 
     vec3 hitPointWorld = cameraPos + rayDirWorld * prim.tHit;
     // Build a robust shadow ray origin: clamp the hit point into the voxel's interior
     // (avoid edge / corner cases where the shadow ray re-enters the voxel) then push along
     // the outward normal by half a voxel plus an epsilon. This is what the pre-M3 shader
     // did and it eliminates the "concentric dotted rings" shadow acne.
-    vec3 voxelMin = prim.voxelWorldMin;
-    vec3 voxelMax = voxelMin + vec3(prim.voxelSize);
-    float interiorEps = prim.voxelSize * 1e-3;
-    vec3 clampedHit = clamp(hitPointWorld, voxelMin + vec3(interiorEps), voxelMax - vec3(interiorEps));
-    vec3 shadowOriginWorld = clampedHit + worldNormal * (prim.voxelSize * 0.5 + 1e-3);
+    // Volume hits skip the clamp: their voxelWorldMin is object-space.
+    vec3 shadowOriginWorld;
+    if (prim.volumeHit) {
+        shadowOriginWorld = hitPointWorld + worldNormal * (prim.voxelSize * 0.5 + 1e-3);
+    } else {
+        vec3 voxelMin = prim.voxelWorldMin;
+        vec3 voxelMax = voxelMin + vec3(prim.voxelSize);
+        float interiorEps = prim.voxelSize * 1e-3;
+        vec3 clampedHit = clamp(hitPointWorld, voxelMin + vec3(interiorEps), voxelMax - vec3(interiorEps));
+        shadowOriginWorld = clampedHit + worldNormal * (prim.voxelSize * 0.5 + 1e-3);
+    }
 
     vec4 voxelColor = unpackRGBA8(prim.packed);
     vec3 lit = frame.ambientColor_intensity.rgb * frame.ambientColor_intensity.w;

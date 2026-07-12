@@ -45,6 +45,21 @@ namespace RAGE {
             const Renderer::PhaseHook &end_;
             const char *name_;
         };
+
+        /// std430 mirror of the shader's VolumeDesc (binding 12).
+        struct GpuVolumeDesc {
+            float invWorld[16];
+            float world[16];
+            int32_t brickDimsX;
+            int32_t brickDimsY;
+            int32_t brickDimsZ;
+            int32_t handleOffset;
+            float voxelSize;
+            float _pad0;
+            float _pad1;
+            float _pad2;
+        };
+        static_assert(sizeof(GpuVolumeDesc) == 160, "must match shader std430 layout");
     }
 
     Renderer::Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain,
@@ -185,6 +200,21 @@ namespace RAGE {
             }));
         }
 
+        if (!freeVolumeDescsBuffer_.has_value()) {
+            freeVolumeDescsBuffer_.emplace(allocator_.createBuffer({
+                .size = static_cast<uint64_t>(limits_.maxFreeVolumes) * sizeof(GpuVolumeDesc),
+                .usage = BufferUsage::Storage,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+            freeVolumeHandlesBuffer_.emplace(allocator_.createBuffer({
+                .size = static_cast<uint64_t>(limits_.maxFreeVolumeHandleCells) * sizeof(BrickHandle),
+                .usage = BufferUsage::Storage,
+                .memory = MemoryLocation::CpuToGpu,
+            }));
+            std::memset(freeVolumeHandlesBuffer_->mappedData(), 0,
+                        static_cast<size_t>(limits_.maxFreeVolumeHandleCells) * sizeof(BrickHandle));
+        }
+
         if (!worldBrickGridParamsBuffer_.has_value()) {
             worldBrickGridParamsBuffer_.emplace(allocator_.createBuffer({
                 .size = 64,                  // 4 × vec4 in std140
@@ -274,11 +304,58 @@ namespace RAGE {
         // ceiling of 16 from the pre-M3 SceneCasters UBO — gone with that descriptor.
         auto *v = dynamic_cast<Voxel3D *>(&node);
         if (v != nullptr && v->voxelData() != nullptr) {
-            shadowCasters_.push_back(v);
+            if (v->renderKind() == VoxelRenderKind::FreeStanding) {
+                freeVolumes_.push_back(v);
+            } else {
+                shadowCasters_.push_back(v);
+            }
         }
         for (const auto &child : node.children()) {
             collectShadowCasters(*child);
         }
+    }
+
+    uint32_t Renderer::uploadFreeVolumes_() {
+        if (freeVolumes_.empty()) {
+            return 0;
+        }
+        if (freeVolumes_.size() > limits_.maxFreeVolumes) {
+            throw std::runtime_error("Renderer: " + std::to_string(freeVolumes_.size())
+                                     + " free-standing volumes exceed budget "
+                                     + std::to_string(limits_.maxFreeVolumes));
+        }
+
+        auto *descDst = static_cast<GpuVolumeDesc *>(freeVolumeDescsBuffer_->mappedData());
+        auto *handleDst = static_cast<BrickHandle *>(freeVolumeHandlesBuffer_->mappedData());
+        uint32_t handleCursor = 0;
+        for (size_t i = 0; i < freeVolumes_.size(); ++i) {
+            const Voxel3D &v = *freeVolumes_[i];
+            const VoxelData &data = *v.voxelData();
+            const auto handles = data.handles();
+            if (handleCursor + handles.size() > limits_.maxFreeVolumeHandleCells) {
+                throw std::runtime_error(
+                    "Renderer: free-volume handle cells exceed budget "
+                    + std::to_string(limits_.maxFreeVolumeHandleCells));
+            }
+
+            GpuVolumeDesc desc{};
+            const Mat4 world = v.worldMatrix();
+            const Mat4 invWorld = world.inverted();
+            std::memcpy(desc.invWorld, invWorld.data(), sizeof(desc.invWorld));
+            std::memcpy(desc.world, world.data(), sizeof(desc.world));
+            const IVec3 bd = data.brickDims();
+            desc.brickDimsX = bd.x;
+            desc.brickDimsY = bd.y;
+            desc.brickDimsZ = bd.z;
+            desc.handleOffset = static_cast<int32_t>(handleCursor);
+            desc.voxelSize = v.voxelSize();
+            descDst[i] = desc;
+
+            std::memcpy(handleDst + handleCursor, handles.data(),
+                        handles.size() * sizeof(BrickHandle));
+            handleCursor += static_cast<uint32_t>(handles.size());
+        }
+        return static_cast<uint32_t>(freeVolumes_.size());
     }
 
     void Renderer::collectVisible(Node3D &node, std::vector<Renderable *> &out) {
@@ -364,6 +441,7 @@ namespace RAGE {
             const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
             collectVisible(root, visible);
             shadowCasters_.clear();
+            freeVolumes_.clear();
             collectShadowCasters(root);
         }
 
@@ -507,6 +585,7 @@ namespace RAGE {
             uniforms.heatmapMaxSteps = heatmapMaxSteps_;
             uniforms.useSvdag = useSvdag_ ? 1 : 0;
             uniforms.useGridTexture = (useGridTexture_ && worldGridUploadDims_.x > 0) ? 1 : 0;
+            uniforms.freeVolumeCount = static_cast<int32_t>(uploadFreeVolumes_());
 
             std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
         }
@@ -602,6 +681,8 @@ namespace RAGE {
         writer.writeStorageBuffer(set, 4, *worldBrickGridHandlesBuffer_);
         writer.writeCombinedImageSampler(set, 11, *worldGridImageView_, worldGridSampler_,
                                          ImageLayout::ShaderReadOnlyOptimal);
+        writer.writeStorageBuffer(set, 12, *freeVolumeDescsBuffer_);
+        writer.writeStorageBuffer(set, 13, *freeVolumeHandlesBuffer_);
         writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
         writer.writeUniformBuffer(set, 6, *worldBrickGridParamsBuffer_);
         writer.writeStorageBuffer(set, 9, *svdagCache_.nodesBuffer());

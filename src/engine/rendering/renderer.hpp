@@ -96,6 +96,10 @@ namespace RAGE {
             /// Toroidal world-grid dims in bricks per axis (power of two). Sizes the
             /// handle SSBO, the 3D texture, and the streaming window ceiling alike.
             IVec3 worldGridDims{ 64, 64, 64 };
+            /// Free-standing (full-TRS) Voxel3D budget: volume count and total
+            /// handle-grid cells across all volumes, re-uploaded each frame.
+            uint32_t maxFreeVolumes = 64;
+            uint32_t maxFreeVolumeHandleCells = 64u * 1024u;
         };
 
         Renderer() = delete;
@@ -222,6 +226,7 @@ namespace RAGE {
         void rebuildFrameResources(FrameExtent extent);
         void collectVisible(Node3D &node, std::vector<Renderable *> &out);
         void collectShadowCasters(Node3D &node);
+        uint32_t uploadFreeVolumes_();
         void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapImageIndex,
                          uint32_t swapW, uint32_t swapH, std::span<Renderable *const> renderables,
                          const FrameContext &frame);
@@ -277,6 +282,9 @@ namespace RAGE {
         bool worldGridGpuDirty_ = false;
         uint64_t lastSceneTreeVersion_ = UINT64_MAX;
         std::vector<Voxel3D *> shadowCasters_;
+        std::vector<Voxel3D *> freeVolumes_;
+        std::optional<VulkanBuffer> freeVolumeDescsBuffer_;
+        std::optional<VulkanBuffer> freeVolumeHandlesBuffer_;
         std::optional<BrickPool> brickPool_;
         WorldBrickGrid worldBrickGrid_;
         std::vector<VoxelDataWorldPlacement> brickPlacementsScratch_;
