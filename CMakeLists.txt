@@ -66,6 +66,7 @@ set(ENGINE_SOURCES
     src/engine/content/procedural_chunk_store.cpp
     src/engine/content/streamer.cpp
     src/engine/toolkit/collision/voxel_world_query.cpp
+    src/engine/toolkit/entity/kinematic_body.cpp
     src/engine/content/scene_generators.cpp
     src/engine/content/vox_loader.cpp
     src/engine/materials/pipeline_cache.cpp

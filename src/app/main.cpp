@@ -23,6 +23,7 @@
 #include "engine/content/scene_generators.hpp"
 #include "engine/content/streamer.hpp"
 #include "engine/content/vox_loader.hpp"
+#include "engine/toolkit/entity/kinematic_body.hpp"
 #include "engine/materials/material.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/renderer.hpp"
@@ -202,8 +203,15 @@ int main(int argc, char **argv) {
         std::vector<std::unique_ptr<VoxelLoadJob>> loadJobs;
 
         const auto [initW, initH] = window.framebufferExtent();
-        Camera camera(std::numbers::pi_v<float> * 0.4f,
-                      static_cast<float>(initW) / static_cast<float>(initH > 0 ? initH : 1), 0.1f, 100.0f);
+        // The camera is a child of a standalone entity node (design sheet Q5-A:
+        // `entity.add(camera)`). The entity is deliberately NOT in the render root —
+        // nothing draws it, and driving it every frame must not dirty the scene. In fly
+        // mode the entity stays at origin, so camera local == world and the fly
+        // controller behaves exactly as before.
+        Node3D playerEntity;
+        Camera &camera = dynamic_cast<Camera &>(playerEntity.add(std::make_unique<Camera>(
+            std::numbers::pi_v<float> * 0.4f,
+            static_cast<float>(initW) / static_cast<float>(initH > 0 ? initH : 1), 0.1f, 100.0f)));
 
         {
             VulkanSwapchain swapchain({ .physicalDevice = ctx.physicalDevice(),
@@ -377,7 +385,17 @@ int main(int argc, char **argv) {
 
             App::FreeFlyController controller(camera, window);
             controller.setMouseVeto([&debugUi]() { return debugUi.wantsMouse(); });
-            controller.setKeyboardVeto([&debugUi]() { return debugUi.wantsKeyboard(); });
+            // Walk mode: the kinematic body drives the entity, the fly controller keeps
+            // mouse-look only (keyboard vetoed), and the camera rides at eye height.
+            constexpr Toolkit::KinematicBodyConfig kPlayerBody{};
+            constexpr float kEyeHeight = 1.62f;
+            constexpr float kWalkSpeed = 4.0f;
+            bool walkMode = false;
+            bool prevWalkKey = false;
+            Toolkit::KinematicBody playerBody(playerEntity, kPlayerBody);
+
+            controller.setKeyboardVeto(
+                [&debugUi, &walkMode]() { return walkMode || debugUi.wantsKeyboard(); });
 
             bool mipSkipEnabled = renderer.mipSkipEnabled();
             int heatmapMode = renderer.heatmapMode();
@@ -544,6 +562,8 @@ int main(int argc, char **argv) {
                         renderer.setHeatmapMaxSteps(heatmapMaxSteps);
                     }
                     debugUi.separatorText("Camera");
+                    debugUi.text("Walk mode (V): %s%s", walkMode ? "on" : "off",
+                                 (walkMode && playerBody.grounded()) ? " - grounded" : "");
                     float speedMult = controller.speedMultiplier();
                     if (debugUi.sliderFloat("Speed (x)", &speedMult, 0.1f, 10.0f)) {
                         controller.setSpeedMultiplier(speedMult);
@@ -605,7 +625,9 @@ int main(int argc, char **argv) {
                     fpsAccumFrames = 0;
                 }
 
-                controller.applyScrollDelta(debugUi.scrollDelta());
+                if (!walkMode) {
+                    controller.applyScrollDelta(debugUi.scrollDelta());
+                }
                 controller.update(dt);
 
                 for (size_t i = 0; i < spinners.size(); ++i) {
@@ -617,11 +639,56 @@ int main(int argc, char **argv) {
                         Quat::fromAxisAngle(axis, static_cast<float>(now) * speed));
                 }
 
+                const bool walkKey = !debugUi.wantsKeyboard()
+                                     && glfwGetKey(window.glfwHandle(), GLFW_KEY_V) == GLFW_PRESS;
+                if (walkKey && !prevWalkKey) {
+                    walkMode = !walkMode;
+                    const Vec3 camWorld = camera.worldMatrix().transformPoint(Vec3::zero());
+                    if (walkMode) {
+                        playerEntity.setPosition(camWorld - Vec3(0.0f, kEyeHeight, 0.0f));
+                        camera.setPosition(Vec3(0.0f, kEyeHeight, 0.0f));
+                    } else {
+                        playerEntity.setPosition(Vec3::zero());
+                        camera.setPosition(camWorld);
+                    }
+                }
+                prevWalkKey = walkKey;
+
+                if (walkMode) {
+                    GLFWwindow *gw = window.glfwHandle();
+                    const Mat4 camWorldM = camera.worldMatrix();
+                    Vec3 fwd = camWorldM.transformDirection(Vec3(0.0f, 0.0f, -1.0f));
+                    fwd.y = 0.0f;
+                    Vec3 right = camWorldM.transformDirection(Vec3(1.0f, 0.0f, 0.0f));
+                    right.y = 0.0f;
+                    Vec3 walk(0.0f, 0.0f, 0.0f);
+                    if (!debugUi.wantsKeyboard()) {
+                        float f = 0.0f;
+                        float r = 0.0f;
+                        if (glfwGetKey(gw, GLFW_KEY_W) == GLFW_PRESS) { f += 1.0f; }
+                        if (glfwGetKey(gw, GLFW_KEY_S) == GLFW_PRESS) { f -= 1.0f; }
+                        if (glfwGetKey(gw, GLFW_KEY_D) == GLFW_PRESS) { r += 1.0f; }
+                        if (glfwGetKey(gw, GLFW_KEY_A) == GLFW_PRESS) { r -= 1.0f; }
+                        const Vec3 dir = (fwd * f) + (right * r);
+                        if (dir.length() > 1e-3f) {
+                            walk = dir.normalized() * kWalkSpeed;
+                        }
+                    }
+                    const Toolkit::MoveInput moveIn{
+                        .walk = walk,
+                        .jump = !debugUi.wantsKeyboard()
+                                && glfwGetKey(gw, GLFW_KEY_SPACE) == GLFW_PRESS,
+                    };
+                    const Toolkit::VoxelWorldQuery worldQuery(renderer.worldBrickGrid(),
+                                                              renderer.brickPool(), kVoxelSize);
+                    playerBody.update(worldQuery, moveIn, dt);
+                }
+
                 if (streamer.has_value()) {
                     const App::Profiler::Zone streamerZone(profiler, "Streamer.Update");
                     const float chunkWorldExtent =
                         static_cast<float>(chunkStore->chunkBrickDims().x) * 8.0f * kVoxelSize;
-                    const Vec3 camPos = camera.position();
+                    const Vec3 camPos = camera.worldMatrix().transformPoint(Vec3::zero());
                     const IVec3 focus{
                         static_cast<int32_t>(std::floor(camPos.x / chunkWorldExtent)),
                         static_cast<int32_t>(std::floor(camPos.y / chunkWorldExtent)),

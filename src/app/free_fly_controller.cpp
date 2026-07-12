@@ -39,7 +39,7 @@ namespace RAGE::App {
             return;
         }
 
-        const bool keyboardVetoed = !mouseCaptured_ && keyboardVeto_ && keyboardVeto_();
+        const bool keyboardVetoed = keyboardVeto_ && keyboardVeto_();
         const bool mouseVetoed = !mouseCaptured_ && mouseVeto_ && mouseVeto_();
 
         const auto pressed = [w, keyboardVetoed](int key) -> bool {
@@ -49,7 +49,9 @@ namespace RAGE::App {
         if (!mouseVetoed && glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
             captureMouse();
         }
-        if (pressed(GLFW_KEY_ESCAPE)) {
+        // Cursor release must work regardless of the keyboard veto — walk mode vetoes
+        // movement keys, but Esc is a UI action, not movement.
+        if (glfwGetKey(w, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             releaseMouse();
         }
 
