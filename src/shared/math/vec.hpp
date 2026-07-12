@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
 #include <glm/glm.hpp>
 
 namespace RAGE {
@@ -109,6 +110,22 @@ namespace RAGE {
         static Vec3 unitX() { return { 1.0f, 0.0f, 0.0f }; }
         static Vec3 unitY() { return { 0.0f, 1.0f, 0.0f }; }
         static Vec3 unitZ() { return { 0.0f, 0.0f, 1.0f }; }
+
+        /// Axis access for axis-generic code: 0 = x, 1 = y, anything else = z.
+        float &operator[](int32_t i) {
+            switch (i) {
+                case 0: return x;
+                case 1: return y;
+                default: return z;
+            }
+        }
+        const float &operator[](int32_t i) const {
+            switch (i) {
+                case 0: return x;
+                case 1: return y;
+                default: return z;
+            }
+        }
 
         Vec3 operator-() const { return { -x, -y, -z }; }
         Vec3 operator+(const Vec3 &o) const { return { x + o.x, y + o.y, z + o.z }; }

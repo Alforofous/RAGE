@@ -126,3 +126,14 @@ TEST(Vec4, ArithmeticAndLength) {
     EXPECT_FLOAT_EQ(a.dot(b), 0.0f);
     EXPECT_FLOAT_EQ(Vec4(2.0f, 0.0f, 0.0f, 0.0f).length(), 2.0f);
 }
+
+TEST(Vec3Index, SubscriptReadsAndWritesAxes) {
+    Vec3 v(1.0f, 2.0f, 3.0f);
+    EXPECT_EQ(v[0], 1.0f);
+    EXPECT_EQ(v[1], 2.0f);
+    EXPECT_EQ(v[2], 3.0f);
+    v[1] = 9.0f;
+    EXPECT_EQ(v.y, 9.0f);
+    const Vec3 c(4.0f, 5.0f, 6.0f);
+    EXPECT_EQ(c[2], 6.0f);
+}

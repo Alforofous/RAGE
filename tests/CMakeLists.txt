@@ -7,6 +7,7 @@ add_executable(rage_tests
     engine/content/file_chunk_store_test.cpp
     engine/content/hybrid_chunk_store_test.cpp
     engine/content/streamer_test.cpp
+    engine/toolkit/collision/voxel_world_query_test.cpp
     engine/content/vox_loader_test.cpp
     engine/materials/material_test.cpp
     engine/rendering/frame_context_test.cpp

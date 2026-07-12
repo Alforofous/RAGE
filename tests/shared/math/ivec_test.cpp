@@ -50,3 +50,14 @@ TEST(IVec3, VolumeProductOfComponents) {
 TEST(IVec3, VolumeFitsInInt64ForLargeGrids) {
     EXPECT_EQ(IVec3(2000, 2000, 2000).volume(), 8'000'000'000LL);
 }
+
+TEST(IVec3Index, SubscriptReadsAndWritesAxes) {
+    IVec3 v{ 1, 2, 3 };
+    EXPECT_EQ(v[0], 1);
+    EXPECT_EQ(v[1], 2);
+    EXPECT_EQ(v[2], 3);
+    v[0] = 7;
+    EXPECT_EQ(v.x, 7);
+    constexpr IVec3 c{ 4, 5, 6 };
+    static_assert(c[1] == 5);
+}

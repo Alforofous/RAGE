@@ -21,6 +21,22 @@ namespace RAGE {
             , y(y_)
             , z(z_) {}
 
+        /// Axis access for axis-generic code: 0 = x, 1 = y, anything else = z.
+        constexpr int32_t &operator[](int32_t i) {
+            switch (i) {
+                case 0: return x;
+                case 1: return y;
+                default: return z;
+            }
+        }
+        constexpr const int32_t &operator[](int32_t i) const {
+            switch (i) {
+                case 0: return x;
+                case 1: return y;
+                default: return z;
+            }
+        }
+
         static constexpr IVec3 zero() { return { 0, 0, 0 }; }
 
         constexpr IVec3 operator+(const IVec3 &o) const { return { x + o.x, y + o.y, z + o.z }; }
