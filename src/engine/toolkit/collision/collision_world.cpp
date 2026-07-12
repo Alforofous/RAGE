@@ -1,7 +1,9 @@
-#include "voxel_world_query.hpp"
+#include "collision_world.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include "engine/scene/brick.hpp"
+#include "engine/scene/voxel_data.hpp"
 
 namespace RAGE::Toolkit {
     namespace {
@@ -16,13 +18,23 @@ namespace RAGE::Toolkit {
         }
     }
 
-    VoxelWorldQuery::VoxelWorldQuery(const WorldBrickGrid &grid, const BrickPool &pool,
-                                     float voxelSize)
+    CollisionWorld::CollisionWorld(const WorldBrickGrid &grid, const BrickPool &pool,
+                                   float voxelSize)
         : grid_(grid)
         , pool_(pool)
         , voxelSize_(voxelSize) {}
 
-    bool VoxelWorldQuery::solid(IVec3 worldVoxel) const {
+    void CollisionWorld::registerVolume(const Voxel3D &volume) {
+        if (std::ranges::find(volumes_, &volume) == volumes_.end()) {
+            volumes_.push_back(&volume);
+        }
+    }
+
+    void CollisionWorld::unregisterVolume(const Voxel3D &volume) {
+        std::erase(volumes_, &volume);
+    }
+
+    bool CollisionWorld::latticeSolid_(IVec3 worldVoxel) const {
         const IVec3 brickCoord{ worldVoxel.x >> 3, worldVoxel.y >> 3, worldVoxel.z >> 3 };
         const BrickHandle h = grid_.handleAt(brickCoord);
         if (h == kEmptyBrick) {
@@ -33,7 +45,36 @@ namespace RAGE::Toolkit {
         return (packed >> 24u) > 0u;
     }
 
-    float VoxelWorldQuery::sweepAxis_(SweepBox box, int32_t axis, float delta, bool &hit) const {
+    bool CollisionWorld::volumeSolidAt_(const Voxel3D &volume, const Mat4 &invWorld,
+                                        Vec3 worldPoint) const {
+        const Vec3 local = invWorld.transformPoint(worldPoint);
+        const float vs = volume.voxelSize();
+        const IVec3 c{ floorToVoxel(local.x, vs), floorToVoxel(local.y, vs),
+                       floorToVoxel(local.z, vs) };
+        const VoxelData *data = volume.voxelData();
+        if (data == nullptr) {
+            return false;
+        }
+        return (data->voxel(c) >> 24u) > 0u;
+    }
+
+    bool CollisionWorld::solid(IVec3 worldVoxel, const Voxel3D *ignore) const {
+        if (latticeSolid_(worldVoxel)) {
+            return true;
+        }
+        if (volumes_.empty()) {
+            return false;
+        }
+        const Vec3 center{ (static_cast<float>(worldVoxel.x) + 0.5f) * voxelSize_,
+                           (static_cast<float>(worldVoxel.y) + 0.5f) * voxelSize_,
+                           (static_cast<float>(worldVoxel.z) + 0.5f) * voxelSize_ };
+        return std::ranges::any_of(volumes_, [&](const Voxel3D *v) {
+            return v != ignore && volumeSolidAt_(*v, v->worldMatrix().inverted(), center);
+        });
+    }
+
+    float CollisionWorld::sweepAxis_(SweepBox box, int32_t axis, float delta,
+                                     const Voxel3D *ignore, bool &hit) const {
         hit = false;
         if (delta == 0.0f) {
             return 0.0f;
@@ -60,7 +101,7 @@ namespace RAGE::Toolkit {
                     c[axis] = v;
                     c[o1] = a;
                     c[o2] = b;
-                    if (!solid(c)) {
+                    if (!solid(c, ignore)) {
                         continue;
                     }
                     hit = true;
@@ -75,7 +116,8 @@ namespace RAGE::Toolkit {
         return delta;
     }
 
-    SweepResult VoxelWorldQuery::sweepAABB(const SweepBox &box, Vec3 delta) const {
+    SweepResult CollisionWorld::sweepAABB(const SweepBox &box, Vec3 delta,
+                                          const Voxel3D *ignore) const {
         SweepResult result{};
         SweepBox current = box;
 
@@ -83,7 +125,7 @@ namespace RAGE::Toolkit {
         bool hits[3] = { false, false, false };
         Vec3 moved(0.0f, 0.0f, 0.0f);
         for (const int32_t axis : kAxisOrder) {
-            const float m = sweepAxis_(current, axis, delta[axis], hits[axis]);
+            const float m = sweepAxis_(current, axis, delta[axis], ignore, hits[axis]);
             moved[axis] = m;
             current.min[axis] += m;
             current.max[axis] += m;

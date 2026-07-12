@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/scene/node3d.hpp"
-#include "engine/toolkit/collision/voxel_world_query.hpp"
+#include "engine/toolkit/collision/collision_world.hpp"
 #include "math/vec.hpp"
 
 namespace RAGE::Toolkit {
@@ -25,7 +25,7 @@ namespace RAGE::Toolkit {
     };
 
     /**
-     * @brief Gravity/jump/step-up kinematics over `VoxelWorldQuery::sweepAABB`,
+     * @brief Gravity/jump/step-up kinematics over `CollisionWorld::sweepAABB`,
      *        driving any `Node3D`'s position — nothing here is "a player"; attach a
      *        camera child and it is one, attach a Voxel3D child and it's a mob.
      *        Deterministic and render-free: `update(world, input, dt)` is the entire
@@ -33,9 +33,12 @@ namespace RAGE::Toolkit {
      */
     class KinematicBody {
     public:
-        KinematicBody(Node3D &node, KinematicBodyConfig config);
+        /// `selfVolume`: this body's own registered Voxel3D (if any), excluded from
+        /// collision so the body doesn't block itself.
+        KinematicBody(Node3D &node, KinematicBodyConfig config,
+                      const Voxel3D *selfVolume = nullptr);
 
-        void update(const VoxelWorldQuery &world, const MoveInput &input, float dt);
+        void update(const CollisionWorld &world, const MoveInput &input, float dt);
 
         bool grounded() const { return grounded_; }
         Vec3 velocity() const { return velocity_; }
@@ -46,6 +49,7 @@ namespace RAGE::Toolkit {
 
         Node3D &node_;
         KinematicBodyConfig config_;
+        const Voxel3D *selfVolume_ = nullptr;
         Vec3 velocity_{ 0.0f, 0.0f, 0.0f };
         bool grounded_ = false;
     };

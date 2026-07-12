@@ -36,7 +36,7 @@ namespace {
             grid_.writeChunk({ 0, 0, 0 }, terrain_);
         }
 
-        VoxelWorldQuery query() const { return { grid_, pool_, kVs }; }
+        CollisionWorld query() const { return { grid_, pool_, kVs }; }
 
         static KinematicBodyConfig smallBody() {
             return KinematicBodyConfig{ .size = Vec3(0.1f, 0.3f, 0.1f),
@@ -51,7 +51,7 @@ namespace {
         VoxelData terrain_;
     };
 
-    void settle(KinematicBody &body, const VoxelWorldQuery &q, int32_t steps = 60) {
+    void settle(KinematicBody &body, const CollisionWorld &q, int32_t steps = 60) {
         for (int32_t i = 0; i < steps; ++i) {
             body.update(q, MoveInput{}, 1.0f / 60.0f);
         }
@@ -62,7 +62,7 @@ TEST_F(KinematicBodyTest, FallsAndLandsOnFloor) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 1.6f, 0.4f));
     KinematicBody body(entity, smallBody());
-    const VoxelWorldQuery q = query();
+    const CollisionWorld q = query();
 
     EXPECT_FALSE(body.grounded());
     settle(body, q);
@@ -75,7 +75,7 @@ TEST_F(KinematicBodyTest, JumpRisesThenLandsAgain) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     KinematicBody body(entity, smallBody());
-    const VoxelWorldQuery q = query();
+    const CollisionWorld q = query();
     settle(body, q);
     ASSERT_TRUE(body.grounded());
 
@@ -92,7 +92,7 @@ TEST_F(KinematicBodyTest, WalksAndStepsUpLowLedge) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     KinematicBody body(entity, smallBody());
-    const VoxelWorldQuery q = query();
+    const CollisionWorld q = query();
     settle(body, q);
 
     for (int32_t i = 0; i < 90; ++i) {
@@ -109,7 +109,7 @@ TEST_F(KinematicBodyTest, TallLedgeBlocksWhenStepUpDisabled) {
     KinematicBodyConfig cfg = smallBody();
     cfg.stepUpHeight = 0.0f;
     KinematicBody body(entity, cfg);
-    const VoxelWorldQuery q = query();
+    const CollisionWorld q = query();
     settle(body, q);
 
     for (int32_t i = 0; i < 120; ++i) {
@@ -134,7 +134,7 @@ TEST_F(KinematicBodyTest, CeilingCancelsAscent) {
     KinematicBodyConfig cfg = smallBody();
     cfg.jumpSpeed = 5.0f;
     KinematicBody body(entity, cfg);
-    const VoxelWorldQuery q = query();
+    const CollisionWorld q = query();
     settle(body, q);
 
     body.update(q, MoveInput{ .walk = Vec3(0.0f, 0.0f, 0.0f), .jump = true }, 1.0f / 60.0f);

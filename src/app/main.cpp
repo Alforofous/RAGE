@@ -224,6 +224,8 @@ int main(int argc, char **argv) {
 
             const WorldPipelineConfig kWorld{};
             Renderer renderer(ctx, allocator, swapchain, kWorld.rendererLimits(true));
+            Toolkit::CollisionWorld collisionWorld(renderer.worldBrickGrid(),
+                                                   renderer.brickPool(), kVoxelSize);
 
             const auto stageVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
                 auto job = std::make_unique<VoxelLoadJob>();
@@ -245,6 +247,18 @@ int main(int argc, char **argv) {
             std::optional<Content::ProceduralChunkStore> chunkStore;
             std::optional<Content::Streamer> streamer;
             std::vector<Voxel3D *> spinners;
+            struct Prop {
+                Voxel3D *volume;
+                Toolkit::KinematicBody body;
+            };
+            std::vector<Prop> props;
+            constexpr Toolkit::KinematicBodyConfig kPropBody{
+                .size = Vec3(0.6f, 0.6f, 0.6f),
+                .gravity = 22.0f,
+                .terminalSpeed = 50.0f,
+                .jumpSpeed = 0.0f,
+                .stepUpHeight = 0.0f,
+            };
             const int32_t kStreamHRadius = kWorld.streamRadius;
             const Content::ChunkStore::YRange kTerrainYRange = kWorld.yRange;
 
@@ -266,6 +280,30 @@ int main(int argc, char **argv) {
                     v->setPosition(Vec3(-3.0f + (3.0f * static_cast<float>(i)), 3.0f, -4.0f));
                     spinners.push_back(v.get());
                     root.add(std::move(v));
+                    collisionWorld.registerVolume(*spinners.back());
+                }
+            };
+
+            // T4 demo: free-standing props that FALL — each drives its own Voxel3D via a
+            // KinematicBody, excluded from colliding with itself. Note: the body box is
+            // bottom-center based while the Voxel3D renders from its corner, so the
+            // collision box sits half a cube off in XZ — invisible on open terrain,
+            // fixed when bodies grow an offset config.
+            const auto addFallingProps = [&]() {
+                constexpr int32_t kPropDim = 12;
+                const std::array<uint32_t, 3> palette{ 0xFF9AC2E8u, 0xFF7AD1E0u, 0xFFB4E8B0u };
+                for (size_t i = 0; i < palette.size(); ++i) {
+                    auto v = std::make_unique<Voxel3D>(
+                        renderer.brickPool(), IVec3{ kPropDim, kPropDim, kPropDim }, kVoxelSize);
+                    v->fillSolid(Color::fromRGBA8(palette[i]));
+                    v->setMaterial(voxelMaterial);
+                    v->setRenderKind(VoxelRenderKind::FreeStanding);
+                    v->setPosition(Vec3(1.8f + (0.9f * static_cast<float>(i)),
+                                        5.0f + (0.8f * static_cast<float>(i)), 1.8f));
+                    Voxel3D *raw = v.get();
+                    root.add(std::move(v));
+                    collisionWorld.registerVolume(*raw);
+                    props.push_back(Prop{ raw, Toolkit::KinematicBody(*raw, kPropBody, raw) });
                 }
             };
 
@@ -291,6 +329,8 @@ int main(int argc, char **argv) {
                     });
                     renderer.setWorldGridStreaming(true);
                     addSpinners();
+                    addFallingProps();
+                    camera.setPosition(Vec3(0.0f, 4.0f, 8.0f));
                     return;
                 }
                 renderer.setWorldGridStreaming(false);
@@ -361,6 +401,8 @@ int main(int argc, char **argv) {
                 }
                 streamer.reset();
                 chunkStore.reset();
+                collisionWorld.clearVolumes();
+                props.clear();
                 spinners.clear();
                 root.clearChildren();
                 loadJobs.clear();
@@ -638,6 +680,9 @@ int main(int argc, char **argv) {
                     spinners[i]->setRotation(
                         Quat::fromAxisAngle(axis, static_cast<float>(now) * speed));
                 }
+                for (Prop &prop : props) {
+                    prop.body.update(collisionWorld, Toolkit::MoveInput{}, dt);
+                }
 
                 const bool walkKey = !debugUi.wantsKeyboard()
                                      && glfwGetKey(window.glfwHandle(), GLFW_KEY_V) == GLFW_PRESS;
@@ -679,9 +724,7 @@ int main(int argc, char **argv) {
                         .jump = !debugUi.wantsKeyboard()
                                 && glfwGetKey(gw, GLFW_KEY_SPACE) == GLFW_PRESS,
                     };
-                    const Toolkit::VoxelWorldQuery worldQuery(renderer.worldBrickGrid(),
-                                                              renderer.brickPool(), kVoxelSize);
-                    playerBody.update(worldQuery, moveIn, dt);
+                    playerBody.update(collisionWorld, moveIn, dt);
                 }
 
                 if (streamer.has_value()) {
