@@ -154,3 +154,54 @@ TEST(HybridChunkStore, MismatchedBrickDimsThrows) {
                                                     false, ChunkStore::YRange{ .min = 0, .max = 0 });
     EXPECT_THROW(HybridChunkStore(std::move(o), std::move(b)), std::invalid_argument);
 }
+
+TEST(HybridChunkStore, WriteThroughCachesBaselineReadyIntoOverlay) {
+    BrickPool pool;
+    auto o = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Missing,
+                                                    true, ChunkStore::YRange{ .min = 0, .max = 0 });
+    auto b = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Ready,
+                                                    false, ChunkStore::YRange{ .min = 0, .max = 0 });
+    Mocks::ScriptedStore *overlay = o.get();
+    HybridChunkStore store(std::move(o), std::move(b), WriteThrough::CacheBaselineReady);
+
+    const ChunkResult r = store.chunkAt(IVec3{ 3, 0, -1 });
+    EXPECT_EQ(r.status, ChunkStatus::Ready);
+    EXPECT_EQ(overlay->puts_, 1);
+    EXPECT_EQ(overlay->lastPut_, (IVec3{ 3, 0, -1 }));
+}
+
+TEST(HybridChunkStore, WriteThroughSkipsBaselineEmpty) {
+    BrickPool pool;
+    auto o = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Missing,
+                                                    true, ChunkStore::YRange{ .min = 0, .max = 0 });
+    auto b = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Empty,
+                                                    false, ChunkStore::YRange{ .min = 0, .max = 0 });
+    Mocks::ScriptedStore *overlay = o.get();
+    HybridChunkStore store(std::move(o), std::move(b), WriteThrough::CacheBaselineReady);
+
+    EXPECT_EQ(store.chunkAt(IVec3{ 0, 0, 0 }).status, ChunkStatus::Empty);
+    EXPECT_EQ(overlay->puts_, 0);
+}
+
+TEST(HybridChunkStore, DisabledWriteThroughNeverWrites) {
+    BrickPool pool;
+    auto o = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Missing,
+                                                    true, ChunkStore::YRange{ .min = 0, .max = 0 });
+    auto b = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Ready,
+                                                    false, ChunkStore::YRange{ .min = 0, .max = 0 });
+    Mocks::ScriptedStore *overlay = o.get();
+    HybridChunkStore store(std::move(o), std::move(b));
+
+    EXPECT_EQ(store.chunkAt(IVec3{ 0, 0, 0 }).status, ChunkStatus::Ready);
+    EXPECT_EQ(overlay->puts_, 0);
+}
+
+TEST(HybridChunkStore, WriteThroughWithNonWritableOverlayThrows) {
+    BrickPool pool;
+    auto o = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Missing,
+                                                    false, ChunkStore::YRange{ .min = 0, .max = 0 });
+    auto b = std::make_unique<Mocks::ScriptedStore>(pool, IVec3{ 2, 2, 2 }, ChunkStatus::Ready,
+                                                    false, ChunkStore::YRange{ .min = 0, .max = 0 });
+    EXPECT_THROW(HybridChunkStore(std::move(o), std::move(b), WriteThrough::CacheBaselineReady),
+                 std::invalid_argument);
+}
