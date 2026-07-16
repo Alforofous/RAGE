@@ -46,20 +46,6 @@ namespace RAGE {
             const char *name_;
         };
 
-        /// std430 mirror of the shader's VolumeDesc (binding 12).
-        struct GpuVolumeDesc {
-            float invWorld[16];
-            float world[16];
-            int32_t brickDimsX;
-            int32_t brickDimsY;
-            int32_t brickDimsZ;
-            int32_t handleOffset;
-            float voxelSize;
-            float _pad0;
-            float _pad1;
-            float _pad2;
-        };
-        static_assert(sizeof(GpuVolumeDesc) == 160, "must match shader std430 layout");
     }
 
     Renderer::Renderer(VulkanContext &ctx, VulkanAllocator &allocator, VulkanSwapchain &swapchain,
@@ -72,6 +58,8 @@ namespace RAGE {
         , descPool_(ctx.vkDevice(), {})
         , pipelineCache_(ctx.vkDevice())
         , svdagCache_(allocator)
+        , worldGridSync_(allocator, ctx.vkDevice(), limits.worldGridDims)
+        , freeVolumeSync_(allocator, limits.maxFreeVolumes, limits.maxFreeVolumeHandleCells)
         , worldBrickGrid_(limits.worldGridDims) {
         brickPool_.emplace(limits_.brickPool);
     }
@@ -161,67 +149,6 @@ namespace RAGE {
                 .memory = MemoryLocation::CpuToGpu,
             }));
             std::memset(brickPoolBuffer_->mappedData(), 0, kBrickPoolBytes);
-        }
-
-        if (!worldBrickGridHandlesBuffer_.has_value()) {
-            const uint64_t kBytes = static_cast<uint64_t>(limits_.worldGridDims.x)
-                                    * static_cast<uint64_t>(limits_.worldGridDims.y)
-                                    * static_cast<uint64_t>(limits_.worldGridDims.z)
-                                    * sizeof(BrickHandle);
-            worldBrickGridHandlesBuffer_.emplace(allocator_.createBuffer({
-                .size = kBytes,
-                .usage = BufferUsage::Storage,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-            std::memset(worldBrickGridHandlesBuffer_->mappedData(), 0, kBytes);
-        }
-
-        if (!worldGridImage_.has_value()) {
-            worldGridImage_.emplace(allocator_.createImage({
-                .width = static_cast<uint32_t>(limits_.worldGridDims.x),
-                .height = static_cast<uint32_t>(limits_.worldGridDims.y),
-                .depth = static_cast<uint32_t>(limits_.worldGridDims.z),
-                .format = ImageFormat::R32_UINT,
-                .usage = ImageUsage::Sampled | ImageUsage::TransferDst,
-                .memory = MemoryLocation::GpuOnly,
-            }));
-            worldGridImageView_.emplace(
-                worldGridImage_->createView({ .viewType = ImageViewType::Type3D }));
-            worldGridSampler_ = VulkanSampler::createNearestClamp(ctx_.vkDevice());
-
-            const uint64_t kStagingBytes = static_cast<uint64_t>(limits_.worldGridDims.x)
-                                           * static_cast<uint64_t>(limits_.worldGridDims.y)
-                                           * static_cast<uint64_t>(limits_.worldGridDims.z)
-                                           * sizeof(BrickHandle);
-            worldGridStagingBuffer_.emplace(allocator_.createBuffer({
-                .size = kStagingBytes,
-                .usage = BufferUsage::TransferSrc,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-        }
-
-        if (!freeVolumeDescsBuffer_.has_value()) {
-            freeVolumeDescsBuffer_.emplace(allocator_.createBuffer({
-                .size = static_cast<uint64_t>(limits_.maxFreeVolumes) * sizeof(GpuVolumeDesc),
-                .usage = BufferUsage::Storage,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-            freeVolumeHandlesBuffer_.emplace(allocator_.createBuffer({
-                .size = static_cast<uint64_t>(limits_.maxFreeVolumeHandleCells) * sizeof(BrickHandle),
-                .usage = BufferUsage::Storage,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-            std::memset(freeVolumeHandlesBuffer_->mappedData(), 0,
-                        static_cast<size_t>(limits_.maxFreeVolumeHandleCells) * sizeof(BrickHandle));
-        }
-
-        if (!worldBrickGridParamsBuffer_.has_value()) {
-            worldBrickGridParamsBuffer_.emplace(allocator_.createBuffer({
-                .size = 64,                  // 4 × vec4 in std140
-                .usage = BufferUsage::Uniform,
-                .memory = MemoryLocation::CpuToGpu,
-            }));
-            std::memset(worldBrickGridParamsBuffer_->mappedData(), 0, 64);
         }
 
         if (!pixelDebugBuffer_.has_value()) {
@@ -315,48 +242,6 @@ namespace RAGE {
         }
     }
 
-    uint32_t Renderer::uploadFreeVolumes_() {
-        if (freeVolumes_.empty()) {
-            return 0;
-        }
-        if (freeVolumes_.size() > limits_.maxFreeVolumes) {
-            throw std::runtime_error("Renderer: " + std::to_string(freeVolumes_.size())
-                                     + " free-standing volumes exceed budget "
-                                     + std::to_string(limits_.maxFreeVolumes));
-        }
-
-        auto *descDst = static_cast<GpuVolumeDesc *>(freeVolumeDescsBuffer_->mappedData());
-        auto *handleDst = static_cast<BrickHandle *>(freeVolumeHandlesBuffer_->mappedData());
-        uint32_t handleCursor = 0;
-        for (size_t i = 0; i < freeVolumes_.size(); ++i) {
-            const Voxel3D &v = *freeVolumes_[i];
-            const VoxelData &data = *v.voxelData();
-            const auto handles = data.handles();
-            if (handleCursor + handles.size() > limits_.maxFreeVolumeHandleCells) {
-                throw std::runtime_error(
-                    "Renderer: free-volume handle cells exceed budget "
-                    + std::to_string(limits_.maxFreeVolumeHandleCells));
-            }
-
-            GpuVolumeDesc desc{};
-            const Mat4 world = v.worldMatrix();
-            const Mat4 invWorld = world.inverted();
-            std::memcpy(desc.invWorld, invWorld.data(), sizeof(desc.invWorld));
-            std::memcpy(desc.world, world.data(), sizeof(desc.world));
-            const IVec3 bd = data.brickDims();
-            desc.brickDimsX = bd.x;
-            desc.brickDimsY = bd.y;
-            desc.brickDimsZ = bd.z;
-            desc.handleOffset = static_cast<int32_t>(handleCursor);
-            desc.voxelSize = v.voxelSize();
-            descDst[i] = desc;
-
-            std::memcpy(handleDst + handleCursor, handles.data(),
-                        handles.size() * sizeof(BrickHandle));
-            handleCursor += static_cast<uint32_t>(handles.size());
-        }
-        return static_cast<uint32_t>(freeVolumes_.size());
-    }
 
     void Renderer::collectVisible(Node3D &node, std::vector<Renderable *> &out) {
         auto *r = dynamic_cast<Renderable *>(&node);
@@ -467,73 +352,22 @@ namespace RAGE {
             worldGridGpuDirty_ = true;
         }
 
-        worldGridUploadDims_ = IVec3{ 0, 0, 0 };
         if (worldGridGpuDirty_ && !shadowCasters_.empty()) {
             worldGridGpuDirty_ = false;
             const PhaseScope gridUpload(phaseBegin_, phaseEnd_, "Render.WorldGridUpload");
             const float brickWorldSize =
                 shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
-
-            // Params UBO: window origin/extent for the DDA, window min brick + wrap
-            // mask for toroidal slot addressing.
-            const IVec3 dims = worldBrickGrid_.windowExtent();
-            const IVec3 origBrick = worldBrickGrid_.windowMinBrick();
-            const IVec3 fixedDims = worldBrickGrid_.fixedDims();
-            struct WorldBrickGridParamsLayout {
-                float originX;
-                float originY;
-                float originZ;
-                float cellSize;
-                int32_t dimsX;
-                int32_t dimsY;
-                int32_t dimsZ;
-                int32_t voxelDim;
-                int32_t winMinX;
-                int32_t winMinY;
-                int32_t winMinZ;
-                int32_t _pad0;
-                int32_t wrapMaskX;
-                int32_t wrapMaskY;
-                int32_t wrapMaskZ;
-                int32_t _pad1;
-            };
-            const WorldBrickGridParamsLayout params{
-                .originX = static_cast<float>(origBrick.x) * brickWorldSize,
-                .originY = static_cast<float>(origBrick.y) * brickWorldSize,
-                .originZ = static_cast<float>(origBrick.z) * brickWorldSize,
-                .cellSize = brickWorldSize,
-                .dimsX = dims.x,
-                .dimsY = dims.y,
-                .dimsZ = dims.z,
-                .voxelDim = Brick::kDim,
-                .winMinX = origBrick.x,
-                .winMinY = origBrick.y,
-                .winMinZ = origBrick.z,
-                ._pad0 = 0,
-                .wrapMaskX = fixedDims.x - 1,
-                .wrapMaskY = fixedDims.y - 1,
-                .wrapMaskZ = fixedDims.z - 1,
-                ._pad1 = 0,
-            };
-            std::memcpy(worldBrickGridParamsBuffer_->mappedData(), &params, sizeof(params));
-
-            const auto handles = worldBrickGrid_.handles();
-            std::memcpy(worldBrickGridHandlesBuffer_->mappedData(), handles.data(),
-                        handles.size() * sizeof(BrickHandle));
-
-            if (useGridTexture_) {
-                std::memcpy(worldGridStagingBuffer_->mappedData(), handles.data(),
-                            handles.size() * sizeof(BrickHandle));
-                worldGridUploadDims_ = fixedDims;
-            }
+            worldGridSync_.upload(worldBrickGrid_, brickWorldSize, useGridTexture_);
 
             if (useSvdag_) {
                 const PhaseScope svdagBuild(phaseBegin_, phaseEnd_, "Render.SvdagUpdate");
+                const IVec3 origBrick = worldBrickGrid_.windowMinBrick();
                 const Vec3 originWorld(static_cast<float>(origBrick.x) * brickWorldSize,
                                        static_cast<float>(origBrick.y) * brickWorldSize,
                                        static_cast<float>(origBrick.z) * brickWorldSize);
                 // The SVDAG builder wants a window-linear layout; the grid stores
                 // wrapped slots, so extract the window before handing it over.
+                const IVec3 dims = worldBrickGrid_.windowExtent();
                 svdagScratch_.clear();
                 svdagScratch_.reserve(static_cast<size_t>(dims.x) * static_cast<size_t>(dims.y)
                                       * static_cast<size_t>(dims.z));
@@ -584,8 +418,12 @@ namespace RAGE {
             uniforms.heatmapMode = heatmapMode_;
             uniforms.heatmapMaxSteps = heatmapMaxSteps_;
             uniforms.useSvdag = useSvdag_ ? 1 : 0;
-            uniforms.useGridTexture = (useGridTexture_ && worldGridUploadDims_.x > 0) ? 1 : 0;
-            uniforms.freeVolumeCount = static_cast<int32_t>(uploadFreeVolumes_());
+            uniforms.useGridTexture =
+                (useGridTexture_
+                 && (worldGridSync_.textureValid() || worldGridSync_.textureUploadArmed()))
+                    ? 1
+                    : 0;
+            uniforms.freeVolumeCount = static_cast<int32_t>(freeVolumeSync_.upload(freeVolumes_));
 
             std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
         }
@@ -678,13 +516,14 @@ namespace RAGE {
         writer.writeStorageImage(set, 0, target, ImageLayout::General);
         writer.writeUniformBuffer(set, 2, *frameUniformBuffer_);
         writer.writeStorageBuffer(set, 3, *brickPoolBuffer_);
-        writer.writeStorageBuffer(set, 4, *worldBrickGridHandlesBuffer_);
-        writer.writeCombinedImageSampler(set, 11, *worldGridImageView_, worldGridSampler_,
+        writer.writeStorageBuffer(set, 4, worldGridSync_.handlesBuffer());
+        writer.writeCombinedImageSampler(set, 11, worldGridSync_.imageView(),
+                                         worldGridSync_.sampler(),
                                          ImageLayout::ShaderReadOnlyOptimal);
-        writer.writeStorageBuffer(set, 12, *freeVolumeDescsBuffer_);
-        writer.writeStorageBuffer(set, 13, *freeVolumeHandlesBuffer_);
+        writer.writeStorageBuffer(set, 12, freeVolumeSync_.descsBuffer());
+        writer.writeStorageBuffer(set, 13, freeVolumeSync_.handlesBuffer());
         writer.writeStorageBuffer(set, 5, *pixelDebugBuffer_);
-        writer.writeUniformBuffer(set, 6, *worldBrickGridParamsBuffer_);
+        writer.writeUniformBuffer(set, 6, worldGridSync_.paramsBuffer());
         writer.writeStorageBuffer(set, 9, *svdagCache_.nodesBuffer());
         writer.writeUniformBuffer(set, 10, *svdagCache_.paramsBuffer());
 
@@ -714,59 +553,11 @@ namespace RAGE {
     void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage,
                                uint32_t swapImageIndex, uint32_t swapW, uint32_t swapH,
                                std::span<Renderable *const> renderables, const FrameContext &frame) {
-        if (worldGridUploadDims_.x == 0 && !worldGridImageInitialized_) {
-            // The descriptor set always references the grid texture, so it must sit in
-            // ShaderReadOnlyOptimal even on frames that never sample it.
-            const std::array<VulkanImageBarrier, 1> init{ { {
-                .image = worldGridImage_->handle(),
-                .oldLayout = ImageLayout::Undefined,
-                .newLayout = ImageLayout::ShaderReadOnlyOptimal,
-                .srcStage = PipelineStage::TopOfPipe,
-                .dstStage = PipelineStage::ComputeShader,
-                .srcAccess = AccessFlags::None,
-                .dstAccess = AccessFlags::ShaderRead,
-            } } };
-            rec.pipelineBarrier(init);
-            worldGridImageInitialized_ = true;
+        if (worldGridSync_.textureUploadArmed() && beforeGpuPass_) {
+            beforeGpuPass_("world_grid_upload", rec.rawHandle());
         }
-
-        if (worldGridUploadDims_.x > 0) {
-            worldGridImageInitialized_ = true;
-            if (beforeGpuPass_) {
-                beforeGpuPass_("world_grid_upload", rec.rawHandle());
-            }
-            const std::array<VulkanImageBarrier, 1> toTransfer{ { {
-                .image = worldGridImage_->handle(),
-                .oldLayout = ImageLayout::Undefined,
-                .newLayout = ImageLayout::TransferDstOptimal,
-                .srcStage = PipelineStage::ComputeShader,
-                .dstStage = PipelineStage::Transfer,
-                .srcAccess = AccessFlags::None,
-                .dstAccess = AccessFlags::TransferWrite,
-            } } };
-            rec.pipelineBarrier(toTransfer);
-
-            const std::array<BufferImageCopy, 1> region{ { {
-                .imageWidth = static_cast<uint32_t>(worldGridUploadDims_.x),
-                .imageHeight = static_cast<uint32_t>(worldGridUploadDims_.y),
-                .imageDepth = static_cast<uint32_t>(worldGridUploadDims_.z),
-            } } };
-            rec.copyBufferToImage(*worldGridStagingBuffer_, *worldGridImage_,
-                                  ImageLayout::TransferDstOptimal, region);
-
-            const std::array<VulkanImageBarrier, 1> toSampled{ { {
-                .image = worldGridImage_->handle(),
-                .oldLayout = ImageLayout::TransferDstOptimal,
-                .newLayout = ImageLayout::ShaderReadOnlyOptimal,
-                .srcStage = PipelineStage::Transfer,
-                .dstStage = PipelineStage::ComputeShader,
-                .srcAccess = AccessFlags::TransferWrite,
-                .dstAccess = AccessFlags::ShaderRead,
-            } } };
-            rec.pipelineBarrier(toSampled);
-            if (afterGpuPass_) {
-                afterGpuPass_("world_grid_upload", rec.rawHandle());
-            }
+        if (worldGridSync_.recordTextureUpload(rec) && afterGpuPass_) {
+            afterGpuPass_("world_grid_upload", rec.rawHandle());
         }
 
         recordPass(rec, *renderTarget_, renderables, frame, true, true);

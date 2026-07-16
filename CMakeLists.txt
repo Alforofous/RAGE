@@ -71,8 +71,10 @@ set(ENGINE_SOURCES
     src/engine/toolkit/content/scene_generators.cpp
     src/engine/toolkit/content/vox_loader.cpp
     src/engine/materials/pipeline_cache.cpp
+    src/engine/rendering/free_volume_gpu_sync.cpp
     src/engine/rendering/gpu_svdag_cache.cpp
     src/engine/rendering/renderer.cpp
+    src/engine/rendering/world_grid_gpu_sync.cpp
     src/engine/scene/camera.cpp
     src/engine/scene/directional_light.cpp
     src/engine/scene/node3d.cpp

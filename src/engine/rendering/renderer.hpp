@@ -11,7 +11,9 @@
 #include "engine/rendering/ambient_light.hpp"
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/pixel_debug.hpp"
+#include "engine/rendering/free_volume_gpu_sync.hpp"
 #include "engine/rendering/gpu_svdag_cache.hpp"
+#include "engine/rendering/world_grid_gpu_sync.hpp"
 #include "engine/scene/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/svdag.hpp"
@@ -226,7 +228,6 @@ namespace RAGE {
         void rebuildFrameResources(FrameExtent extent);
         void collectVisible(Node3D &node, std::vector<Renderable *> &out);
         void collectShadowCasters(Node3D &node);
-        uint32_t uploadFreeVolumes_();
         void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapImageIndex,
                          uint32_t swapW, uint32_t swapH, std::span<Renderable *const> renderables,
                          const FrameContext &frame);
@@ -249,15 +250,9 @@ namespace RAGE {
         std::optional<VulkanRenderTarget> thumbnailTarget_;
         std::optional<VulkanBuffer> frameUniformBuffer_;
         std::optional<VulkanBuffer> brickPoolBuffer_;
-        std::optional<VulkanBuffer> worldBrickGridHandlesBuffer_;
-        std::optional<VulkanBuffer> worldBrickGridParamsBuffer_;
-        std::optional<VulkanImage> worldGridImage_;
-        std::optional<VulkanImageView> worldGridImageView_;
-        std::optional<VulkanBuffer> worldGridStagingBuffer_;
-        VulkanSampler worldGridSampler_;
-        IVec3 worldGridUploadDims_{};
-        bool worldGridImageInitialized_ = false;
         GpuSvdagCache svdagCache_;
+        WorldGridGpuSync worldGridSync_;
+        FreeVolumeGpuSync freeVolumeSync_;
         std::optional<VulkanBuffer> pixelDebugBuffer_;
         std::optional<VulkanBuffer> thumbnailStaging_;
         bool thumbnailQueued_ = false;
@@ -283,8 +278,6 @@ namespace RAGE {
         uint64_t lastSceneTreeVersion_ = UINT64_MAX;
         std::vector<Voxel3D *> shadowCasters_;
         std::vector<Voxel3D *> freeVolumes_;
-        std::optional<VulkanBuffer> freeVolumeDescsBuffer_;
-        std::optional<VulkanBuffer> freeVolumeHandlesBuffer_;
         std::optional<BrickPool> brickPool_;
         WorldBrickGrid worldBrickGrid_;
         std::vector<VoxelDataWorldPlacement> brickPlacementsScratch_;
