@@ -29,6 +29,12 @@ namespace RAGE {
         UpdateResult update(std::span<const BrickHandle> handles, IVec3 dims,
                             Vec3 originWorld, float brickWorldSize);
 
+        /**
+         * @brief Adopt a DAG built elsewhere (e.g. on a worker thread via `buildSvdag`)
+         *        and upload it — the upload half of `update` without the CPU build.
+         */
+        UpdateResult uploadBuilt(Svdag &&svdag, Vec3 originWorld, float brickWorldSize);
+
         const Svdag &svdag() const { return svdag_; }
 
         const VulkanBuffer *nodesBuffer() const {
@@ -46,6 +52,8 @@ namespace RAGE {
         }
 
     private:
+        void writeParams_(Vec3 originWorld, float brickWorldSize);
+
         static constexpr uint64_t kMaxNodes_ = 64u * 1024u;
 
         VulkanAllocator &allocator_;

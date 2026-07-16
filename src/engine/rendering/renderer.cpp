@@ -358,33 +358,73 @@ namespace RAGE {
             const float brickWorldSize =
                 shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
             worldGridSync_.upload(worldBrickGrid_, brickWorldSize, useGridTexture_);
+            svdagFresh_ = false;
+            gridQuietFrames_ = 0;
+            ++gridChangeStamp_;
+        } else {
+            ++gridQuietFrames_;
+        }
 
-            if (useSvdag_) {
-                const PhaseScope svdagBuild(phaseBegin_, phaseEnd_, "Render.SvdagUpdate");
-                const IVec3 origBrick = worldBrickGrid_.windowMinBrick();
-                const Vec3 originWorld(static_cast<float>(origBrick.x) * brickWorldSize,
-                                       static_cast<float>(origBrick.y) * brickWorldSize,
-                                       static_cast<float>(origBrick.z) * brickWorldSize);
-                // The SVDAG builder wants a window-linear layout; the grid stores
-                // wrapped slots, so extract the window before handing it over.
-                const IVec3 dims = worldBrickGrid_.windowExtent();
-                svdagScratch_.clear();
-                svdagScratch_.reserve(static_cast<size_t>(dims.x) * static_cast<size_t>(dims.y)
-                                      * static_cast<size_t>(dims.z));
-                for (int32_t z = 0; z < dims.z; ++z) {
-                    for (int32_t yy = 0; yy < dims.y; ++yy) {
-                        for (int32_t x = 0; x < dims.x; ++x) {
-                            svdagScratch_.push_back(worldBrickGrid_.handleAt(
-                                IVec3{ origBrick.x + x, origBrick.y + yy, origBrick.z + z }));
-                        }
-                    }
-                }
-                const auto result = svdagCache_.update(svdagScratch_, dims, originWorld, brickWorldSize);
+        // SVDAG builds are debounced AND asynchronous: kicked off only once the grid
+        // settles, built on a worker thread from a wrapped-storage snapshot, adopted
+        // only if the grid hasn't changed since. While stale, frames render through
+        // the flat path (uniforms.useSvdag gates on freshness) — no churn-time hitch.
+        if (svdagBuildDone_.load()) {
+            svdagBuildDone_.store(false);
+            svdagBuildRunning_.store(false);
+            if (svdagBuildStamp_ == gridChangeStamp_ && useSvdag_) {
+                const auto result = svdagCache_.uploadBuilt(std::move(svdagBuildResult_),
+                                                            svdagBuildOrigin_,
+                                                            svdagBuildBrickSize_);
                 if (result.capacityExceeded) {
                     Core::log(Core::LogLevel::Warn,
                               "SVDAG node count exceeds GPU buffer capacity — falling back to flat grid");
                 }
+                svdagFresh_ = true;
             }
+        }
+        if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && !shadowCasters_.empty()
+            && (gridQuietFrames_ >= kSvdagQuietFrames || svdagJustEnabled)) {
+            const PhaseScope svdagKick(phaseBegin_, phaseEnd_, "Render.SvdagKickoff");
+            const float brickWorldSize =
+                shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
+            const IVec3 origBrick = worldBrickGrid_.windowMinBrick();
+            svdagBuildStamp_ = gridChangeStamp_;
+            const auto handles = worldBrickGrid_.handles();
+            svdagBuildStorage_.assign(handles.begin(), handles.end());
+            svdagBuildFixedDims_ = worldBrickGrid_.fixedDims();
+            svdagBuildWinMin_ = origBrick;
+            svdagBuildWinExtent_ = worldBrickGrid_.windowExtent();
+            svdagBuildOrigin_ = Vec3(static_cast<float>(origBrick.x) * brickWorldSize,
+                                     static_cast<float>(origBrick.y) * brickWorldSize,
+                                     static_cast<float>(origBrick.z) * brickWorldSize);
+            svdagBuildBrickSize_ = brickWorldSize;
+            svdagBuildRunning_.store(true);
+            svdagWorker_ = std::jthread([this] {
+                // De-wrap the snapshot into window-linear order, then build the DAG.
+                const IVec3 n = svdagBuildFixedDims_;
+                const IVec3 mn = svdagBuildWinMin_;
+                const IVec3 ext = svdagBuildWinExtent_;
+                std::vector<BrickHandle> linear;
+                linear.reserve(static_cast<size_t>(ext.x) * static_cast<size_t>(ext.y)
+                               * static_cast<size_t>(ext.z));
+                for (int32_t z = 0; z < ext.z; ++z) {
+                    for (int32_t y = 0; y < ext.y; ++y) {
+                        for (int32_t x = 0; x < ext.x; ++x) {
+                            const IVec3 slot{ (mn.x + x) & (n.x - 1), (mn.y + y) & (n.y - 1),
+                                              (mn.z + z) & (n.z - 1) };
+                            const size_t idx =
+                                (static_cast<size_t>(slot.z) * static_cast<size_t>(n.x)
+                                 * static_cast<size_t>(n.y))
+                                + (static_cast<size_t>(slot.y) * static_cast<size_t>(n.x))
+                                + static_cast<size_t>(slot.x);
+                            linear.push_back(svdagBuildStorage_[idx]);
+                        }
+                    }
+                }
+                svdagBuildResult_ = linear.empty() ? Svdag{} : buildSvdag(linear, ext);
+                svdagBuildDone_.store(true);
+            });
         }
 
         {
@@ -417,7 +457,7 @@ namespace RAGE {
             uniforms.mipSkipEnabled = mipSkipEnabled_ ? 1 : 0;
             uniforms.heatmapMode = heatmapMode_;
             uniforms.heatmapMaxSteps = heatmapMaxSteps_;
-            uniforms.useSvdag = useSvdag_ ? 1 : 0;
+            uniforms.useSvdag = (useSvdag_ && svdagFresh_) ? 1 : 0;
             uniforms.useGridTexture =
                 (useGridTexture_
                  && (worldGridSync_.textureValid() || worldGridSync_.textureUploadArmed()))

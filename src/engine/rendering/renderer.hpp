@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
+#include <thread>
 #include <optional>
 #include <span>
 #include <vector>
@@ -271,6 +273,24 @@ namespace RAGE {
         int32_t heatmapMaxSteps_ = 1024;
         bool useSvdag_ = false;
         bool useGridTexture_ = false;
+        /// Grid-quiet frames before an SVDAG rebuild is kicked off (debounce: never
+        /// rebuild mid-churn; frames render through the flat path while stale).
+        static constexpr int32_t kSvdagQuietFrames = 30;
+        bool svdagFresh_ = false;
+        int32_t gridQuietFrames_ = 0;
+        uint64_t gridChangeStamp_ = 0;
+        // Async SVDAG build: worker consumes a wrapped-storage snapshot (plain data, no
+        // Vulkan), result adopted on the main thread only if the grid didn't change.
+        std::atomic<bool> svdagBuildRunning_{ false };
+        std::atomic<bool> svdagBuildDone_{ false };
+        uint64_t svdagBuildStamp_ = 0;
+        std::vector<BrickHandle> svdagBuildStorage_;
+        IVec3 svdagBuildFixedDims_{};
+        IVec3 svdagBuildWinMin_{};
+        IVec3 svdagBuildWinExtent_{};
+        Vec3 svdagBuildOrigin_{};
+        float svdagBuildBrickSize_ = 0.0f;
+        Svdag svdagBuildResult_;
         bool prevUseSvdag_ = false;
         bool prevUseGridTexture_ = false;
         bool worldGridStreaming_ = false;
@@ -294,5 +314,7 @@ namespace RAGE {
 
         FrameExtent lastExtent_{};
         bool needsRecreate_ = true;
+        /// Last member on purpose: destroyed (auto-joined) before everything it reads.
+        std::jthread svdagWorker_;
     };
 }

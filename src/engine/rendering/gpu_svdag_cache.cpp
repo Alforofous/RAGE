@@ -63,7 +63,28 @@ namespace RAGE {
             }
         }
         result.nodeCount = svdag_.nodes.size();
+        writeParams_(originWorld, brickWorldSize);
+        return result;
+    }
 
+    GpuSvdagCache::UpdateResult GpuSvdagCache::uploadBuilt(Svdag &&svdag, Vec3 originWorld,
+                                                           float brickWorldSize) {
+        UpdateResult result;
+        result.rebuilt = true;
+        svdag_ = std::move(svdag);
+        lastSourceHash_ = 0;   // externally built: hash-skip no longer valid
+        if (svdag_.nodes.size() > kMaxNodes_) {
+            result.capacityExceeded = true;
+        } else if (!svdag_.nodes.empty()) {
+            std::memcpy(nodesBuffer_->mappedData(), svdag_.nodes.data(),
+                        svdag_.nodes.size() * sizeof(SvdagNode));
+        }
+        result.nodeCount = svdag_.nodes.size();
+        writeParams_(originWorld, brickWorldSize);
+        return result;
+    }
+
+    void GpuSvdagCache::writeParams_(Vec3 originWorld, float brickWorldSize) {
         const SvdagParamsUbo params{
             .originWorld_brickSize = Vec4(originWorld.x, originWorld.y, originWorld.z, brickWorldSize),
             .rootIndex = static_cast<int32_t>(svdag_.rootIndex),
@@ -72,7 +93,5 @@ namespace RAGE {
             ._pad = 0,
         };
         std::memcpy(paramsBuffer_->mappedData(), &params, sizeof(params));
-
-        return result;
     }
 }
