@@ -249,16 +249,9 @@ int main(int argc, char **argv) {
             std::vector<Voxel3D *> spinners;
             struct Prop {
                 Voxel3D *volume;
-                Toolkit::KinematicBody body;
+                std::unique_ptr<Toolkit::KinematicBody> body;
             };
             std::vector<Prop> props;
-            constexpr Toolkit::KinematicBodyConfig kPropBody{
-                .size = Vec3(0.6f, 0.6f, 0.6f),
-                .gravity = 22.0f,
-                .terminalSpeed = 50.0f,
-                .jumpSpeed = 0.0f,
-                .stepUpHeight = 0.0f,
-            };
             const int32_t kStreamHRadius = kWorld.streamRadius;
             const Content::ChunkStore::YRange kTerrainYRange = kWorld.yRange;
 
@@ -284,26 +277,44 @@ int main(int argc, char **argv) {
                 }
             };
 
-            // T4 demo: free-standing props that FALL — each drives its own Voxel3D via a
-            // KinematicBody, excluded from colliding with itself. Note: the body box is
-            // bottom-center based while the Voxel3D renders from its corner, so the
-            // collision box sits half a cube off in XZ — invisible on open terrain,
-            // fixed when bodies grow an offset config.
+            // T5 demo: falling free-standing props with distinct masses — walk into the
+            // light one and bulldoze it; the heavy one barely budges. Body boxes are
+            // bottom-center based while Voxel3D renders corner-origin, so collision sits
+            // half a cube off in XZ — known v1 slop.
             const auto addFallingProps = [&]() {
                 constexpr int32_t kPropDim = 12;
-                const std::array<uint32_t, 3> palette{ 0xFF9AC2E8u, 0xFF7AD1E0u, 0xFFB4E8B0u };
-                for (size_t i = 0; i < palette.size(); ++i) {
+                struct PropSpec {
+                    uint32_t color;
+                    float mass;
+                };
+                const std::array<PropSpec, 3> specs{ {
+                    { .color = 0xFF9AC2E8u, .mass = 15.0f },     // light — pushable
+                    { .color = 0xFF7AD1E0u, .mass = 80.0f },     // player-weight
+                    { .color = 0xFFB4E8B0u, .mass = 2000.0f },   // heavy — immovable-ish
+                } };
+                for (size_t i = 0; i < specs.size(); ++i) {
                     auto v = std::make_unique<Voxel3D>(
                         renderer.brickPool(), IVec3{ kPropDim, kPropDim, kPropDim }, kVoxelSize);
-                    v->fillSolid(Color::fromRGBA8(palette[i]));
+                    v->fillSolid(Color::fromRGBA8(specs[i].color));
                     v->setMaterial(voxelMaterial);
                     v->setRenderKind(VoxelRenderKind::FreeStanding);
                     v->setPosition(Vec3(1.8f + (0.9f * static_cast<float>(i)),
                                         5.0f + (0.8f * static_cast<float>(i)), 1.8f));
                     Voxel3D *raw = v.get();
                     root.add(std::move(v));
-                    collisionWorld.registerVolume(*raw);
-                    props.push_back(Prop{ raw, Toolkit::KinematicBody(*raw, kPropBody, raw) });
+                    const Toolkit::KinematicBodyConfig propCfg{
+                        .size = Vec3(0.6f, 0.6f, 0.6f),
+                        .gravity = 22.0f,
+                        .terminalSpeed = 50.0f,
+                        .jumpSpeed = 0.0f,
+                        .stepUpHeight = 0.0f,
+                        .mass = specs[i].mass,
+                    };
+                    props.push_back(Prop{
+                        .volume = raw,
+                        .body = std::make_unique<Toolkit::KinematicBody>(*raw, collisionWorld,
+                                                                         propCfg, raw),
+                    });
                 }
             };
 
@@ -434,7 +445,7 @@ int main(int argc, char **argv) {
             constexpr float kWalkSpeed = 4.0f;
             bool walkMode = false;
             bool prevWalkKey = false;
-            Toolkit::KinematicBody playerBody(playerEntity, kPlayerBody);
+            Toolkit::KinematicBody playerBody(playerEntity, collisionWorld, kPlayerBody);
 
             controller.setKeyboardVeto(
                 [&debugUi, &walkMode]() { return walkMode || debugUi.wantsKeyboard(); });
@@ -680,8 +691,11 @@ int main(int argc, char **argv) {
                     spinners[i]->setRotation(
                         Quat::fromAxisAngle(axis, static_cast<float>(now) * speed));
                 }
-                for (Prop &prop : props) {
-                    prop.body.update(collisionWorld, Toolkit::MoveInput{}, dt);
+                {
+                    const App::Profiler::Zone physicsZone(profiler, "Physics.Bodies");
+                    for (Prop &prop : props) {
+                        prop.body->update(Toolkit::MoveInput{}, dt);
+                    }
                 }
 
                 const bool walkKey = !debugUi.wantsKeyboard()
@@ -724,7 +738,10 @@ int main(int argc, char **argv) {
                         .jump = !debugUi.wantsKeyboard()
                                 && glfwGetKey(gw, GLFW_KEY_SPACE) == GLFW_PRESS,
                     };
-                    playerBody.update(collisionWorld, moveIn, dt);
+                    {
+                        const App::Profiler::Zone playerZone(profiler, "Physics.Player");
+                        playerBody.update(moveIn, dt);
+                    }
                 }
 
                 if (streamer.has_value()) {

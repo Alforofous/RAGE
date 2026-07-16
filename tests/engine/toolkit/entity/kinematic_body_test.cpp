@@ -36,7 +36,6 @@ namespace {
             grid_.writeChunk({ 0, 0, 0 }, terrain_);
         }
 
-        CollisionWorld query() const { return { grid_, pool_, kVs }; }
 
         static KinematicBodyConfig smallBody() {
             return KinematicBodyConfig{ .size = Vec3(0.1f, 0.3f, 0.1f),
@@ -51,9 +50,9 @@ namespace {
         VoxelData terrain_;
     };
 
-    void settle(KinematicBody &body, const CollisionWorld &q, int32_t steps = 60) {
+    void settle(KinematicBody &body, int32_t steps = 60) {
         for (int32_t i = 0; i < steps; ++i) {
-            body.update(q, MoveInput{}, 1.0f / 60.0f);
+            body.update(MoveInput{}, 1.0f / 60.0f);
         }
     }
 }
@@ -61,11 +60,11 @@ namespace {
 TEST_F(KinematicBodyTest, FallsAndLandsOnFloor) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 1.6f, 0.4f));
-    KinematicBody body(entity, smallBody());
-    const CollisionWorld q = query();
+    CollisionWorld world(grid_, pool_, kVs);
+    KinematicBody body(entity, world, smallBody());
 
     EXPECT_FALSE(body.grounded());
-    settle(body, q);
+    settle(body);
     EXPECT_TRUE(body.grounded());
     EXPECT_NEAR(entity.position().y, 0.8f, 2e-3f);
     EXPECT_FLOAT_EQ(body.velocity().y, 0.0f);
@@ -74,16 +73,16 @@ TEST_F(KinematicBodyTest, FallsAndLandsOnFloor) {
 TEST_F(KinematicBodyTest, JumpRisesThenLandsAgain) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
-    KinematicBody body(entity, smallBody());
-    const CollisionWorld q = query();
-    settle(body, q);
+    CollisionWorld world(grid_, pool_, kVs);
+    KinematicBody body(entity, world, smallBody());
+    settle(body);
     ASSERT_TRUE(body.grounded());
 
-    body.update(q, MoveInput{ .walk = Vec3(0.0f, 0.0f, 0.0f), .jump = true }, 1.0f / 60.0f);
+    body.update(MoveInput{ .walk = Vec3(0.0f, 0.0f, 0.0f), .jump = true }, 1.0f / 60.0f);
     EXPECT_FALSE(body.grounded());
     EXPECT_GT(entity.position().y, 0.8f);
 
-    settle(body, q, 120);
+    settle(body, 120);
     EXPECT_TRUE(body.grounded());
     EXPECT_NEAR(entity.position().y, 0.8f, 2e-3f);
 }
@@ -91,12 +90,12 @@ TEST_F(KinematicBodyTest, JumpRisesThenLandsAgain) {
 TEST_F(KinematicBodyTest, WalksAndStepsUpLowLedge) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
-    KinematicBody body(entity, smallBody());
-    const CollisionWorld q = query();
-    settle(body, q);
+    CollisionWorld world(grid_, pool_, kVs);
+    KinematicBody body(entity, world, smallBody());
+    settle(body);
 
     for (int32_t i = 0; i < 90; ++i) {
-        body.update(q, MoveInput{ .walk = Vec3(0.5f, 0.0f, 0.0f) }, 1.0f / 60.0f);
+        body.update(MoveInput{ .walk = Vec3(0.5f, 0.0f, 0.0f) }, 1.0f / 60.0f);
     }
     EXPECT_GT(entity.position().x, 0.9f);
     EXPECT_NEAR(entity.position().y, 1.0f, 2e-2f);
@@ -108,12 +107,12 @@ TEST_F(KinematicBodyTest, TallLedgeBlocksWhenStepUpDisabled) {
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     KinematicBodyConfig cfg = smallBody();
     cfg.stepUpHeight = 0.0f;
-    KinematicBody body(entity, cfg);
-    const CollisionWorld q = query();
-    settle(body, q);
+    CollisionWorld world(grid_, pool_, kVs);
+    KinematicBody body(entity, world, cfg);
+    settle(body);
 
     for (int32_t i = 0; i < 120; ++i) {
-        body.update(q, MoveInput{ .walk = Vec3(0.5f, 0.0f, 0.0f) }, 1.0f / 60.0f);
+        body.update(MoveInput{ .walk = Vec3(0.5f, 0.0f, 0.0f) }, 1.0f / 60.0f);
     }
     EXPECT_LT(entity.position().x, 0.8f);
     EXPECT_NEAR(entity.position().y, 0.8f, 2e-3f);
@@ -133,17 +132,57 @@ TEST_F(KinematicBodyTest, CeilingCancelsAscent) {
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     KinematicBodyConfig cfg = smallBody();
     cfg.jumpSpeed = 5.0f;
-    KinematicBody body(entity, cfg);
-    const CollisionWorld q = query();
-    settle(body, q);
+    CollisionWorld world(grid_, pool_, kVs);
+    KinematicBody body(entity, world, cfg);
+    settle(body);
 
-    body.update(q, MoveInput{ .walk = Vec3(0.0f, 0.0f, 0.0f), .jump = true }, 1.0f / 60.0f);
+    body.update(MoveInput{ .walk = Vec3(0.0f, 0.0f, 0.0f), .jump = true }, 1.0f / 60.0f);
     float peak = entity.position().y;
     for (int32_t i = 0; i < 30; ++i) {
-        body.update(q, MoveInput{}, 1.0f / 60.0f);
+        body.update(MoveInput{}, 1.0f / 60.0f);
         peak = std::max(peak, entity.position().y);
     }
     EXPECT_LE(peak + smallBody().size.y, 1.2f + 1e-2f);
-    settle(body, q, 60);
+    settle(body, 60);
+    EXPECT_TRUE(body.grounded());
+}
+
+TEST_F(KinematicBodyTest, HeavierBodyMovesLessInMutualOverlap) {
+    CollisionWorld world(grid_, pool_, kVs);
+
+    Node3D light;
+    Node3D heavy;
+    // Overlapping boxes on the floor, offset slightly in x so separation is lateral.
+    light.setPosition(Vec3(0.38f, 0.8001f, 0.4f));
+    heavy.setPosition(Vec3(0.44f, 0.8001f, 0.4f));
+    KinematicBodyConfig lightCfg = smallBody();
+    lightCfg.mass = 10.0f;
+    KinematicBodyConfig heavyCfg = smallBody();
+    heavyCfg.mass = 1000.0f;
+    KinematicBody lightBody(light, world, lightCfg);
+    KinematicBody heavyBody(heavy, world, heavyCfg);
+    EXPECT_EQ(world.bodyCount(), 2u);
+
+    const float lightStart = light.position().x;
+    const float heavyStart = heavy.position().x;
+    for (int32_t i = 0; i < 30; ++i) {
+        lightBody.update(MoveInput{}, 1.0f / 60.0f);
+        heavyBody.update(MoveInput{}, 1.0f / 60.0f);
+    }
+    const float lightMoved = std::abs(light.position().x - lightStart);
+    const float heavyMoved = std::abs(heavy.position().x - heavyStart);
+    EXPECT_GT(lightMoved, heavyMoved * 5.0f);
+    EXPECT_GT(lightMoved + heavyMoved, 0.03f);
+}
+
+TEST_F(KinematicBodyTest, DepenetrationPushesBodyOutOfSolid) {
+    CollisionWorld world(grid_, pool_, kVs);
+    Node3D entity;
+    // Feet 0.05 below the floor top (0.8): overlapping the floor by half a voxel.
+    entity.setPosition(Vec3(0.4f, 0.75f, 0.4f));
+    KinematicBody body(entity, world, smallBody());
+
+    body.update(MoveInput{}, 1.0f / 60.0f);
+    EXPECT_GE(entity.position().y, 0.8f - 1e-3f);
     EXPECT_TRUE(body.grounded());
 }
