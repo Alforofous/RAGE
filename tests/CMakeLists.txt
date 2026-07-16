@@ -12,7 +12,7 @@ add_executable(rage_tests
     engine/content/vox_loader_test.cpp
     engine/materials/material_test.cpp
     engine/rendering/frame_context_test.cpp
-    engine/rendering/world_brick_grid_test.cpp
+    engine/scene/world_brick_grid_test.cpp
     engine/scene/brick_pool_test.cpp
     engine/scene/camera_test.cpp
     engine/scene/svdag_test.cpp

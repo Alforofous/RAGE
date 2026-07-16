@@ -65,7 +65,8 @@ set(ENGINE_SOURCES
     src/engine/content/hybrid_chunk_store.cpp
     src/engine/content/procedural_chunk_store.cpp
     src/engine/content/streamer.cpp
-    src/engine/toolkit/collision/collision_world.cpp
+    src/engine/toolkit/collision/body_registry.cpp
+    src/engine/toolkit/collision/world_solid_query.cpp
     src/engine/toolkit/entity/kinematic_body.cpp
     src/engine/content/scene_generators.cpp
     src/engine/content/vox_loader.cpp
@@ -80,7 +81,7 @@ set(ENGINE_SOURCES
     src/engine/scene/svdag.cpp
     src/engine/scene/voxel3d.cpp
     src/engine/scene/voxel_data.cpp
-    src/engine/rendering/world_brick_grid.cpp
+    src/engine/scene/world_brick_grid.cpp
 )
 
 add_library(rage_engine STATIC ${ENGINE_SOURCES})

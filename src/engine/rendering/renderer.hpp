@@ -12,7 +12,7 @@
 #include "engine/rendering/frame_context.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/gpu_svdag_cache.hpp"
-#include "engine/rendering/world_brick_grid.hpp"
+#include "engine/scene/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/svdag.hpp"
 #include "engine/scene/renderable_node3d.hpp"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace RAGE {
@@ -50,4 +51,18 @@ namespace RAGE {
             return static_cast<int64_t>(x) * static_cast<int64_t>(y) * static_cast<int64_t>(z);
         }
     };
+
+    /// Hash functor for `IVec3` keys in unordered containers (splitmix-style mixing).
+    struct IVec3Hash {
+        size_t operator()(const IVec3 &v) const noexcept {
+            const uint64_t x = static_cast<uint32_t>(v.x);
+            const uint64_t y = static_cast<uint32_t>(v.y);
+            const uint64_t z = static_cast<uint32_t>(v.z);
+            uint64_t h = x * 0x9E3779B97F4A7C15ull;
+            h ^= y + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
+            h ^= z + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
+            return static_cast<size_t>(h);
+        }
+    };
+
 }

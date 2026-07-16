@@ -1,6 +1,7 @@
 #include "world_brick_grid.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -49,6 +50,13 @@ namespace RAGE {
     }
 
     void WorldBrickGrid::writeChunk(IVec3 worldBrickOrigin, const VoxelData &data) {
+        // Contract: content is only placed inside the current window — a write elsewhere
+        // would silently alias the wrapped slot of a live cell.
+        assert(worldBrickOrigin.x >= windowMinBrick_.x && worldBrickOrigin.y >= windowMinBrick_.y
+               && worldBrickOrigin.z >= windowMinBrick_.z
+               && worldBrickOrigin.x + data.brickDims().x <= windowMinBrick_.x + windowExtent_.x
+               && worldBrickOrigin.y + data.brickDims().y <= windowMinBrick_.y + windowExtent_.y
+               && worldBrickOrigin.z + data.brickDims().z <= windowMinBrick_.z + windowExtent_.z);
         clearChunk(worldBrickOrigin, data.brickDims());
         data.forEachOccupiedBrick([this, worldBrickOrigin](IVec3 brickCoord, BrickHandle h) {
             handles_[slotIndex(IVec3{ worldBrickOrigin.x + brickCoord.x,
@@ -58,6 +66,17 @@ namespace RAGE {
     }
 
     void WorldBrickGrid::clearChunk(IVec3 worldBrickOrigin, IVec3 brickDims) {
+        // Evicted chunks sit near the window edge; anything a full storage period away
+        // would alias a live cell instead of clearing its own stale one.
+        assert(worldBrickOrigin.x >= windowMinBrick_.x - fixedDims_.x
+               && worldBrickOrigin.y >= windowMinBrick_.y - fixedDims_.y
+               && worldBrickOrigin.z >= windowMinBrick_.z - fixedDims_.z
+               && worldBrickOrigin.x + brickDims.x
+                      <= windowMinBrick_.x + windowExtent_.x + fixedDims_.x
+               && worldBrickOrigin.y + brickDims.y
+                      <= windowMinBrick_.y + windowExtent_.y + fixedDims_.y
+               && worldBrickOrigin.z + brickDims.z
+                      <= windowMinBrick_.z + windowExtent_.z + fixedDims_.z);
         for (int32_t z = 0; z < brickDims.z; ++z) {
             for (int32_t y = 0; y < brickDims.y; ++y) {
                 for (int32_t x = 0; x < brickDims.x; ++x) {

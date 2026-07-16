@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "engine/rendering/world_brick_grid.hpp"
+#include "engine/scene/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/voxel_data.hpp"
 #include "engine/scene/voxel3d.hpp"
@@ -27,7 +27,7 @@ namespace {
                     }
                 }
             }
-            grid_.setWindow({ 0, 0, 0 }, { 2, 2, 2 });
+            grid_.setWindow({ 0, 0, 0 }, { 2, 4, 2 });
             grid_.writeChunk({ 0, 0, 0 }, floor_);
         }
 

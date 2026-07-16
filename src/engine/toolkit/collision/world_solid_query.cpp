@@ -1,8 +1,9 @@
-#include "collision_world.hpp"
+#include "world_solid_query.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include "engine/scene/brick.hpp"
+#include "engine/scene/voxel3d.hpp"
 #include "engine/scene/voxel_data.hpp"
 
 namespace RAGE::Toolkit {
@@ -18,23 +19,23 @@ namespace RAGE::Toolkit {
         }
     }
 
-    CollisionWorld::CollisionWorld(const WorldBrickGrid &grid, const BrickPool &pool,
-                                   float voxelSize)
+    WorldSolidQuery::WorldSolidQuery(const WorldBrickGrid &grid, const BrickPool &pool,
+                                     float voxelSize)
         : grid_(grid)
         , pool_(pool)
         , voxelSize_(voxelSize) {}
 
-    void CollisionWorld::registerVolume(const Voxel3D &volume) {
+    void WorldSolidQuery::registerVolume(const Voxel3D &volume) {
         if (std::ranges::find(volumes_, &volume) == volumes_.end()) {
             volumes_.push_back(&volume);
         }
     }
 
-    void CollisionWorld::unregisterVolume(const Voxel3D &volume) {
+    void WorldSolidQuery::unregisterVolume(const Voxel3D &volume) {
         std::erase(volumes_, &volume);
     }
 
-    bool CollisionWorld::latticeSolid_(IVec3 worldVoxel) const {
+    bool WorldSolidQuery::latticeSolid_(IVec3 worldVoxel) const {
         const IVec3 brickCoord{ worldVoxel.x >> 3, worldVoxel.y >> 3, worldVoxel.z >> 3 };
         const BrickHandle h = grid_.handleAt(brickCoord);
         if (h == kEmptyBrick) {
@@ -45,28 +46,25 @@ namespace RAGE::Toolkit {
         return (packed >> 24u) > 0u;
     }
 
-    bool CollisionWorld::volumeSolidAt_(const Voxel3D &volume, const Mat4 &invWorld,
-                                        Vec3 worldPoint) const {
-        const Vec3 local = invWorld.transformPoint(worldPoint);
-        const float vs = volume.voxelSize();
-        const IVec3 c{ floorToVoxel(local.x, vs), floorToVoxel(local.y, vs),
-                       floorToVoxel(local.z, vs) };
+    bool WorldSolidQuery::volumeSolidAt_(const Voxel3D &volume, const Mat4 &invWorld,
+                                         Vec3 worldPoint) {
         const VoxelData *data = volume.voxelData();
         if (data == nullptr) {
             return false;
         }
+        const Vec3 local = invWorld.transformPoint(worldPoint);
+        const float vs = volume.voxelSize();
+        const IVec3 c{ floorToVoxel(local.x, vs), floorToVoxel(local.y, vs),
+                       floorToVoxel(local.z, vs) };
         return (data->voxel(c) >> 24u) > 0u;
     }
 
-    bool CollisionWorld::volumeIsBodyOwned_(const Voxel3D *volume) const {
-        return std::ranges::any_of(bodies_,
-                                   [volume](const Body &b) { return b.ownedVolume == volume; });
-    }
-
-    void CollisionWorld::gatherVolumes_(const SweepBox &bounds, const Voxel3D *ignore) const {
-        volumeScratch_.clear();
+    std::span<const WorldSolidQuery::VolumeScratch> WorldSolidQuery::gatherVolumes_(
+        const SweepBox &bounds, const Voxel3D *ignore,
+        std::span<const Voxel3D *const> excluded) const {
+        scratch_.clear();
         for (const Voxel3D *v : volumes_) {
-            if (v == ignore || volumeIsBodyOwned_(v)) {
+            if (v == ignore || std::ranges::find(excluded, v) != excluded.end()) {
                 continue;
             }
             // Conservative world AABB of the volume's local bounds (8 corners).
@@ -98,43 +96,39 @@ namespace RAGE::Toolkit {
                 || mn.y > bounds.max.y || mx.z < bounds.min.z || mn.z > bounds.max.z) {
                 continue;
             }
-            volumeScratch_.push_back(VolumeScratch{ .volume = v, .invWorld = world.inverted() });
+            scratch_.push_back(VolumeScratch{ .volume = v, .invWorld = world.inverted() });
         }
+        return scratch_;
     }
 
-    bool CollisionWorld::scratchSolid_(IVec3 worldVoxel) const {
+    bool WorldSolidQuery::cellSolid_(IVec3 worldVoxel,
+                                     std::span<const VolumeScratch> scope) const {
         if (latticeSolid_(worldVoxel)) {
             return true;
         }
-        if (volumeScratch_.empty()) {
+        if (scope.empty()) {
             return false;
         }
         const Vec3 center{ (static_cast<float>(worldVoxel.x) + 0.5f) * voxelSize_,
                            (static_cast<float>(worldVoxel.y) + 0.5f) * voxelSize_,
                            (static_cast<float>(worldVoxel.z) + 0.5f) * voxelSize_ };
-        return std::ranges::any_of(volumeScratch_, [&](const VolumeScratch &sc) {
+        return std::ranges::any_of(scope, [&](const VolumeScratch &sc) {
             return volumeSolidAt_(*sc.volume, sc.invWorld, center);
         });
     }
 
-    bool CollisionWorld::solid(IVec3 worldVoxel, const Voxel3D *ignore) const {
-        if (latticeSolid_(worldVoxel)) {
-            return true;
-        }
-        if (volumes_.empty()) {
-            return false;
-        }
-        const Vec3 center{ (static_cast<float>(worldVoxel.x) + 0.5f) * voxelSize_,
-                           (static_cast<float>(worldVoxel.y) + 0.5f) * voxelSize_,
-                           (static_cast<float>(worldVoxel.z) + 0.5f) * voxelSize_ };
-        return std::ranges::any_of(volumes_, [&](const Voxel3D *v) {
-            return v != ignore && !volumeIsBodyOwned_(v)
-                   && volumeSolidAt_(*v, v->worldMatrix().inverted(), center);
-        });
+    bool WorldSolidQuery::solid(IVec3 worldVoxel, const Voxel3D *ignore,
+                                std::span<const Voxel3D *const> excluded) const {
+        const Vec3 cellMin{ static_cast<float>(worldVoxel.x) * voxelSize_,
+                            static_cast<float>(worldVoxel.y) * voxelSize_,
+                            static_cast<float>(worldVoxel.z) * voxelSize_ };
+        const SweepBox cell{ .min = cellMin,
+                             .max = cellMin + Vec3(voxelSize_, voxelSize_, voxelSize_) };
+        return cellSolid_(worldVoxel, gatherVolumes_(cell, ignore, excluded));
     }
 
-    /// Precondition: `gatherVolumes_` covered `box`.
-    bool CollisionWorld::overlapsSolid_(const SweepBox &box, const Voxel3D * /*ignore*/) const {
+    bool WorldSolidQuery::overlapsSolid_(const SweepBox &box,
+                                         std::span<const VolumeScratch> scope) const {
         const float vs = voxelSize_;
         const int32_t xMin = static_cast<int32_t>(std::floor((box.min.x + kFaceEps) / vs));
         const int32_t xMax = static_cast<int32_t>(std::floor((box.max.x - kFaceEps) / vs));
@@ -145,7 +139,7 @@ namespace RAGE::Toolkit {
         for (int32_t z = zMin; z <= zMax; ++z) {
             for (int32_t y = yMin; y <= yMax; ++y) {
                 for (int32_t x = xMin; x <= xMax; ++x) {
-                    if (scratchSolid_(IVec3{ x, y, z })) {
+                    if (cellSolid_(IVec3{ x, y, z }, scope)) {
                         return true;
                     }
                 }
@@ -154,11 +148,12 @@ namespace RAGE::Toolkit {
         return false;
     }
 
-    Vec3 CollisionWorld::depenetrate(const SweepBox &box, float maxPush,
-                                     const Voxel3D *ignore) const {
+    Vec3 WorldSolidQuery::depenetrate(const SweepBox &box, float maxPush, const Voxel3D *ignore,
+                                      std::span<const Voxel3D *const> excluded) const {
         const Vec3 pad(maxPush, maxPush, maxPush);
-        gatherVolumes_(SweepBox{ .min = box.min - pad, .max = box.max + pad }, ignore);
-        if (!overlapsSolid_(box, ignore)) {
+        const std::span<const VolumeScratch> scope = gatherVolumes_(
+            SweepBox{ .min = box.min - pad, .max = box.max + pad }, ignore, excluded);
+        if (!overlapsSolid_(box, scope)) {
             return Vec3(0.0f, 0.0f, 0.0f);
         }
         // Probe axis pushes in half-voxel steps; return the shortest that clears.
@@ -174,7 +169,7 @@ namespace RAGE::Toolkit {
                     Vec3 push(0.0f, 0.0f, 0.0f);
                     push[axis] = (sign * dist) + (sign * kSkin);
                     const SweepBox moved{ .min = box.min + push, .max = box.max + push };
-                    if (!overlapsSolid_(moved, ignore)) {
+                    if (!overlapsSolid_(moved, scope)) {
                         best = push;
                         bestDist = dist;
                         break;
@@ -191,73 +186,8 @@ namespace RAGE::Toolkit {
         return best;
     }
 
-    BodyId CollisionWorld::addBody(const SweepBox &box, float mass,
-                                   const Voxel3D *ownedVolume) {
-        bodies_.push_back(Body{ .id = nextBodyId_, .box = box, .mass = mass,
-                                .ownedVolume = ownedVolume });
-        return BodyId{ nextBodyId_++ };
-    }
-
-    void CollisionWorld::removeBody(BodyId id) {
-        std::erase_if(bodies_, [id](const Body &b) { return b.id == id.id; });
-    }
-
-    void CollisionWorld::updateBodyBox(BodyId id, const SweepBox &box) {
-        for (Body &b : bodies_) {
-            if (b.id == id.id) {
-                b.box = box;
-                return;
-            }
-        }
-    }
-
-    Vec3 CollisionWorld::separationFor(BodyId self) const {
-        const Body *me = nullptr;
-        for (const Body &b : bodies_) {
-            if (b.id == self.id) {
-                me = &b;
-                break;
-            }
-        }
-        if (me == nullptr) {
-            return Vec3(0.0f, 0.0f, 0.0f);
-        }
-
-        Vec3 total(0.0f, 0.0f, 0.0f);
-        for (const Body &other : bodies_) {
-            if (other.id == me->id) {
-                continue;
-            }
-            // Per-axis overlap depths; positive on every axis = boxes intersect.
-            float depth[3];
-            bool overlaps = true;
-            for (int32_t a = 0; a < 3 && overlaps; ++a) {
-                const float d = std::min(me->box.max[a], other.box.max[a])
-                                - std::max(me->box.min[a], other.box.min[a]);
-                depth[a] = d;
-                overlaps = d > 0.0f;
-            }
-            if (!overlaps) {
-                continue;
-            }
-            int32_t axis = 0;
-            if (depth[1] < depth[axis]) {
-                axis = 1;
-            }
-            if (depth[2] < depth[axis]) {
-                axis = 2;
-            }
-            const float myCenter = (me->box.min[axis] + me->box.max[axis]) * 0.5f;
-            const float otherCenter = (other.box.min[axis] + other.box.max[axis]) * 0.5f;
-            const float dir = myCenter < otherCenter ? -1.0f : 1.0f;
-            const float myShare = other.mass / (me->mass + other.mass);
-            total[axis] += dir * depth[axis] * myShare;
-        }
-        return total;
-    }
-
-    /// Precondition: `gatherVolumes_` covered the whole swept region.
-    float CollisionWorld::sweepAxis_(SweepBox box, int32_t axis, float delta, bool &hit) const {
+    float WorldSolidQuery::sweepAxis_(SweepBox box, int32_t axis, float delta,
+                                      std::span<const VolumeScratch> scope, bool &hit) const {
         hit = false;
         if (delta == 0.0f) {
             return 0.0f;
@@ -284,7 +214,7 @@ namespace RAGE::Toolkit {
                     c[axis] = v;
                     c[o1] = a;
                     c[o2] = b;
-                    if (!scratchSolid_(c)) {
+                    if (!cellSolid_(c, scope)) {
                         continue;
                     }
                     hit = true;
@@ -299,8 +229,8 @@ namespace RAGE::Toolkit {
         return delta;
     }
 
-    SweepResult CollisionWorld::sweepAABB(const SweepBox &box, Vec3 delta,
-                                          const Voxel3D *ignore) const {
+    SweepResult WorldSolidQuery::sweepAABB(const SweepBox &box, Vec3 delta, const Voxel3D *ignore,
+                                           std::span<const Voxel3D *const> excluded) const {
         SweepResult result{};
         SweepBox current = box;
 
@@ -309,13 +239,13 @@ namespace RAGE::Toolkit {
             sweptBounds.min[a] = std::min(sweptBounds.min[a], sweptBounds.min[a] + delta[a]);
             sweptBounds.max[a] = std::max(sweptBounds.max[a], sweptBounds.max[a] + delta[a]);
         }
-        gatherVolumes_(sweptBounds, ignore);
+        const std::span<const VolumeScratch> scope = gatherVolumes_(sweptBounds, ignore, excluded);
 
         static constexpr int32_t kAxisOrder[3] = { 1, 0, 2 };
         bool hits[3] = { false, false, false };
         Vec3 moved(0.0f, 0.0f, 0.0f);
         for (const int32_t axis : kAxisOrder) {
-            const float m = sweepAxis_(current, axis, delta[axis], hits[axis]);
+            const float m = sweepAxis_(current, axis, delta[axis], scope, hits[axis]);
             moved[axis] = m;
             current.min[axis] += m;
             current.max[axis] += m;

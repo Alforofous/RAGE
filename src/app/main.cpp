@@ -754,12 +754,14 @@ int main(int argc, char **argv) {
                         static_cast<int32_t>(std::floor(camPos.y / chunkWorldExtent)),
                         static_cast<int32_t>(std::floor(camPos.z / chunkWorldExtent)),
                     };
-                    streamer->update(focus, kStreamHRadius);
+                    // Window first: placement events fired by update() must land inside
+                    // the window the grid asserts against.
                     const IVec3 cb = kWorld.chunkBrickDims;
                     renderer.setWorldGridWindow(
                         IVec3{ (focus.x - kStreamHRadius) * cb.x, kTerrainYRange.min * cb.y,
                                (focus.z - kStreamHRadius) * cb.z },
                         kWorld.windowBrickExtent());
+                    streamer->update(focus, kStreamHRadius);
                 }
 
                 const auto [w, h] = window.framebufferExtent();

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <vector>
-#include "engine/rendering/world_brick_grid.hpp"
+#include "engine/scene/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/voxel_data.hpp"
 #include "math/ivec.hpp"

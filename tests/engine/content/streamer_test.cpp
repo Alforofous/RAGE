@@ -67,8 +67,8 @@ namespace RAGE::Mocks {
         float voxelSize_ = 0.f;
         mutable std::mutex mtx_;
         ChunkStatus defaultStatus_ = ChunkStatus::Empty;
-        std::unordered_map<IVec3, ChunkStatus, Content::IVec3Hash> forced_;
-        std::unordered_map<IVec3, int, Content::IVec3Hash> callCount_;
+        std::unordered_map<IVec3, ChunkStatus, IVec3Hash> forced_;
+        std::unordered_map<IVec3, int, IVec3Hash> callCount_;
         YRange yRange_{ .min = 0, .max = 0 };
     };
 }
@@ -239,7 +239,7 @@ TEST(Streamer, OnPrepareHookRunsForEachReadyChunkBeforeAttach) {
     store.setDefault(ChunkStatus::Ready);
 
     std::mutex seenMtx;
-    std::unordered_set<IVec3, Content::IVec3Hash> seen;
+    std::unordered_set<IVec3, IVec3Hash> seen;
     Streamer s(store, root);
     s.setOnChunkPrepare([&seenMtx, &seen](Voxel3D &, IVec3 c) {
         std::lock_guard lock(seenMtx);
@@ -287,7 +287,7 @@ TEST(Streamer, PlacedEventFiresPerAttachedChunkWithCoord) {
     store.setDefault(ChunkStatus::Ready);
 
     std::mutex mtx;
-    std::unordered_map<IVec3, const Voxel3D *, Content::IVec3Hash> placed;
+    std::unordered_map<IVec3, const Voxel3D *, IVec3Hash> placed;
     Streamer s(store, root);
     s.setOnChunkPlaced([&mtx, &placed](IVec3 c, Voxel3D &v) {
         std::lock_guard lock(mtx);
