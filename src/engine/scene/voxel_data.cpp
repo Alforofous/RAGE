@@ -1,4 +1,5 @@
 #include "voxel_data.hpp"
+#include "shared/profiling.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -90,7 +91,8 @@ namespace RAGE {
     }
 
     void VoxelData::fillFromPackedRGBA8(const uint32_t *src, IVec3 srcDims, const FillProgressFn &onProgress,
-                                          const FillCancelFn &onCancel) {
+                                        const FillCancelFn &onCancel) {
+        const Core::ProfileZone zone("VoxelData.Fill");
         if (src == nullptr) {
             throw std::invalid_argument("VoxelData::fillFromPackedRGBA8: src is null");
         }

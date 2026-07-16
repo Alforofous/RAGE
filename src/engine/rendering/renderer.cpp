@@ -1,4 +1,5 @@
 #include "renderer.hpp"
+#include "shared/profiling.hpp"
 #include <array>
 #include <cstring>
 #include <exception>
@@ -389,6 +390,8 @@ namespace RAGE {
             svdagBuildBrickSize_ = brickWorldSize;
             svdagBuildRunning_.store(true);
             svdagWorker_ = std::jthread([this] {
+                Core::profileThreadName("SvdagBuilder");
+                const Core::ProfileZone buildZone("Svdag.Build");
                 // De-wrap the snapshot into window-linear order, then build the DAG.
                 const IVec3 n = svdagBuildFixedDims_;
                 const IVec3 mn = svdagBuildWinMin_;

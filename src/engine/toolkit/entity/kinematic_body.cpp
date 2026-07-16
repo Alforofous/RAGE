@@ -1,4 +1,5 @@
 #include "kinematic_body.hpp"
+#include "shared/profiling.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -30,6 +31,7 @@ namespace RAGE::Toolkit {
     }
 
     void KinematicBody::update(const MoveInput &input, float dt) {
+        const Core::ProfileZone zone("KinematicBody.Update");
         // 1. Positional response: solid geometry that moved into us (infinite mass,
         //    full push), then our mass share of overlap with other bodies.
         Vec3 corrected(0.0f, 0.0f, 0.0f);

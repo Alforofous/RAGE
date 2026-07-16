@@ -1,4 +1,5 @@
 #include "file_chunk_store.hpp"
+#include "shared/profiling.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -152,6 +153,7 @@ namespace RAGE::Toolkit::Content {
     }
 
     ChunkResult FileChunkStore::chunkAt(IVec3 coord) {
+        const Core::ProfileZone zone("Chunk.DiskRead");
         const std::filesystem::path path = pathFor_(coord);
         std::vector<char> bytes;
         {
@@ -189,6 +191,7 @@ namespace RAGE::Toolkit::Content {
     }
 
     void FileChunkStore::putChunk(IVec3 coord, const Voxel3D &chunk) {
+        const Core::ProfileZone zone("Chunk.DiskWrite");
         const IVec3 expectedDims = chunkBrickDims_ * 8;
         const IVec3 dims = chunk.dimensions();
         if (dims.x != expectedDims.x || dims.y != expectedDims.y || dims.z != expectedDims.z) {

@@ -1,4 +1,5 @@
 #include "streamer.hpp"
+#include "shared/profiling.hpp"
 
 #include <algorithm>
 #include <exception>
@@ -36,6 +37,7 @@ namespace RAGE::Toolkit::Content {
     }
 
     void Streamer::workerMain_() {
+        Core::profileThreadName("ChunkLoader");
         while (true) {
             IVec3 coord{};
             {
@@ -51,6 +53,7 @@ namespace RAGE::Toolkit::Content {
 
             ChunkResult result;
             try {
+                const Core::ProfileZone zone("Chunk.Load");
                 result = store_.chunkAt(coord);
             } catch (const std::exception &e) {
                 const std::string msg = std::string("Streamer worker: chunk generation failed: ")
@@ -90,15 +93,24 @@ namespace RAGE::Toolkit::Content {
         }
 
         deferred_.clear();
-        const ChunkStore::YRange y = store_.yRange();
-        for (auto &entry : drained) {
-            if (!inCylinder(entry.coord, focusChunk, horizontalRadius, y)) {
-                continue;
+        {
+            const Core::ProfileZone drainZone("Streamer.Drain");
+            const ChunkStore::YRange y = store_.yRange();
+            for (auto &entry : drained) {
+                if (!inCylinder(entry.coord, focusChunk, horizontalRadius, y)) {
+                    continue;
+                }
+                applyResult_(entry.coord, std::move(entry.result));
             }
-            applyResult_(entry.coord, std::move(entry.result));
         }
-        evictOutOfRange_(focusChunk, horizontalRadius);
-        repopulatePending_(focusChunk, horizontalRadius);
+        {
+            const Core::ProfileZone evictZone("Streamer.Evict");
+            evictOutOfRange_(focusChunk, horizontalRadius);
+        }
+        {
+            const Core::ProfileZone repopZone("Streamer.Repopulate");
+            repopulatePending_(focusChunk, horizontalRadius);
+        }
     }
 
     void Streamer::applyResult_(IVec3 coord, ChunkResult result) {

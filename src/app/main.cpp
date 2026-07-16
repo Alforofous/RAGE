@@ -691,6 +691,12 @@ int main(int argc, char **argv) {
                     profiler.plot("brick_pool_mb",
                                   static_cast<double>(renderer.brickPool().allocatedBytes())
                                       / (1024.0 * 1024.0));
+                    if (streamer.has_value()) {
+                        profiler.plot("chunks_loaded",
+                                      static_cast<double>(streamer->loadedCount()));
+                        profiler.plot("chunks_pending",
+                                      static_cast<double>(streamer->pendingCount()));
+                    }
                     fpsLastUpdate = now;
                     fpsAccumDt = 0.0;
                     fpsAccumFrames = 0;

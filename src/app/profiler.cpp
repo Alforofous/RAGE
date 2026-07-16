@@ -4,6 +4,7 @@
 #include <string>
 #include "app/build_paths.hpp"
 #include "engine/rendering/renderer.hpp"
+#include "shared/profiling.hpp"
 
 #ifdef _WIN32
     #ifndef WIN32_LEAN_AND_MEAN
@@ -45,12 +46,35 @@ namespace {
     // timestamp at destruction, so the scope must stay alive across the pass recording —
     // heap-held here, destroyed on the matching after-hook.
     std::vector<std::unique_ptr<tracy::VkCtxScope>> g_gpuZoneStack;
+
+    // Backend for the engine's Core::ProfileHooks trampoline (shared/profiling.hpp):
+    // same emitters as Profiler::beginZone/endZone, callable from any engine thread.
+    void coreZoneBegin(const char *name) {
+        const size_t nameLen = std::strlen(name);
+        auto srcLoc =
+            ___tracy_alloc_srcloc_name(0, nullptr, 0, nullptr, 0, name, nameLen, 0xffaaaaee);
+        g_zoneStack.push_back(___tracy_emit_zone_begin_alloc(srcLoc, 1));
+    }
+    void coreZoneEnd() {
+        if (!g_zoneStack.empty()) {
+            ___tracy_emit_zone_end(g_zoneStack.back());
+            g_zoneStack.pop_back();
+        }
+    }
+    void coreThreadName(const char *name) { ___tracy_set_thread_name(name); }
+    void corePlot(const char *name, double value) { TracyPlot(name, value); }
 #endif
 }
 
 namespace RAGE::App {
     Profiler::Profiler() {
 #ifdef RAGE_PROFILING_TRACY
+        Core::gProfileHooks = Core::ProfileHooks{
+            .zoneBegin = &coreZoneBegin,
+            .zoneEnd = &coreZoneEnd,
+            .threadName = &coreThreadName,
+            .plot = &corePlot,
+        };
         std::fprintf(stdout, "[profiler] Tracy client v0.13.1 linked, on-demand. Connect Tracy.exe to attach.\n");
         std::fflush(stdout);
 #else

@@ -1,4 +1,5 @@
 #include "world_solid_query.hpp"
+#include "shared/profiling.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -150,6 +151,7 @@ namespace RAGE::Toolkit {
 
     Vec3 WorldSolidQuery::depenetrate(const SweepBox &box, float maxPush, const Voxel3D *ignore,
                                       std::span<const Voxel3D *const> excluded) const {
+        const Core::ProfileZone zone("Collision.Depenetrate");
         const Vec3 pad(maxPush, maxPush, maxPush);
         const std::span<const VolumeScratch> scope = gatherVolumes_(
             SweepBox{ .min = box.min - pad, .max = box.max + pad }, ignore, excluded);
@@ -231,6 +233,7 @@ namespace RAGE::Toolkit {
 
     SweepResult WorldSolidQuery::sweepAABB(const SweepBox &box, Vec3 delta, const Voxel3D *ignore,
                                            std::span<const Voxel3D *const> excluded) const {
+        const Core::ProfileZone zone("Collision.Sweep");
         SweepResult result{};
         SweepBox current = box;
 
