@@ -1,14 +1,14 @@
 #pragma once
 
 #include <memory>
-#include "engine/content/chunk_generator.hpp"
-#include "engine/content/chunk_store.hpp"
+#include "engine/toolkit/content/chunk_generator.hpp"
+#include "engine/toolkit/content/chunk_store.hpp"
 
 namespace RAGE {
     class BrickPool;
 }
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /** @brief `ChunkStore` that synthesizes chunks on demand via a `ChunkGenerator`. */
     class ProceduralChunkStore : public ChunkStore {
     public:

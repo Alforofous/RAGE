@@ -8,7 +8,7 @@
 #include "engine/scene/voxel3d.hpp"
 #include "shared/logger.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     namespace {
         bool inCylinder(IVec3 coord, IVec3 focus, int32_t hRadius, ChunkStore::YRange y) {
             const int32_t dx = coord.x - focus.x;

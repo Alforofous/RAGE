@@ -5,7 +5,7 @@
 #include <vector>
 #include "math/ivec.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /**
      * Parsed MagicaVoxel .vox file as a dense color grid.
      *

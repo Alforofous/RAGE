@@ -18,11 +18,11 @@
 #include <GLFW/glfw3.h>
 #include "app/build_paths.hpp"
 #include "debug_ui.hpp"
-#include "engine/content/chunk_generators.hpp"
-#include "engine/content/procedural_chunk_store.hpp"
-#include "engine/content/scene_generators.hpp"
-#include "engine/content/streamer.hpp"
-#include "engine/content/vox_loader.hpp"
+#include "engine/toolkit/content/chunk_generators.hpp"
+#include "engine/toolkit/content/procedural_chunk_store.hpp"
+#include "engine/toolkit/content/scene_generators.hpp"
+#include "engine/toolkit/content/streamer.hpp"
+#include "engine/toolkit/content/vox_loader.hpp"
 #include "engine/toolkit/entity/kinematic_body.hpp"
 #include "engine/materials/material.hpp"
 #include "engine/rendering/pixel_debug.hpp"
@@ -102,7 +102,7 @@ namespace {
      */
     struct WorldPipelineConfig {
         int32_t streamRadius = 30;
-        Content::ChunkStore::YRange yRange{ .min = -1, .max = 2 };
+        Toolkit::Content::ChunkStore::YRange yRange{ .min = -1, .max = 2 };
         IVec3 chunkBrickDims{ 4, 4, 4 };
 
         /// Bricks per axis the loaded window can span (XZ diameter × chunk, Y from yRange).
@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
 
         struct VoxelLoadJob {
             std::string label;
-            Content::VoxModel model;
+            Toolkit::Content::VoxModel model;
             Voxel3D *target = nullptr;
             std::atomic<float> loadProgress{ 0.0f };
         };
@@ -230,7 +230,7 @@ int main(int argc, char **argv) {
             const auto stageVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
                 auto job = std::make_unique<VoxelLoadJob>();
                 job->label = voxPath.filename().string();
-                job->model = Content::loadVox(voxPath);
+                job->model = Toolkit::Content::loadVox(voxPath);
                 auto v = std::make_unique<Voxel3D>(renderer.brickPool(), job->model.dims, kVoxelSize);
                 job->target = v.get();
                 v->setMaterial(voxelMaterial);
@@ -244,8 +244,8 @@ int main(int argc, char **argv) {
 
             Node3D root;
 
-            std::optional<Content::ProceduralChunkStore> chunkStore;
-            std::optional<Content::Streamer> streamer;
+            std::optional<Toolkit::Content::ProceduralChunkStore> chunkStore;
+            std::optional<Toolkit::Content::Streamer> streamer;
             std::vector<Voxel3D *> spinners;
             struct Prop {
                 Voxel3D *volume;
@@ -253,7 +253,7 @@ int main(int argc, char **argv) {
             };
             std::vector<Prop> props;
             const int32_t kStreamHRadius = kWorld.streamRadius;
-            const Content::ChunkStore::YRange kTerrainYRange = kWorld.yRange;
+            const Toolkit::Content::ChunkStore::YRange kTerrainYRange = kWorld.yRange;
 
             // T1 demo: free-standing (full-TRS) volumes spinning above the terrain.
             const auto addSpinners = [&]() {
@@ -320,7 +320,7 @@ int main(int argc, char **argv) {
 
             const auto buildScene = [&]() {
                 if (scene == SceneKind::Streamed) {
-                    auto gen = std::make_unique<Content::TerrainChunkGenerator>();
+                    auto gen = std::make_unique<Toolkit::Content::TerrainChunkGenerator>();
                     if (gen->chunkBrickDims() != kWorld.chunkBrickDims) {
                         throw std::runtime_error(
                             "WorldPipelineConfig.chunkBrickDims does not match the terrain generator");
@@ -346,9 +346,9 @@ int main(int argc, char **argv) {
                 }
                 renderer.setWorldGridStreaming(false);
 
-                std::unique_ptr<Content::Generator> generator;
+                std::unique_ptr<Toolkit::Content::Generator> generator;
                 if (scene == SceneKind::Cubes) {
-                    generator = std::make_unique<Content::CubeGridGenerator>();
+                    generator = std::make_unique<Toolkit::Content::CubeGridGenerator>();
                 }
 
                 if (generator) {

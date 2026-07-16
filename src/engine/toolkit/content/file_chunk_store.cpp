@@ -9,7 +9,7 @@
 #include <vector>
 #include "engine/scene/voxel3d.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     namespace {
         constexpr uint32_t kMagic = 0x31434752u;
         constexpr uint32_t kFlagEmpty = 1u;

@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include "engine/content/chunk_store.hpp"
+#include "engine/toolkit/content/chunk_store.hpp"
 #include "math/ivec.hpp"
 
 namespace RAGE {
@@ -17,7 +17,7 @@ namespace RAGE {
     class Voxel3D;
 }
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /**
      * @brief Maintains a cylinder of loaded chunks around a focus point. XZ extent is set by
      *        `horizontalRadius` (Euclidean), Y extent comes from `store.yRange()`. Chunk

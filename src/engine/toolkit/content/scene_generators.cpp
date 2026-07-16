@@ -4,7 +4,7 @@
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/voxel3d.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     std::vector<std::unique_ptr<Voxel3D>> CubeGridGenerator::generate(BrickPool &pool, float voxelSize) {
         constexpr int32_t kCubeDim = 16;
         constexpr int kGridN = 16;

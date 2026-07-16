@@ -1,15 +1,15 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <unordered_set>
-#include "engine/content/chunk_generator.hpp"
-#include "engine/content/chunk_generators.hpp"
-#include "engine/content/chunk_store.hpp"
-#include "engine/content/procedural_chunk_store.hpp"
+#include "engine/toolkit/content/chunk_generator.hpp"
+#include "engine/toolkit/content/chunk_generators.hpp"
+#include "engine/toolkit/content/chunk_store.hpp"
+#include "engine/toolkit/content/procedural_chunk_store.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/voxel3d.hpp"
 
 using namespace RAGE;
-using namespace RAGE::Content;
+using namespace RAGE::Toolkit::Content;
 
 namespace RAGE::Mocks {
     class MapChunkStore : public ChunkStore {

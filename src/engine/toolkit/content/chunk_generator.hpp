@@ -8,7 +8,7 @@ namespace RAGE {
     class Voxel3D;
 }
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /** @brief Pure function from chunk coord to `Voxel3D`. Same coord → identical content. */
     class ChunkGenerator {
     public:

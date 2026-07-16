@@ -2,14 +2,14 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
-#include "engine/content/chunk_store.hpp"
-#include "engine/content/streamer.hpp"
+#include "engine/toolkit/content/chunk_store.hpp"
+#include "engine/toolkit/content/streamer.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/node3d.hpp"
 #include "engine/scene/voxel3d.hpp"
 
 using namespace RAGE;
-using namespace RAGE::Content;
+using namespace RAGE::Toolkit::Content;
 
 namespace RAGE::Mocks {
     class StreamerMockStore : public ChunkStore {

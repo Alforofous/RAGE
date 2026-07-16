@@ -8,7 +8,7 @@ namespace RAGE {
     class Voxel3D;
 }
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /**
      * @brief Produces `Voxel3D` instances on demand. Concrete generators (procedural
      *        terrain, prefab arrays, file-loaded scenes) implement `generate`. The

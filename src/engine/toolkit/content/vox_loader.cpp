@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     namespace {
         constexpr uint32_t kMagicVox = 0x20584F56u;
         constexpr uint32_t kChunkMain = 0x4E49414Du;

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "engine/content/chunk_generator.hpp"
+#include "engine/toolkit/content/chunk_generator.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /** @brief Sin-based heightmap terrain, evaluated per-chunk on demand. */
     class TerrainChunkGenerator : public ChunkGenerator {
     public:

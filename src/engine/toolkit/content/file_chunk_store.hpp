@@ -2,13 +2,13 @@
 
 #include <filesystem>
 #include <mutex>
-#include "engine/content/chunk_store.hpp"
+#include "engine/toolkit/content/chunk_store.hpp"
 
 namespace RAGE {
     class BrickPool;
 }
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /**
      * @brief Writable `ChunkStore` persisting chunks as one file per coord under a
      *        directory (`chunk_<x>_<y>_<z>.rgc`).

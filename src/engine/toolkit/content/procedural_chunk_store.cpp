@@ -2,7 +2,7 @@
 
 #include "engine/scene/voxel3d.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     ProceduralChunkStore::ProceduralChunkStore(std::unique_ptr<ChunkGenerator> generator,
                                                  BrickPool &pool, float voxelSize, YRange yRange)
         : generator_(std::move(generator))

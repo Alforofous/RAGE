@@ -1,9 +1,9 @@
 #pragma once
 
 #include <memory>
-#include "engine/content/chunk_store.hpp"
+#include "engine/toolkit/content/chunk_store.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /**
      * @brief Composes a writable overlay store over a read-only baseline. `chunkAt`
      *        consults the overlay first; only a `Missing` result falls through to the

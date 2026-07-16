@@ -5,7 +5,7 @@
 #include <utility>
 #include "engine/scene/voxel3d.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     HybridChunkStore::HybridChunkStore(std::unique_ptr<ChunkStore> overlay,
                                        std::unique_ptr<ChunkStore> baseline)
         : overlay_(std::move(overlay))

@@ -5,13 +5,13 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include "engine/content/chunk_store.hpp"
-#include "engine/content/file_chunk_store.hpp"
+#include "engine/toolkit/content/chunk_store.hpp"
+#include "engine/toolkit/content/file_chunk_store.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/voxel3d.hpp"
 
 using namespace RAGE;
-using namespace RAGE::Content;
+using namespace RAGE::Toolkit::Content;
 
 namespace {
     constexpr float kVoxelSize = 0.05f;

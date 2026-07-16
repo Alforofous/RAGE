@@ -7,7 +7,7 @@
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/voxel3d.hpp"
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     namespace {
         constexpr uint32_t kStone = 0xFF707070u;
         constexpr uint32_t kDirt  = 0xFF354E6Eu;

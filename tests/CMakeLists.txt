@@ -2,14 +2,14 @@
 cmake_minimum_required(VERSION 3.16)
 
 add_executable(rage_tests
-    engine/content/chunk_generators_test.cpp
-    engine/content/chunk_store_test.cpp
-    engine/content/file_chunk_store_test.cpp
-    engine/content/hybrid_chunk_store_test.cpp
-    engine/content/streamer_test.cpp
+    engine/toolkit/content/chunk_generators_test.cpp
+    engine/toolkit/content/chunk_store_test.cpp
+    engine/toolkit/content/file_chunk_store_test.cpp
+    engine/toolkit/content/hybrid_chunk_store_test.cpp
+    engine/toolkit/content/streamer_test.cpp
     engine/toolkit/collision/collision_world_test.cpp
     engine/toolkit/entity/kinematic_body_test.cpp
-    engine/content/vox_loader_test.cpp
+    engine/toolkit/content/vox_loader_test.cpp
     engine/materials/material_test.cpp
     engine/rendering/frame_context_test.cpp
     engine/scene/world_brick_grid_test.cpp

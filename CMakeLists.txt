@@ -60,16 +60,16 @@ set(ENGINE_SOURCES
     src/platform/gpu/vulkan/vulkan_sampler.cpp
     src/platform/gpu/vulkan/vulkan_shader_module.cpp
     src/platform/gpu/vulkan/vulkan_swapchain.cpp
-    src/engine/content/chunk_generators.cpp
-    src/engine/content/file_chunk_store.cpp
-    src/engine/content/hybrid_chunk_store.cpp
-    src/engine/content/procedural_chunk_store.cpp
-    src/engine/content/streamer.cpp
+    src/engine/toolkit/content/chunk_generators.cpp
+    src/engine/toolkit/content/file_chunk_store.cpp
+    src/engine/toolkit/content/hybrid_chunk_store.cpp
+    src/engine/toolkit/content/procedural_chunk_store.cpp
+    src/engine/toolkit/content/streamer.cpp
     src/engine/toolkit/collision/body_registry.cpp
     src/engine/toolkit/collision/world_solid_query.cpp
     src/engine/toolkit/entity/kinematic_body.cpp
-    src/engine/content/scene_generators.cpp
-    src/engine/content/vox_loader.cpp
+    src/engine/toolkit/content/scene_generators.cpp
+    src/engine/toolkit/content/vox_loader.cpp
     src/engine/materials/pipeline_cache.cpp
     src/engine/rendering/gpu_svdag_cache.cpp
     src/engine/rendering/renderer.cpp

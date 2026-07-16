@@ -8,7 +8,7 @@ namespace RAGE {
     class Voxel3D;
 }
 
-namespace RAGE::Content {
+namespace RAGE::Toolkit::Content {
     /**
      * @brief Source of `Voxel3D` chunks by integer coord. Implementations must be internally
      *        synchronised — `chunkAt` runs on the loader thread, `putChunk` on the main thread.

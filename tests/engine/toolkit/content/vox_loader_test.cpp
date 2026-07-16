@@ -6,11 +6,11 @@
 #include <fstream>
 #include <stdexcept>
 #include <vector>
-#include "engine/content/vox_loader.hpp"
+#include "engine/toolkit/content/vox_loader.hpp"
 #include "math/ivec.hpp"
 
 using namespace RAGE;
-using namespace RAGE::Content;
+using namespace RAGE::Toolkit::Content;
 
 namespace {
     constexpr uint32_t kMagicVox = 0x20584F56u;
