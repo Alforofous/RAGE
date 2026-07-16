@@ -228,14 +228,11 @@ namespace RAGE {
         using Renderable = RenderableNode3D<VulkanShaderModule>;
 
         void rebuildFrameResources(FrameExtent extent);
-        void collectVisible(Node3D &node, std::vector<Renderable *> &out);
         void collectShadowCasters(Node3D &node);
         void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapImageIndex,
-                         uint32_t swapW, uint32_t swapH, std::span<Renderable *const> renderables,
-                         const FrameContext &frame);
+                         uint32_t swapW, uint32_t swapH, const FrameContext &frame);
         void recordPass(VulkanRecorder<queue_kind::Graphics> &rec, VulkanRenderTarget &target,
-                        std::span<Renderable *const> renderables, const FrameContext &frame, bool isFirstPass,
-                        bool isLastPass);
+                        const FrameContext &frame, bool isFirstPass, bool isLastPass);
         void drainInFlight();
         VulkanRenderTarget &resolveTarget(const Pass &pass);
 

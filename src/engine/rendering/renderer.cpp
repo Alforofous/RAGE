@@ -229,7 +229,7 @@ namespace RAGE {
         // M3+M4: no fixed cap. World brick grid scales with the union of placements; the
         // brick pool deduplicates identical content. Previously had a `kMaxSceneCasters`
         // ceiling of 16 from the pre-M3 SceneCasters UBO — gone with that descriptor.
-        auto *v = dynamic_cast<Voxel3D *>(&node);
+        auto *v = node.asVoxel3D();
         if (v != nullptr && v->voxelData() != nullptr) {
             if (v->renderKind() == VoxelRenderKind::FreeStanding) {
                 freeVolumes_.push_back(v);
@@ -242,16 +242,6 @@ namespace RAGE {
         }
     }
 
-
-    void Renderer::collectVisible(Node3D &node, std::vector<Renderable *> &out) {
-        auto *r = dynamic_cast<Renderable *>(&node);
-        if (r != nullptr && r->visible() && r->hasMaterial()) {
-            out.push_back(r);
-        }
-        for (const auto &child : node.children()) {
-            collectVisible(*child, out);
-        }
-    }
 
     void Renderer::render(Node3D &root, const Camera &camera, FrameExtent extent) {
         if (extent.width == 0 || extent.height == 0) {
@@ -321,10 +311,8 @@ namespace RAGE {
             worldGridGpuDirty_ = true;
         }
 
-        std::vector<Renderable *> visible;
         if (sceneChanged) {
             const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
-            collectVisible(root, visible);
             shadowCasters_.clear();
             freeVolumes_.clear();
             collectShadowCasters(root);
@@ -473,7 +461,7 @@ namespace RAGE {
         VulkanRecorder<queue_kind::Graphics> rec = std::move(cmd).begin();
         const auto [swW, swH] = swapchain_.extent();
         const FrameContext frameCtx{ .camera = &camera };
-        recordFrame(rec, swapchain_.image(acq.imageIndex), acq.imageIndex, swW, swH, visible, frameCtx);
+        recordFrame(rec, swapchain_.image(acq.imageIndex), acq.imageIndex, swW, swH, frameCtx);
         VulkanExecutable<queue_kind::Graphics> exe = std::move(rec).end();
 
         const std::array<VulkanSemaphoreWait, 1> waits{ { { .semaphore = imageReady,
@@ -508,8 +496,8 @@ namespace RAGE {
     }
 
     void Renderer::recordPass(VulkanRecorder<queue_kind::Graphics> &rec, VulkanRenderTarget &target,
-                              std::span<Renderable *const> /*renderables*/, const FrameContext & /*frame*/,
-                              bool /*isFirstPass*/, bool /*isLastPass*/) {
+                              const FrameContext & /*frame*/, bool /*isFirstPass*/,
+                              bool /*isLastPass*/) {
         VkImage targetImage = target.image().handle();
         const uint32_t tgtW = target.width();
         const uint32_t tgtH = target.height();
@@ -592,7 +580,7 @@ namespace RAGE {
 
     void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage,
                                uint32_t swapImageIndex, uint32_t swapW, uint32_t swapH,
-                               std::span<Renderable *const> renderables, const FrameContext &frame) {
+                               const FrameContext &frame) {
         if (worldGridSync_.textureUploadArmed() && beforeGpuPass_) {
             beforeGpuPass_("world_grid_upload", rec.rawHandle());
         }
@@ -600,7 +588,7 @@ namespace RAGE {
             afterGpuPass_("world_grid_upload", rec.rawHandle());
         }
 
-        recordPass(rec, *renderTarget_, renderables, frame, true, true);
+        recordPass(rec, *renderTarget_, frame, true, true);
 
         VulkanRenderTarget &mainTarget = *renderTarget_;
         VkImage mainTargetImage = mainTarget.image().handle();

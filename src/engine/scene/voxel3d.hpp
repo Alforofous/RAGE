@@ -64,6 +64,8 @@ namespace RAGE {
         IVec3 dimensions() const { return dims_; }
         float voxelSize() const { return voxelSize_; }
 
+        Voxel3D *asVoxel3D() override { return this; }
+
         void setRenderKind(VoxelRenderKind kind) {
             renderKind_ = kind;
             setTransformBumpsTreeVersion(kind == VoxelRenderKind::GridResident);

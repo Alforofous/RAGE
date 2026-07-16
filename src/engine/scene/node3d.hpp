@@ -11,6 +11,8 @@
 #include "math/vec.hpp"
 
 namespace RAGE {
+    class Voxel3D;
+
     /**
      * Base scene-graph node: a transform plus a parent-children hierarchy.
      *
@@ -74,6 +76,13 @@ namespace RAGE {
          *        "did the scene change since last frame". Main-thread only.
          */
         uint64_t treeVersion() const { return treeVersion_; }
+
+        /**
+         * @brief Cheap type test for scene walks: non-null when this node is a
+         *        `Voxel3D`. Replaces per-node `dynamic_cast` on hot paths (the
+         *        renderer's collect walk visits every node on scene change).
+         */
+        virtual Voxel3D *asVoxel3D() { return nullptr; }
 
     protected:
         /**
