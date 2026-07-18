@@ -14,7 +14,6 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
-#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include "app/build_paths.hpp"
 #include "debug_ui.hpp"
@@ -36,12 +35,8 @@
 #include "engine/scene/node3d.hpp"
 #include "engine/scene/svdag.hpp"
 #include "engine/scene/voxel3d.hpp"
+#include "engine/toolkit/pipeline/voxel_pipeline.hpp"
 #include "free_fly_controller.hpp"
-#include "gpu/vulkan/vulkan_allocator.hpp"
-#include "gpu/vulkan/vulkan_context.hpp"
-#include "gpu/vulkan/vulkan_queue.hpp"
-#include "gpu/vulkan/vulkan_shader_module.hpp"
-#include "gpu/vulkan/vulkan_swapchain.hpp"
 #include "math/color.hpp"
 #include "math/ivec.hpp"
 #include "math/vec.hpp"
@@ -49,43 +44,6 @@
 
 namespace {
     using namespace RAGE;
-
-    VulkanContextCreateInfo buildContextInfo() {
-        uint32_t glfwExtCount = 0;
-        const char **glfwExts = glfwGetRequiredInstanceExtensions(&glfwExtCount);
-
-        VulkanContextCreateInfo info;
-        info.appName = "RAGE Smoke";
-        info.enableValidation = true;
-        info.requiredExtensions.assign(glfwExts, glfwExts + glfwExtCount);
-
-        return info;
-    }
-
-    class SurfaceGuard {
-    public:
-        SurfaceGuard(VkInstance instance, GLFWwindow *window)
-            : instance_(instance) {
-            if (glfwCreateWindowSurface(instance_, window, nullptr, &surface_) != VK_SUCCESS) {
-                throw std::runtime_error("glfwCreateWindowSurface failed");
-            }
-        }
-        ~SurfaceGuard() {
-            if (surface_ != VK_NULL_HANDLE) {
-                vkDestroySurfaceKHR(instance_, surface_, nullptr);
-            }
-        }
-        SurfaceGuard(const SurfaceGuard &) = delete;
-        SurfaceGuard &operator=(const SurfaceGuard &) = delete;
-        SurfaceGuard(SurfaceGuard &&) = delete;
-        SurfaceGuard &operator=(SurfaceGuard &&) = delete;
-
-        VkSurfaceKHR handle() const { return surface_; }
-
-    private:
-        VkInstance instance_ = VK_NULL_HANDLE;
-        VkSurfaceKHR surface_ = VK_NULL_HANDLE;
-    };
 
     int32_t nextPow2(int32_t v) {
         int32_t p = 1;
@@ -178,15 +136,15 @@ int main(int argc, char **argv) {
     try {
         App::Window window(1280, 720, "RAGE Smoke");
 
-        VulkanContext ctx(buildContextInfo());
-        VulkanAllocator allocator(ctx.vkInstance(), ctx.physicalDevice(), ctx.vkDevice());
-        const SurfaceGuard surfaceGuard(ctx.vkInstance(), window.glfwHandle());
-
-        const std::filesystem::path shaderDir = executableDir(argv[0]) / "shaders";
-        auto voxelShader = std::make_shared<const VulkanShaderModule>(
-            VulkanShaderModule::fromFile(ctx.vkDevice(), shaderDir / "voxel_raycast.comp.spv"));
-
-        auto voxelMaterial = std::make_shared<Material<VulkanShaderModule>>(voxelShader);
+        const WorldPipelineConfig kWorld{};
+        Toolkit::VoxelPipeline pipeline(window.vulkanSurfaceSource(),
+                                        Toolkit::VoxelPipelineSettings{
+                                            .appName = "RAGE Smoke",
+                                            .shaderDir = executableDir(argv[0]) / "shaders",
+                                            .vsync = vsync,
+                                            .limits = kWorld.rendererLimits(true),
+                                        });
+        const auto voxelMaterial = pipeline.defaultVoxelMaterial();
 
         constexpr float kVoxelSize = 0.05f;
 
@@ -212,16 +170,7 @@ int main(int argc, char **argv) {
             static_cast<float>(initW) / static_cast<float>(initH > 0 ? initH : 1), 0.1f, 100.0f);
 
         {
-            VulkanSwapchain swapchain({ .physicalDevice = ctx.physicalDevice(),
-                                        .device = ctx.vkDevice(),
-                                        .surface = surfaceGuard.handle(),
-                                        .graphicsQueueFamily = ctx.graphicsQueue().queueFamily(),
-                                        .width = initW,
-                                        .height = initH,
-                                        .vsync = vsync });
-
-            const WorldPipelineConfig kWorld{};
-            Renderer renderer(ctx, allocator, swapchain, kWorld.rendererLimits(true));
+            Renderer &renderer = pipeline.renderer();
             Toolkit::CollisionWorld collisionWorld(renderer.worldBrickGrid(),
                                                    renderer.brickPool(), kVoxelSize);
 
@@ -429,7 +378,7 @@ int main(int argc, char **argv) {
                 loaderThread = std::thread(runLoader);
             };
 
-            App::DebugUi debugUi(ctx, window.glfwHandle());
+            App::DebugUi debugUi(pipeline.context(), window.glfwHandle());
             debugUi.attach(renderer);
 
             App::FreeFlyController controller(camera, window);
@@ -542,7 +491,7 @@ int main(int argc, char **argv) {
                                  processRSSMBHistory.oldestOffset(), "%.0f MB", 0.0f, FLT_MAX);
                 }
 
-                const double gpuMB = static_cast<double>(allocator.stats().usedBytes)
+                const double gpuMB = static_cast<double>(pipeline.gpuMemoryUsedBytes())
                                      / (1024.0 * 1024.0);
                 std::snprintf(header.data(), header.size(), "GPU %.0f MB###gpu", gpuMB);
                 if (debugUi.collapsingHeader(header.data())) {
@@ -639,7 +588,7 @@ int main(int argc, char **argv) {
                 lastTime = now;
 
                 frameMsHistory.push(dt * 1000.0f);
-                gpuMemoryMBHistory.push(static_cast<float>(allocator.stats().usedBytes)
+                gpuMemoryMBHistory.push(static_cast<float>(pipeline.gpuMemoryUsedBytes())
                                         / (1024.0f * 1024.0f));
                 const float brickPoolMB =
                     static_cast<float>(renderer.brickPool().allocatedBytes()) / (1024.0f * 1024.0f);
@@ -791,7 +740,7 @@ int main(int argc, char **argv) {
                 prevRight = rightDown;
 
                 const double renderStart = glfwGetTime();
-                renderer.render(root, camera, FrameExtent{ .width = w, .height = h });
+                pipeline.render(root, camera);
                 renderMsHistory.push(static_cast<float>((glfwGetTime() - renderStart) * 1000.0));
 
                 PixelDebug pd;

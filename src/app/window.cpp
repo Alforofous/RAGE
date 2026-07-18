@@ -98,6 +98,29 @@ namespace RAGE::App {
         return { static_cast<uint32_t>(w), static_cast<uint32_t>(h) };
     }
 
+    Toolkit::WindowSurfaceSource Window::vulkanSurfaceSource() const {
+        GLFWwindow *handle = window_;
+        uint32_t extCount = 0;
+        const char **exts = glfwGetRequiredInstanceExtensions(&extCount);
+
+        Toolkit::WindowSurfaceSource source;
+        source.instanceExtensions.assign(exts, exts + extCount);
+        source.createSurface = [handle](VkInstance instance) {
+            VkSurfaceKHR surface = VK_NULL_HANDLE;
+            if (glfwCreateWindowSurface(instance, handle, nullptr, &surface) != VK_SUCCESS) {
+                throw std::runtime_error("glfwCreateWindowSurface failed");
+            }
+            return surface;
+        };
+        source.framebufferExtent = [handle]() {
+            int w = 0;
+            int h = 0;
+            glfwGetFramebufferSize(handle, &w, &h);
+            return std::pair{ static_cast<uint32_t>(w), static_cast<uint32_t>(h) };
+        };
+        return source;
+    }
+
     void Window::framebufferResizeCallback(GLFWwindow *window, int /*width*/, int /*height*/) {
         auto *self = static_cast<Window *>(glfwGetWindowUserPointer(window));
         if (self != nullptr) {

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include "engine/toolkit/pipeline/window_surface_source.hpp"
 
 struct GLFWwindow;
 
@@ -36,6 +37,13 @@ namespace RAGE::App {
         void setTitle(const std::string &title);
 
         std::pair<uint32_t, uint32_t> framebufferExtent() const;
+
+        /**
+         * @brief Bind this window's surface-creation and extent callbacks for the
+         *        engine pipeline. Keeps the engine window-agnostic: only this app
+         *        layer knows GLFW. The window must outlive the returned source's use.
+         */
+        Toolkit::WindowSurfaceSource vulkanSurfaceSource() const;
 
         bool wasResized() const { return resized_; }
         void clearResized() { resized_ = false; }

@@ -68,6 +68,7 @@ set(ENGINE_SOURCES
     src/engine/toolkit/collision/body_registry.cpp
     src/engine/toolkit/collision/world_solid_query.cpp
     src/engine/toolkit/entity/kinematic_body.cpp
+    src/engine/toolkit/pipeline/voxel_pipeline.cpp
     src/engine/toolkit/content/scene_generators.cpp
     src/engine/toolkit/content/vox_loader.cpp
     src/engine/materials/pipeline_cache.cpp
