@@ -214,9 +214,9 @@ int main(int argc, char **argv) {
         // mode the entity stays at origin, so camera local == world and the fly
         // controller behaves exactly as before.
         Node3D playerEntity;
-        Camera &camera = dynamic_cast<Camera &>(playerEntity.add(std::make_unique<Camera>(
+        Camera &camera = playerEntity.add<Camera>(
             std::numbers::pi_v<float> * 0.4f,
-            static_cast<float>(initW) / static_cast<float>(initH > 0 ? initH : 1), 0.1f, 100.0f)));
+            static_cast<float>(initW) / static_cast<float>(initH > 0 ? initH : 1), 0.1f, 100.0f);
 
         {
             VulkanSwapchain swapchain({ .physicalDevice = ctx.physicalDevice(),

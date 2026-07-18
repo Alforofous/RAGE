@@ -300,3 +300,82 @@ TEST(Node3DTreeVersion, FreeStandingVoxelTransformsDoNotBumpVersion) {
     v.setPosition(Vec3(4.0f, 5.0f, 6.0f));
     EXPECT_GT(root.treeVersion(), back);
 }
+
+namespace {
+    /// Minimal typed child for the templated add<T> overloads: records its
+    /// constructor argument and destruction so tests can observe both.
+    struct TaggedNode : Node3D {
+        explicit TaggedNode(int tag, bool *destroyed = nullptr)
+            : tag_(tag)
+            , destroyed_(destroyed) {}
+        ~TaggedNode() override {
+            if (destroyed_ != nullptr) {
+                *destroyed_ = true;
+            }
+        }
+        TaggedNode(const TaggedNode &) = delete;
+        TaggedNode &operator=(const TaggedNode &) = delete;
+        TaggedNode(TaggedNode &&) = delete;
+        TaggedNode &operator=(TaggedNode &&) = delete;
+
+        int tag() const { return tag_; }
+
+    private:
+        int tag_ = 0;
+        bool *destroyed_ = nullptr;
+    };
+}
+
+TEST(Node3DTypedAdd, TypedUniquePtrOverloadReturnsConcreteReference) {
+    Node3D root;
+    TaggedNode &child = root.add(std::make_unique<TaggedNode>(42));
+    EXPECT_EQ(child.tag(), 42);
+    EXPECT_EQ(child.parent(), &root);
+    EXPECT_EQ(root.childCount(), 1u);
+}
+
+TEST(Node3DTypedAdd, ConstructInPlaceForwardsArguments) {
+    Node3D root;
+    TaggedNode &child = root.add<TaggedNode>(7);
+    EXPECT_EQ(child.tag(), 7);
+    EXPECT_EQ(child.parent(), &root);
+}
+
+TEST(Node3DTypedAdd, ConstructInPlaceWithNoArguments) {
+    Node3D root;
+    Node3D &child = root.add<Node3D>();
+    EXPECT_EQ(child.parent(), &root);
+    EXPECT_EQ(root.childCount(), 1u);
+}
+
+TEST(Node3DTypedAdd, ReturnedReferenceIsTheOwnedChild) {
+    Node3D root;
+    TaggedNode &child = root.add<TaggedNode>(1);
+    ASSERT_EQ(root.childCount(), 1u);
+    EXPECT_EQ(root.children()[0].get(), static_cast<Node3D *>(&child));
+}
+
+TEST(Node3DTypedAdd, GraphOwnsConstructedChild) {
+    bool destroyed = false;
+    {
+        Node3D root;
+        root.add<TaggedNode>(3, &destroyed);
+        EXPECT_FALSE(destroyed);
+    }
+    EXPECT_TRUE(destroyed);
+}
+
+TEST(Node3DTypedAdd, BumpsTreeVersionLikeUntypedAdd) {
+    Node3D root;
+    const uint64_t before = root.treeVersion();
+    root.add<TaggedNode>(9);
+    EXPECT_GT(root.treeVersion(), before);
+}
+
+TEST(Node3DTypedAdd, WorksWithVoxel3D) {
+    BrickPool pool;
+    Node3D root;
+    Voxel3D &v = root.add<Voxel3D>(pool, IVec3{ 8, 8, 8 }, 0.05f);
+    EXPECT_EQ(v.parent(), &root);
+    EXPECT_EQ(root.children()[0]->asVoxel3D(), &v);
+}

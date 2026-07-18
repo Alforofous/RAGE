@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -54,6 +55,30 @@ namespace RAGE {
         const Mat4 &worldMatrix() const;
 
         Node3D &add(std::unique_ptr<Node3D> child);
+
+        /**
+         * @brief Typed adoption: adds `child` and returns a reference of its concrete
+         *        type, so call sites keep a usable handle without a cast.
+         */
+        template <typename T>
+            requires std::derived_from<T, Node3D> && (!std::same_as<T, Node3D>)
+        T &add(std::unique_ptr<T> child) {
+            T &ref = *child;
+            add(std::unique_ptr<Node3D>(std::move(child)));
+            return ref;
+        }
+
+        /**
+         * @brief Construct-in-place adoption: `scene.add<Voxel3D>(dims)` builds the
+         *        node, adds it, and returns the typed reference. The graph owns the
+         *        node; the returned reference stays valid until it is removed.
+         */
+        template <typename T, typename... Args>
+            requires std::derived_from<T, Node3D> && std::constructible_from<T, Args...>
+        T &add(Args &&...args) {
+            return add(std::make_unique<T>(std::forward<Args>(args)...));
+        }
+
         std::unique_ptr<Node3D> remove(Node3D *child);
 
         /**
