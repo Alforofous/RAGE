@@ -1,11 +1,6 @@
 #pragma once
 
 #include <string>
-#include <vulkan/vulkan.h>
-
-namespace RAGE {
-    class Renderer;
-}
 
 namespace RAGE::App {
     /**
@@ -18,10 +13,10 @@ namespace RAGE::App {
      *      contains zero profiling-library text — `grep -r tracy src/engine/` returns
      *      nothing. Swap the library by rewriting this one wrapper.
      *   2. The Profiler is wired up at the topmost level (main.cpp). Engine components don't
-     *      depend on it; they expose **observer callbacks**, and Profiler subscribes to those
-     *      callbacks from outside.
-     *   3. Adding more granular profiling means drilling a new callback **down** through the
-     *      engine to where you want a labelled span — never reaching **up** with a profiler
+     *      depend on it; they emit through the null-checked `Core::ProfileHooks` trampoline
+     *      (`shared/profiling.hpp`), and the Profiler constructor installs the backends.
+     *   3. Adding more granular profiling means dropping a `Core::ProfileZone` (or the
+     *      matching trampoline call) at the site — never reaching **up** with a profiler
      *      include.
      *
      * Sampling vs. instrumentation
@@ -43,17 +38,16 @@ namespace RAGE::App {
      * GPU profiling
      * =============
      * GPU spans require the active VkCommandBuffer (Tracy issues vkCmdWriteTimestamp queries
-     * into it). The engine emits onBeforeGpuPass / onAfterGpuPass callbacks with the
-     * command-buffer handle; Profiler subscribes and translates those into GPU zones. Engine
-     * still has no Tracy text — it merely hands out a VkCommandBuffer that anyone could use.
+     * into it). The engine emits gpuPassBegin/gpuPassEnd through the trampoline with the
+     * command buffer as an opaque void*; the backend translates those into GPU zones. Engine
+     * still has no Tracy text — it merely hands out a handle that anyone could use.
      *
      * Wiring at the top
      * =================
-     *     App::Profiler prof;            // initialises the profiling library
-     *     prof.attach(renderer);         // subscribes Profiler to all engine callbacks
+     *     App::Profiler prof;   // initialises the library AND installs all engine hooks
      *     // ... main loop ...
      *     // Tracy server connects, flame chart appears. Or, if RAGE_PROFILING_TRACY is
-     *     // unset at build time, attach() is a no-op and there's zero runtime cost.
+     *     // unset at build time, every hook stays null and emission is a no-op branch.
      *
      * Running it
      * ==========
@@ -76,7 +70,7 @@ namespace RAGE::App {
      *
      * Swapping the library
      * ====================
-     * Replace this file's implementation. The header API (attach, plot, frameMark) is what
+     * Replace this file's implementation. The header API (plot, frameMark, zones) is what
      * the rest of the codebase sees. Anything Tracy-specific must stay behind the .cpp file.
      */
     class Profiler {
@@ -89,13 +83,8 @@ namespace RAGE::App {
         Profiler(Profiler &&) = delete;
         Profiler &operator=(Profiler &&) = delete;
 
-        // Subscribe the profiler to a Renderer's observer callbacks: frame end + GPU pass
-        // boundaries. Idempotent if called once per renderer. Any future engine callbacks
-        // that profiling cares about should be subscribed here.
-        void attach(Renderer &renderer);
-
         // Manual frame marker, in case some component is responsible for frame boundaries
-        // other than Renderer. Most callers should not need this — attach() takes care of it.
+        // other than the renderer (which emits through the trampoline).
         void frameMark();
 
         // Plot a scalar value on the timeline (FPS, voxel count, anything). Useful for
@@ -181,8 +170,6 @@ namespace RAGE::App {
         bool isConnected() const;
 
     private:
-        // GPU-context handle owned by the wrapper. Kept opaque so we don't leak Tracy types.
-        void *gpuContext_ = nullptr;
         // Spawned tracy-profiler.exe child handle (HANDLE on Windows). Opaque void* so this
         // header stays Win32-free. nullptr when no child is alive.
         void *profilerGuiProcess_ = nullptr;

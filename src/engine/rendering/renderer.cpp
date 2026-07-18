@@ -23,29 +23,6 @@ namespace RAGE {
         // and `end(name)` on destruction. Lets any return path inside render() leave the
         // phase balanced without each branch having to remember to call end. Engine has no
         // profiler library knowledge — this just routes the engine's own callbacks.
-        class PhaseScope {
-        public:
-            PhaseScope(const Renderer::PhaseHook &begin, const Renderer::PhaseHook &end, const char *name)
-                : end_(end)
-                , name_(name) {
-                if (begin) {
-                    begin(name);
-                }
-            }
-            ~PhaseScope() {
-                if (end_) {
-                    end_(name_);
-                }
-            }
-            PhaseScope(const PhaseScope &) = delete;
-            PhaseScope &operator=(const PhaseScope &) = delete;
-            PhaseScope(PhaseScope &&) = delete;
-            PhaseScope &operator=(PhaseScope &&) = delete;
-
-        private:
-            const Renderer::PhaseHook &end_;
-            const char *name_;
-        };
 
     }
 
@@ -243,16 +220,15 @@ namespace RAGE {
         }
     }
 
-
     void Renderer::render(Node3D &root, const Camera &camera, FrameExtent extent) {
         if (extent.width == 0 || extent.height == 0) {
             return;
         }
-        const PhaseScope renderScope(phaseBegin_, phaseEnd_, "Renderer::render");
+        const Core::ProfileZone renderScope("Renderer::render");
 
         const bool extentChanged = (extent != lastExtent_) && (lastExtent_.width != 0);
         if (needsRecreate_ || extentChanged) {
-            const PhaseScope rebuild(phaseBegin_, phaseEnd_, "Render.RebuildFrameResources");
+            const Core::ProfileZone rebuild("Render.RebuildFrameResources");
             drainInFlight();
             vkDeviceWaitIdle(ctx_.vkDevice());
             if (lastExtent_.width != 0) {
@@ -264,14 +240,14 @@ namespace RAGE {
         }
 
         {
-            const PhaseScope drain(phaseBegin_, phaseEnd_, "Render.DrainInFlight");
+            const Core::ProfileZone drain("Render.DrainInFlight");
             drainInFlight();
         }
 
-        if (thumbnailQueued_ && frameImage_ && thumbnailStaging_.has_value()) {
+        if (thumbnailQueued_ && Core::profileFrameImageWanted() && thumbnailStaging_.has_value()) {
             const auto width = static_cast<uint16_t>(thumbnailTarget_->width());
             const auto height = static_cast<uint16_t>(thumbnailTarget_->height());
-            frameImage_(thumbnailStaging_->mappedData(), width, height);
+            Core::profileFrameImage(thumbnailStaging_->mappedData(), width, height);
             thumbnailQueued_ = false;
         }
 
@@ -290,7 +266,7 @@ namespace RAGE {
         // dirty, and a fresh brick can change the chunk handle grids the world grid indexes.
         std::vector<BrickHandle> dirtyBricks;
         {
-            const PhaseScope brickUpload(phaseBegin_, phaseEnd_, "Render.DirtyBrickUpload");
+            const Core::ProfileZone brickUpload("Render.DirtyBrickUpload");
             auto *poolDst = static_cast<Brick *>(brickPoolBuffer_->mappedData());
             dirtyBricks = brickPool_->drainDirty();
             for (const BrickHandle h : dirtyBricks) {
@@ -313,14 +289,14 @@ namespace RAGE {
         }
 
         if (sceneChanged) {
-            const PhaseScope collect(phaseBegin_, phaseEnd_, "Render.Collect");
+            const Core::ProfileZone collect("Render.Collect");
             shadowCasters_.clear();
             freeVolumes_.clear();
             collectShadowCasters(root);
         }
 
         if (sceneChanged && !worldGridStreaming_) {
-            const PhaseScope brickRebuild(phaseBegin_, phaseEnd_, "Render.WorldBrickGridRebuild");
+            const Core::ProfileZone brickRebuild("Render.WorldBrickGridRebuild");
             brickPlacementsScratch_.clear();
             brickPlacementsScratch_.reserve(shadowCasters_.size());
             float placeBrickWorldSize = 0.0f;
@@ -343,7 +319,7 @@ namespace RAGE {
 
         if (worldGridGpuDirty_ && !shadowCasters_.empty()) {
             worldGridGpuDirty_ = false;
-            const PhaseScope gridUpload(phaseBegin_, phaseEnd_, "Render.WorldGridUpload");
+            const Core::ProfileZone gridUpload("Render.WorldGridUpload");
             const float brickWorldSize =
                 shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
             worldGridSync_.upload(worldBrickGrid_, brickWorldSize, useGridTexture_);
@@ -374,7 +350,7 @@ namespace RAGE {
         }
         if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && !shadowCasters_.empty()
             && (gridQuietFrames_ >= kSvdagQuietFrames || svdagJustEnabled)) {
-            const PhaseScope svdagKick(phaseBegin_, phaseEnd_, "Render.SvdagKickoff");
+            const Core::ProfileZone svdagKick("Render.SvdagKickoff");
             const float brickWorldSize =
                 shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
             const IVec3 origBrick = worldBrickGrid_.windowMinBrick();
@@ -419,7 +395,7 @@ namespace RAGE {
         }
 
         {
-            const PhaseScope writeUbo(phaseBegin_, phaseEnd_, "Render.FrameUniformsWrite");
+            const Core::ProfileZone writeUbo("Render.FrameUniformsWrite");
             FrameUniforms uniforms{};
             const Mat4 camWorld = camera.worldMatrix();
             const Vec3 cameraPos = camWorld.transformPoint(Vec3::zero());
@@ -459,7 +435,7 @@ namespace RAGE {
             std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
         }
 
-        const PhaseScope recordScope(phaseBegin_, phaseEnd_, "Render.RecordFrame");
+        const Core::ProfileZone recordScope("Render.RecordFrame");
         VulkanCommandBuffer<queue_kind::Graphics> cmd = cmdPool_.allocate();
         VulkanRecorder<queue_kind::Graphics> rec = std::move(cmd).begin();
         const auto [swW, swH] = swapchain_.extent();
@@ -489,9 +465,7 @@ namespace RAGE {
             needsRecreate_ = true;
         }
 
-        if (frameEnd_) {
-            frameEnd_();
-        }
+        Core::profileFrameMark();
     }
 
     VulkanRenderTarget &Renderer::resolveTarget(const Pass &pass) {
@@ -537,7 +511,7 @@ namespace RAGE {
         }
         VulkanPipeline *pipelinePtr = nullptr;
         {
-            const PhaseScope pipelineScope(phaseBegin_, phaseEnd_, "Pass.PipelineGetOrCreate");
+            const Core::ProfileZone pipelineScope("Pass.PipelineGetOrCreate");
             pipelinePtr = &pipelineCache_.getOrCreate(*anyCaster->material());
         }
         VulkanPipeline &pipeline = *pipelinePtr;
@@ -559,7 +533,7 @@ namespace RAGE {
         writer.writeUniformBuffer(set, 10, *svdagCache_.paramsBuffer());
 
         {
-            const PhaseScope commitScope(phaseBegin_, phaseEnd_, "Pass.DescriptorCommit");
+            const Core::ProfileZone commitScope("Pass.DescriptorCommit");
             writer.commit();
         }
 
@@ -568,27 +542,24 @@ namespace RAGE {
         const uint32_t gx = (wg[0] > 0) ? ((tgtW + wg[0] - 1) / wg[0]) : 1;
         const uint32_t gy = (wg[1] > 0) ? ((tgtH + wg[1] - 1) / wg[1]) : 1;
 
-        if (beforeGpuPass_) {
-            beforeGpuPass_("voxel_raycast", rec.rawHandle());
-        }
+        Core::profileGpuPassBegin("voxel_raycast", rec.rawHandle());
         pipeline.execute(rec, PipelineExecuteContext{ .descriptorSets = sets,
                                                       .pushConstants = {},
                                                       .groupsX = gx,
                                                       .groupsY = gy,
                                                       .groupsZ = 1 });
-        if (afterGpuPass_) {
-            afterGpuPass_("voxel_raycast", rec.rawHandle());
-        }
+        Core::profileGpuPassEnd();
     }
 
     void Renderer::recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage,
                                uint32_t swapImageIndex, uint32_t swapW, uint32_t swapH,
                                const FrameContext &frame) {
-        if (worldGridSync_.textureUploadArmed() && beforeGpuPass_) {
-            beforeGpuPass_("world_grid_upload", rec.rawHandle());
+        const bool gridUploadArmed = worldGridSync_.textureUploadArmed();
+        if (gridUploadArmed) {
+            Core::profileGpuPassBegin("world_grid_upload", rec.rawHandle());
         }
-        if (worldGridSync_.recordTextureUpload(rec) && afterGpuPass_) {
-            afterGpuPass_("world_grid_upload", rec.rawHandle());
+        if (worldGridSync_.recordTextureUpload(rec) && gridUploadArmed) {
+            Core::profileGpuPassEnd();
         }
 
         recordPass(rec, *renderTarget_, frame, true, true);
@@ -616,19 +587,13 @@ namespace RAGE {
                                                             .dstAccess = AccessFlags::TransferWrite } } };
         rec.pipelineBarrier(toBlit);
 
-        if (beforeGpuPass_) {
-            beforeGpuPass_("blit_to_swapchain", rec.rawHandle());
-        }
+        Core::profileGpuPassBegin("blit_to_swapchain", rec.rawHandle());
         rec.blitImage(mainTargetImage, ImageLayout::TransferSrcOptimal, rtW, rtH, swapImage,
                       ImageLayout::TransferDstOptimal, swapW, swapH);
-        if (afterGpuPass_) {
-            afterGpuPass_("blit_to_swapchain", rec.rawHandle());
-        }
+        Core::profileGpuPassEnd();
 
-        if (frameImage_ && thumbnailTarget_.has_value() && thumbnailStaging_.has_value()) {
-            if (beforeGpuPass_) {
-                beforeGpuPass_("thumbnail_readback", rec.rawHandle());
-            }
+        if (Core::profileFrameImageWanted() && thumbnailTarget_.has_value() && thumbnailStaging_.has_value()) {
+            Core::profileGpuPassBegin("thumbnail_readback", rec.rawHandle());
             VkImage thumbImage = thumbnailTarget_->image().handle();
             const std::array<VulkanImageBarrier, 1> thumbToDst{ { { .image = thumbImage,
                                                                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -668,9 +633,7 @@ namespace RAGE {
             rec.copyImageToBuffer(thumbImage, ImageLayout::TransferSrcOptimal, *thumbnailStaging_, regions);
 
             thumbnailQueued_ = true;
-            if (afterGpuPass_) {
-                afterGpuPass_("thumbnail_readback", rec.rawHandle());
-            }
+            Core::profileGpuPassEnd();
         }
 
         if (uiRender_) {
@@ -684,17 +647,13 @@ namespace RAGE {
                                                                   .dstAccess = AccessFlags::ColorAttachmentWrite } } };
             rec.pipelineBarrier(toColor);
 
-            if (beforeGpuPass_) {
-                beforeGpuPass_("debug_ui", rec.rawHandle());
-            }
+            Core::profileGpuPassBegin("debug_ui", rec.rawHandle());
             uiRender_(UiRenderContext{ .cmd = rec.rawHandle(),
                                        .swapImage = swapImage,
                                        .swapImageIndex = swapImageIndex,
                                        .width = swapW,
                                        .height = swapH });
-            if (afterGpuPass_) {
-                afterGpuPass_("debug_ui", rec.rawHandle());
-            }
+            Core::profileGpuPassEnd();
 
             const std::array<VulkanImageBarrier, 1> toPresent{ { { .image = swapImage,
                                                                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,

@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <string>
 #include "app/build_paths.hpp"
-#include "engine/rendering/renderer.hpp"
 #include "shared/profiling.hpp"
 
 #ifdef _WIN32
@@ -29,6 +28,7 @@
     #include <cstring>
     #include <memory>
     #include <vector>
+    #include <vulkan/vulkan.h>
     #include <tracy/Tracy.hpp>
     #include <tracy/TracyC.h>
     #include <tracy/TracyVulkan.hpp>
@@ -41,11 +41,16 @@ namespace {
     // Thread-local because zones nest only within a single thread's call stack.
     thread_local std::vector<TracyCZoneCtx> g_zoneStack;
 
-    // GPU zone stack for the paired onBeforeGpuPass / onAfterGpuPass hooks. VkCtxScope
+    // GPU zone stack for the paired gpuPassBegin / gpuPassEnd hooks. VkCtxScope
     // writes its begin timestamp into the command buffer at construction and the end
     // timestamp at destruction, so the scope must stay alive across the pass recording —
-    // heap-held here, destroyed on the matching after-hook.
+    // heap-held here, destroyed on the matching end hook.
     std::vector<std::unique_ptr<tracy::VkCtxScope>> g_gpuZoneStack;
+
+    // Tracy GPU context (TracyVkCtx). File-scope because the trampoline backends are free
+    // functions. Currently never created (GPU zones are latent until a context exists);
+    // Profiler's destructor releases it if some future path creates one.
+    void *g_gpuContext = nullptr;
 
     // Backend for the engine's Core::ProfileHooks trampoline (shared/profiling.hpp):
     // same emitters as Profiler::beginZone/endZone, callable from any engine thread.
@@ -63,6 +68,27 @@ namespace {
     }
     void coreThreadName(const char *name) { ___tracy_set_thread_name(name); }
     void corePlot(const char *name, double value) { TracyPlot(name, value); }
+    void coreFrameMark() { FrameMark; }
+    void coreGpuPassBegin(const char *name, void *commandBuffer) {
+        if (g_gpuContext != nullptr) {
+            g_gpuZoneStack.push_back(std::make_unique<tracy::VkCtxScope>(
+                static_cast<TracyVkCtx>(g_gpuContext), TracyLine, TracyFile, strlen(TracyFile),
+                TracyFunction, strlen(TracyFunction), name, strlen(name),
+                static_cast<VkCommandBuffer>(commandBuffer), true));
+        }
+    }
+    void coreGpuPassEnd() {
+        if (g_gpuContext != nullptr && !g_gpuZoneStack.empty()) {
+            g_gpuZoneStack.pop_back();
+        }
+    }
+    void coreFrameImage(const void *rgbaPixels, uint16_t width, uint16_t height) {
+        // offset = 0: the image is for the most recently signaled frame (the one whose
+        // FrameMark just fired at the end of the previous render() call). The pixels come
+        // from that frame's render — the renderer waited for GPU completion via
+        // drainInFlight before reading the staging buffer.
+        FrameImage(rgbaPixels, width, height, 0, false);
+    }
 #endif
 }
 
@@ -74,6 +100,10 @@ namespace RAGE::App {
             .zoneEnd = &coreZoneEnd,
             .threadName = &coreThreadName,
             .plot = &corePlot,
+            .frameMark = &coreFrameMark,
+            .gpuPassBegin = &coreGpuPassBegin,
+            .gpuPassEnd = &coreGpuPassEnd,
+            .frameImage = &coreFrameImage,
         };
         std::fprintf(stdout, "[profiler] Tracy client v0.13.1 linked, on-demand. Connect Tracy.exe to attach.\n");
         std::fflush(stdout);
@@ -86,9 +116,9 @@ namespace RAGE::App {
 
     Profiler::~Profiler() {
 #ifdef RAGE_PROFILING_TRACY
-        if (gpuContext_ != nullptr) {
-            TracyVkDestroy(static_cast<TracyVkCtx>(gpuContext_));
-            gpuContext_ = nullptr;
+        if (g_gpuContext != nullptr) {
+            TracyVkDestroy(static_cast<TracyVkCtx>(g_gpuContext));
+            g_gpuContext = nullptr;
         }
 #endif
 #ifdef _WIN32
@@ -97,72 +127,6 @@ namespace RAGE::App {
             profilerGuiProcess_ = nullptr;
         }
 #endif
-    }
-
-    void Profiler::attach(Renderer &renderer) {
-        renderer.onFrameEnd([this] { frameMark(); });
-
-        renderer.onBeforeGpuPass([this](const char *passName, VkCommandBuffer cmd) {
-#ifdef RAGE_PROFILING_TRACY
-            if (gpuContext_ != nullptr) {
-                g_gpuZoneStack.push_back(std::make_unique<tracy::VkCtxScope>(
-                    static_cast<TracyVkCtx>(gpuContext_), TracyLine, TracyFile, strlen(TracyFile),
-                    TracyFunction, strlen(TracyFunction), passName, strlen(passName), cmd, true));
-            }
-#else
-            (void)passName;
-            (void)cmd;
-#endif
-        });
-
-        renderer.onAfterGpuPass([this](const char *passName, VkCommandBuffer cmd) {
-            (void)passName;
-            (void)cmd;
-#ifdef RAGE_PROFILING_TRACY
-            if (gpuContext_ != nullptr && !g_gpuZoneStack.empty()) {
-                g_gpuZoneStack.pop_back();
-            }
-#endif
-        });
-
-        renderer.onFrameImage([](const void *rgbaBytes, uint16_t width, uint16_t height) {
-#ifdef RAGE_PROFILING_TRACY
-            // offset = 0: the image is for the most recently signaled frame (the one whose
-            // FrameMark just fired at the end of the previous render() call). The pixels come
-            // from that frame's render — we waited for its GPU completion via drainInFlight
-            // before reading the staging buffer.
-            FrameImage(rgbaBytes, width, height, 0, false);
-#else
-            (void)rgbaBytes;
-            (void)width;
-            (void)height;
-#endif
-        });
-
-        renderer.onPhaseBegin([](const char *name) {
-#ifdef RAGE_PROFILING_TRACY
-            const auto nameLen = std::strlen(name);
-            const auto srcloc = ___tracy_alloc_srcloc_name(
-                0,
-                "engine", sizeof("engine") - 1,
-                name, nameLen,
-                name, nameLen,
-                0);
-            g_zoneStack.push_back(___tracy_emit_zone_begin_alloc(srcloc, 1));
-#else
-            (void)name;
-#endif
-        });
-
-        renderer.onPhaseEnd([](const char *name) {
-            (void)name;
-#ifdef RAGE_PROFILING_TRACY
-            if (!g_zoneStack.empty()) {
-                ___tracy_emit_zone_end(g_zoneStack.back());
-                g_zoneStack.pop_back();
-            }
-#endif
-        });
     }
 
     void Profiler::frameMark() {

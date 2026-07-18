@@ -309,7 +309,6 @@ int main(int argc, char **argv) {
             buildScene();
 
             std::atomic<bool> loaderDone{ false };
-            profiler.attach(renderer);
 
             std::atomic<bool> loaderCancel{ false };
 

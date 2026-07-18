@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace RAGE::Core {
     /**
      * @brief Engine-side profiling trampoline. The engine never links a profiler —
@@ -17,6 +19,15 @@ namespace RAGE::Core {
         void (*zoneEnd)() = nullptr;
         void (*threadName)(const char *name) = nullptr;
         void (*plot)(const char *name, double value) = nullptr;
+        /// End-of-frame marker (frame boundaries in the profiler timeline).
+        void (*frameMark)() = nullptr;
+        /// Paired GPU-pass zone around command recording. `commandBuffer` is the
+        /// backend's raw handle (VkCommandBuffer), opaque here by design.
+        void (*gpuPassBegin)(const char *name, void *commandBuffer) = nullptr;
+        void (*gpuPassEnd)() = nullptr;
+        /// Frame thumbnail (RGBA8) for the profiler's frame browser. Emitters must
+        /// skip the (expensive) capture entirely while this is null.
+        void (*frameImage)(const void *rgbaPixels, uint16_t width, uint16_t height) = nullptr;
     };
 
     inline ProfileHooks gProfileHooks{};
@@ -32,6 +43,35 @@ namespace RAGE::Core {
     inline void profilePlot(const char *name, double value) {
         if (gProfileHooks.plot != nullptr) {
             gProfileHooks.plot(name, value);
+        }
+    }
+
+    /// Mark a frame boundary (no-op without a backend).
+    inline void profileFrameMark() {
+        if (gProfileHooks.frameMark != nullptr) {
+            gProfileHooks.frameMark();
+        }
+    }
+
+    /// Begin/end a GPU-pass zone around command recording (no-ops without a backend).
+    inline void profileGpuPassBegin(const char *name, void *commandBuffer) {
+        if (gProfileHooks.gpuPassBegin != nullptr) {
+            gProfileHooks.gpuPassBegin(name, commandBuffer);
+        }
+    }
+    inline void profileGpuPassEnd() {
+        if (gProfileHooks.gpuPassEnd != nullptr) {
+            gProfileHooks.gpuPassEnd();
+        }
+    }
+
+    /// True while a backend wants frame thumbnails — check BEFORE capturing.
+    inline bool profileFrameImageWanted() { return gProfileHooks.frameImage != nullptr; }
+
+    /// Deliver a captured frame thumbnail (no-op without a backend).
+    inline void profileFrameImage(const void *rgbaPixels, uint16_t width, uint16_t height) {
+        if (gProfileHooks.frameImage != nullptr) {
+            gProfileHooks.frameImage(rgbaPixels, width, height);
         }
     }
 

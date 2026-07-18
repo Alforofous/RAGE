@@ -185,11 +185,6 @@ namespace RAGE {
         // Observer hooks fired during render(). Each is a single-slot std::function; pass a
         // null/empty value to clear. The engine has no knowledge of what listens — see
         // src/app/profiler.hpp for the canonical subscriber.
-        using FrameHook = std::function<void()>;
-        using GpuPassHook = std::function<void(const char *passName, VkCommandBuffer cmd)>;
-        using FrameImageHook =
-            std::function<void(const void *rgbaBytes, uint16_t width, uint16_t height)>;
-        using PhaseHook = std::function<void(const char *name)>;
 
         struct SwapchainInfo {
             VkDevice device = VK_NULL_HANDLE;
@@ -215,12 +210,6 @@ namespace RAGE {
         using SwapchainRebuiltHook = std::function<void(const SwapchainInfo &)>;
         using UiRenderHook = std::function<void(const UiRenderContext &)>;
 
-        void onFrameEnd(FrameHook h) { frameEnd_ = std::move(h); }
-        void onBeforeGpuPass(GpuPassHook h) { beforeGpuPass_ = std::move(h); }
-        void onAfterGpuPass(GpuPassHook h) { afterGpuPass_ = std::move(h); }
-        void onFrameImage(FrameImageHook h) { frameImage_ = std::move(h); }
-        void onPhaseBegin(PhaseHook h) { phaseBegin_ = std::move(h); }
-        void onPhaseEnd(PhaseHook h) { phaseEnd_ = std::move(h); }
         void onSwapchainRebuilt(SwapchainRebuiltHook h);
         void onUiRender(UiRenderHook h) { uiRender_ = std::move(h); }
 
@@ -300,12 +289,6 @@ namespace RAGE {
         std::vector<VoxelDataWorldPlacement> brickPlacementsScratch_;
         std::vector<BrickHandle> svdagScratch_;
 
-        FrameHook frameEnd_;
-        GpuPassHook beforeGpuPass_;
-        GpuPassHook afterGpuPass_;
-        FrameImageHook frameImage_;
-        PhaseHook phaseBegin_;
-        PhaseHook phaseEnd_;
         SwapchainRebuiltHook swapchainRebuilt_;
         UiRenderHook uiRender_;
 
