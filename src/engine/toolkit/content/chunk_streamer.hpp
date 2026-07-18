@@ -23,7 +23,7 @@ namespace RAGE::Toolkit::Content {
      *        `horizontalRadius` (Euclidean), Y extent comes from `store.yRange()`. Chunk
      *        generation runs on an internal worker thread; `update()` is near-free.
      */
-    class Streamer {
+    class ChunkStreamer {
     public:
         using ChunkPrepareHook = std::function<void(Voxel3D &, IVec3 chunkCoord)>;
 
@@ -36,13 +36,13 @@ namespace RAGE::Toolkit::Content {
         using ChunkPlacedHook = std::function<void(IVec3 chunkCoord, Voxel3D &chunk)>;
         using ChunkEvictedHook = std::function<void(IVec3 chunkCoord, Voxel3D &chunk)>;
 
-        Streamer(ChunkStore &store, Node3D &parent);
-        ~Streamer();
+        ChunkStreamer(ChunkStore &store, Node3D &parent);
+        ~ChunkStreamer();
 
-        Streamer(const Streamer &) = delete;
-        Streamer &operator=(const Streamer &) = delete;
-        Streamer(Streamer &&) = delete;
-        Streamer &operator=(Streamer &&) = delete;
+        ChunkStreamer(const ChunkStreamer &) = delete;
+        ChunkStreamer &operator=(const ChunkStreamer &) = delete;
+        ChunkStreamer(ChunkStreamer &&) = delete;
+        ChunkStreamer &operator=(ChunkStreamer &&) = delete;
 
         void setOnChunkPrepare(ChunkPrepareHook hook) { onPrepare_ = std::move(hook); }
         void setOnChunkPlaced(ChunkPlacedHook hook) { onPlaced_ = std::move(hook); }

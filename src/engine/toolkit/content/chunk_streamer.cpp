@@ -1,4 +1,4 @@
-#include "streamer.hpp"
+#include "chunk_streamer.hpp"
 #include "shared/profiling.hpp"
 
 #include <algorithm>
@@ -19,13 +19,13 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    Streamer::Streamer(ChunkStore &store, Node3D &parent)
+    ChunkStreamer::ChunkStreamer(ChunkStore &store, Node3D &parent)
         : store_(store)
         , parent_(parent) {
         worker_ = std::thread([this] { workerMain_(); });
     }
 
-    Streamer::~Streamer() {
+    ChunkStreamer::~ChunkStreamer() {
         {
             std::lock_guard lock(mtx_);
             shouldStop_ = true;
@@ -36,7 +36,7 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void Streamer::workerMain_() {
+    void ChunkStreamer::workerMain_() {
         Core::profileThreadName("ChunkLoader");
         while (true) {
             IVec3 coord{};
@@ -56,7 +56,7 @@ namespace RAGE::Toolkit::Content {
                 const Core::ProfileZone zone("Chunk.Load");
                 result = store_.chunkAt(coord);
             } catch (const std::exception &e) {
-                const std::string msg = std::string("Streamer worker: chunk generation failed: ")
+                const std::string msg = std::string("ChunkStreamer worker: chunk generation failed: ")
                                         + e.what();
                 Core::log(Core::LogLevel::Error, msg.c_str());
                 result = ChunkResult{ .status = ChunkStatus::Missing, .chunk = nullptr };
@@ -71,7 +71,7 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void Streamer::update(IVec3 focusChunk, int32_t horizontalRadius) {
+    void ChunkStreamer::update(IVec3 focusChunk, int32_t horizontalRadius) {
         std::deque<ReadyEntry> drained;
         bool queuesIdle = false;
         {
@@ -94,7 +94,7 @@ namespace RAGE::Toolkit::Content {
 
         deferred_.clear();
         {
-            const Core::ProfileZone drainZone("Streamer.Drain");
+            const Core::ProfileZone drainZone("ChunkStreamer.Drain");
             const ChunkStore::YRange y = store_.yRange();
             for (auto &entry : drained) {
                 if (!inCylinder(entry.coord, focusChunk, horizontalRadius, y)) {
@@ -104,16 +104,16 @@ namespace RAGE::Toolkit::Content {
             }
         }
         {
-            const Core::ProfileZone evictZone("Streamer.Evict");
+            const Core::ProfileZone evictZone("ChunkStreamer.Evict");
             evictOutOfRange_(focusChunk, horizontalRadius);
         }
         {
-            const Core::ProfileZone repopZone("Streamer.Repopulate");
+            const Core::ProfileZone repopZone("ChunkStreamer.Repopulate");
             repopulatePending_(focusChunk, horizontalRadius);
         }
     }
 
-    void Streamer::applyResult_(IVec3 coord, ChunkResult result) {
+    void ChunkStreamer::applyResult_(IVec3 coord, ChunkResult result) {
         if (loaded_.contains(coord)) {
             return;
         }
@@ -134,7 +134,7 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void Streamer::evictOutOfRange_(IVec3 focusChunk, int32_t hRadius) {
+    void ChunkStreamer::evictOutOfRange_(IVec3 focusChunk, int32_t hRadius) {
         const ChunkStore::YRange y = store_.yRange();
         std::unordered_set<const Node3D *> evicted;
         for (auto it = loaded_.begin(); it != loaded_.end();) {
@@ -161,7 +161,7 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void Streamer::repopulatePending_(IVec3 focusChunk, int32_t hRadius) {
+    void ChunkStreamer::repopulatePending_(IVec3 focusChunk, int32_t hRadius) {
         struct Candidate {
             IVec3 coord;
             int32_t dist2;
@@ -205,12 +205,12 @@ namespace RAGE::Toolkit::Content {
         workerCv_.notify_all();
     }
 
-    size_t Streamer::pendingCount() const {
+    size_t ChunkStreamer::pendingCount() const {
         std::lock_guard lock(mtx_);
         return pending_.size() + inFlight_.size() + ready_.size();
     }
 
-    void Streamer::flushAsync(IVec3 focusChunk, int32_t horizontalRadius) {
+    void ChunkStreamer::flushAsync(IVec3 focusChunk, int32_t horizontalRadius) {
         while (true) {
             update(focusChunk, horizontalRadius);
             std::unique_lock lock(mtx_);

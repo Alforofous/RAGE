@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "engine/toolkit/content/chunk_store.hpp"
-#include "engine/toolkit/content/streamer.hpp"
+#include "engine/toolkit/content/chunk_streamer.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/node3d.hpp"
 #include "engine/scene/voxel3d.hpp"
@@ -78,13 +78,13 @@ namespace {
     constexpr IVec3 kChunkDims{ 4, 4, 4 };
 }
 
-TEST(Streamer, EmptyStartLoadsCylinderOfReadyChunks) {
+TEST(ChunkStreamer, EmptyStartLoadsCylinderOfReadyChunks) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
 
     EXPECT_EQ(s.loadedCount(), 5u);
@@ -95,14 +95,14 @@ TEST(Streamer, EmptyStartLoadsCylinderOfReadyChunks) {
     EXPECT_FALSE(s.isLoaded(IVec3{ 0, 1, 0 }));
 }
 
-TEST(Streamer, YRangeStacksLayers) {
+TEST(ChunkStreamer, YRangeStacksLayers) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
     store.setYRange({ .min = -1, .max = 1 });
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
 
     EXPECT_EQ(s.loadedCount(), 15u);
@@ -111,13 +111,13 @@ TEST(Streamer, YRangeStacksLayers) {
     EXPECT_FALSE(s.isLoaded(IVec3{ 0, 2, 0 }));
 }
 
-TEST(Streamer, YRangeIsAbsoluteNotRelativeToFocus) {
+TEST(ChunkStreamer, YRangeIsAbsoluteNotRelativeToFocus) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 100, 0 }, 0);
 
     EXPECT_EQ(s.loadedCount(), 1u);
@@ -125,13 +125,13 @@ TEST(Streamer, YRangeIsAbsoluteNotRelativeToFocus) {
     EXPECT_FALSE(s.isLoaded(IVec3{ 0, 100, 0 }));
 }
 
-TEST(Streamer, RepeatUpdateAtSameFocusDoesNotReQueryLoadedChunks) {
+TEST(ChunkStreamer, RepeatUpdateAtSameFocusDoesNotReQueryLoadedChunks) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
 
@@ -140,13 +140,13 @@ TEST(Streamer, RepeatUpdateAtSameFocusDoesNotReQueryLoadedChunks) {
     EXPECT_EQ(root.childCount(), 5u);
 }
 
-TEST(Streamer, FocusShiftEvictsOutOfRangeAndLoadsNewSlice) {
+TEST(ChunkStreamer, FocusShiftEvictsOutOfRangeAndLoadsNewSlice) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
     s.flushAsync(IVec3{ 1, 0, 0 }, 1);
 
@@ -155,13 +155,13 @@ TEST(Streamer, FocusShiftEvictsOutOfRangeAndLoadsNewSlice) {
     EXPECT_TRUE(s.isLoaded(IVec3{ 2, 0, 0 }));
 }
 
-TEST(Streamer, FlyingUpDoesNotEvictGroundChunks) {
+TEST(ChunkStreamer, FlyingUpDoesNotEvictGroundChunks) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
     EXPECT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
 
@@ -170,13 +170,13 @@ TEST(Streamer, FlyingUpDoesNotEvictGroundChunks) {
     EXPECT_EQ(s.loadedCount(), 5u);
 }
 
-TEST(Streamer, EmptyStatusIsRememberedAndNotReQueried) {
+TEST(ChunkStreamer, EmptyStatusIsRememberedAndNotReQueried) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Empty);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
 
@@ -184,13 +184,13 @@ TEST(Streamer, EmptyStatusIsRememberedAndNotReQueried) {
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 1);
 }
 
-TEST(Streamer, MissingStatusIsRememberedAndNotReQueried) {
+TEST(ChunkStreamer, MissingStatusIsRememberedAndNotReQueried) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Missing);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
     s.flushAsync(IVec3{ 0, 0, 0 }, 1);
 
@@ -198,14 +198,14 @@ TEST(Streamer, MissingStatusIsRememberedAndNotReQueried) {
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 1);
 }
 
-TEST(Streamer, PendingStatusIsRetriedOnNextUpdate) {
+TEST(ChunkStreamer, PendingStatusIsRetriedOnNextUpdate) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Empty);
     store.seed(IVec3{ 0, 0, 0 }, ChunkStatus::Pending);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 0);
     EXPECT_EQ(s.loadedCount(), 0u);
     EXPECT_EQ(s.skippedCount(), 0u);
@@ -217,13 +217,13 @@ TEST(Streamer, PendingStatusIsRetriedOnNextUpdate) {
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 2);
 }
 
-TEST(Streamer, ChurningFocusNeverOrphansSceneTreeChildren) {
+TEST(ChunkStreamer, ChurningFocusNeverOrphansSceneTreeChildren) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     for (int32_t i = 0; i < 500; ++i) {
         s.update(IVec3{ i % 7, 0, (i * 3) % 5 }, 2);
     }
@@ -232,7 +232,7 @@ TEST(Streamer, ChurningFocusNeverOrphansSceneTreeChildren) {
     EXPECT_EQ(root.childCount(), s.loadedCount());
 }
 
-TEST(Streamer, OnPrepareHookRunsForEachReadyChunkBeforeAttach) {
+TEST(ChunkStreamer, OnPrepareHookRunsForEachReadyChunkBeforeAttach) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
@@ -240,7 +240,7 @@ TEST(Streamer, OnPrepareHookRunsForEachReadyChunkBeforeAttach) {
 
     std::mutex seenMtx;
     std::unordered_set<IVec3, IVec3Hash> seen;
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.setOnChunkPrepare([&seenMtx, &seen](Voxel3D &, IVec3 c) {
         std::lock_guard lock(seenMtx);
         seen.insert(c);
@@ -253,13 +253,13 @@ TEST(Streamer, OnPrepareHookRunsForEachReadyChunkBeforeAttach) {
     EXPECT_TRUE(seen.contains(IVec3{ 1, 0, 0 }));
 }
 
-TEST(Streamer, EvictionForgetsSkippedSoReentryReQueries) {
+TEST(ChunkStreamer, EvictionForgetsSkippedSoReentryReQueries) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Empty);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 0);
     EXPECT_EQ(s.skippedCount(), 1u);
 
@@ -270,17 +270,17 @@ TEST(Streamer, EvictionForgetsSkippedSoReentryReQueries) {
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 2);
 }
 
-TEST(Streamer, DestructorCleansUpWorkerWhileChunksInFlight) {
+TEST(ChunkStreamer, DestructorCleansUpWorkerWhileChunksInFlight) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.update(IVec3{ 0, 0, 0 }, 1);
 }
 
-TEST(Streamer, PlacedEventFiresPerAttachedChunkWithCoord) {
+TEST(ChunkStreamer, PlacedEventFiresPerAttachedChunkWithCoord) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
@@ -288,7 +288,7 @@ TEST(Streamer, PlacedEventFiresPerAttachedChunkWithCoord) {
 
     std::mutex mtx;
     std::unordered_map<IVec3, const Voxel3D *, IVec3Hash> placed;
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.setOnChunkPlaced([&mtx, &placed](IVec3 c, Voxel3D &v) {
         std::lock_guard lock(mtx);
         placed.emplace(c, &v);
@@ -301,13 +301,13 @@ TEST(Streamer, PlacedEventFiresPerAttachedChunkWithCoord) {
     EXPECT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
 }
 
-TEST(Streamer, EvictedEventFiresForOutOfRangeChunksBeforeDestruction) {
+TEST(ChunkStreamer, EvictedEventFiresForOutOfRangeChunksBeforeDestruction) {
     BrickPool pool;
     Node3D root;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
 
-    Streamer s(store, root);
+    ChunkStreamer s(store, root);
     s.flushAsync(IVec3{ 0, 0, 0 }, 0);
     ASSERT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
 

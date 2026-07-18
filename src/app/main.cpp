@@ -18,10 +18,8 @@
 #include "app/build_paths.hpp"
 #include "debug_ui.hpp"
 #include "engine/toolkit/content/chunk_generators.hpp"
-#include "engine/toolkit/content/hybrid_chunk_store.hpp"
-#include "engine/toolkit/content/file_chunk_store.hpp"
-#include "engine/toolkit/content/procedural_chunk_store.hpp"
-#include "engine/toolkit/content/streamer.hpp"
+#include "engine/toolkit/content/chunk_store_factory.hpp"
+#include "engine/toolkit/content/chunk_streamer.hpp"
 #include "engine/toolkit/content/vox_loader.hpp"
 #include "engine/toolkit/entity/kinematic_body.hpp"
 #include "engine/materials/material.hpp"
@@ -192,7 +190,7 @@ int main(int argc, char **argv) {
             Node3D root;
 
             std::unique_ptr<Toolkit::Content::ChunkStore> chunkStore;
-            std::optional<Toolkit::Content::Streamer> streamer;
+            std::optional<Toolkit::Content::ChunkStreamer> streamer;
             std::vector<Voxel3D *> spinners;
             struct Prop {
                 Voxel3D *volume;
@@ -271,20 +269,8 @@ int main(int argc, char **argv) {
                     throw std::runtime_error(
                         "WorldPipelineConfig.chunkBrickDims does not match the terrain generator");
                 }
-                auto procedural = std::make_unique<Toolkit::Content::ProceduralChunkStore>(
-                    std::move(gen), renderer.brickPool(), kVoxelSize, kTerrainYRange);
-                if (worldDir.empty()) {
-                    chunkStore = std::move(procedural);
-                } else {
-                    // Persistent world: disk overlay over the generator, caching
-                    // every generated chunk so revisits and restarts read from disk.
-                    auto fileStore = std::make_unique<Toolkit::Content::FileChunkStore>(
-                        worldDir, renderer.brickPool(), kWorld.chunkBrickDims, kVoxelSize,
-                        kTerrainYRange);
-                    chunkStore = std::make_unique<Toolkit::Content::HybridChunkStore>(
-                        std::move(fileStore), std::move(procedural),
-                        Toolkit::Content::WriteThrough::CacheBaselineReady);
-                }
+                chunkStore = Toolkit::Content::chunkStore(std::move(gen), renderer.brickPool(),
+                                                          kVoxelSize, kTerrainYRange, worldDir);
                 streamer.emplace(*chunkStore, root);
                 streamer->setOnChunkPrepare(
                     [&voxelMaterial](Voxel3D &v, IVec3) { v.setMaterial(voxelMaterial); });
@@ -695,7 +681,7 @@ int main(int argc, char **argv) {
                 }
 
                 if (streamer.has_value()) {
-                    const App::Profiler::Zone streamerZone(profiler, "Streamer.Update");
+                    const App::Profiler::Zone streamerZone(profiler, "ChunkStreamer.Update");
                     const float chunkWorldExtent =
                         static_cast<float>(chunkStore->chunkBrickDims().x) * 8.0f * kVoxelSize;
                     const Vec3 camPos = camera.worldMatrix().transformPoint(Vec3::zero());
