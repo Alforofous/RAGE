@@ -22,7 +22,6 @@
 #include "engine/toolkit/content/hybrid_chunk_store.hpp"
 #include "engine/toolkit/content/file_chunk_store.hpp"
 #include "engine/toolkit/content/procedural_chunk_store.hpp"
-#include "engine/toolkit/content/scene_generators.hpp"
 #include "engine/toolkit/content/streamer.hpp"
 #include "engine/toolkit/content/vox_loader.hpp"
 #include "engine/toolkit/entity/kinematic_body.hpp"
@@ -155,17 +154,11 @@ int main(int argc, char **argv) {
     bool autoLaunchTracy = false;
     bool vsync = true;
     std::filesystem::path worldDir;   // --world=<dir>: persist streamed chunks here
-    enum class SceneKind { Sphere, Cubes, Streamed };
-    SceneKind scene = SceneKind::Sphere;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--profile") == 0) {
             autoLaunchTracy = true;
         } else if (std::strcmp(argv[i], "--no-vsync") == 0) {
             vsync = false;
-        } else if (std::strcmp(argv[i], "--scene=cubes") == 0) {
-            scene = SceneKind::Cubes;
-        } else if (std::strcmp(argv[i], "--scene=streamed") == 0) {
-            scene = SceneKind::Streamed;
         } else if (std::strncmp(argv[i], "--world=", 8) == 0) {
             worldDir = argv[i] + 8;
         }
@@ -324,60 +317,45 @@ int main(int argc, char **argv) {
             };
 
             const auto buildScene = [&]() {
-                if (scene == SceneKind::Streamed) {
-                    auto gen = std::make_unique<Toolkit::Content::TerrainChunkGenerator>();
-                    if (gen->chunkBrickDims() != kWorld.chunkBrickDims) {
-                        throw std::runtime_error(
-                            "WorldPipelineConfig.chunkBrickDims does not match the terrain generator");
-                    }
-                    auto procedural = std::make_unique<Toolkit::Content::ProceduralChunkStore>(
-                        std::move(gen), renderer.brickPool(), kVoxelSize, kTerrainYRange);
-                    if (worldDir.empty()) {
-                        chunkStore = std::move(procedural);
-                    } else {
-                        // Persistent world: disk overlay over the generator, caching
-                        // every generated chunk so revisits and restarts read from disk.
-                        auto fileStore = std::make_unique<Toolkit::Content::FileChunkStore>(
-                            worldDir, renderer.brickPool(), kWorld.chunkBrickDims, kVoxelSize,
-                            kTerrainYRange);
-                        chunkStore = std::make_unique<Toolkit::Content::HybridChunkStore>(
-                            std::move(fileStore), std::move(procedural),
-                            Toolkit::Content::WriteThrough::CacheBaselineReady);
-                    }
-                    streamer.emplace(*chunkStore, root);
-                    streamer->setOnChunkPrepare(
-                        [&voxelMaterial](Voxel3D &v, IVec3) { v.setMaterial(voxelMaterial); });
-                    const IVec3 cb = kWorld.chunkBrickDims;
-                    streamer->setOnChunkPlaced([&renderer, cb](IVec3 c, Voxel3D &v) {
-                        renderer.worldGridWriteChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
-                                                     *v.voxelData());
-                    });
-                    streamer->setOnChunkEvicted([&renderer, cb](IVec3 c, Voxel3D &v) {
-                        renderer.worldGridClearChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
-                                                     v.voxelData()->brickDims());
-                    });
-                    renderer.setWorldGridStreaming(true);
-                    addSpinners();
-                    addFallingProps();
-                    camera.setPosition(Vec3(0.0f, 4.0f, 8.0f));
-                    return;
+                auto gen = std::make_unique<Toolkit::Content::TerrainChunkGenerator>();
+                if (gen->chunkBrickDims() != kWorld.chunkBrickDims) {
+                    throw std::runtime_error(
+                        "WorldPipelineConfig.chunkBrickDims does not match the terrain generator");
                 }
-                renderer.setWorldGridStreaming(false);
-
-                std::unique_ptr<Toolkit::Content::Generator> generator;
-                if (scene == SceneKind::Cubes) {
-                    generator = std::make_unique<Toolkit::Content::CubeGridGenerator>();
-                }
-
-                if (generator) {
-                    for (auto &v : generator->generate(renderer.brickPool(), kVoxelSize)) {
-                        v->setMaterial(voxelMaterial);
-                        root.add(std::move(v));
-                    }
+                auto procedural = std::make_unique<Toolkit::Content::ProceduralChunkStore>(
+                    std::move(gen), renderer.brickPool(), kVoxelSize, kTerrainYRange);
+                if (worldDir.empty()) {
+                    chunkStore = std::move(procedural);
                 } else {
-                    root.add(stageVoxelFromFile(assetsDir / "floor.vox", Vec3(-6.4f, -7.0f, -22.4f)));
-                    root.add(stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(-6.4f, -6.4f, -22.4f)));
+                    // Persistent world: disk overlay over the generator, caching
+                    // every generated chunk so revisits and restarts read from disk.
+                    auto fileStore = std::make_unique<Toolkit::Content::FileChunkStore>(
+                        worldDir, renderer.brickPool(), kWorld.chunkBrickDims, kVoxelSize,
+                        kTerrainYRange);
+                    chunkStore = std::make_unique<Toolkit::Content::HybridChunkStore>(
+                        std::move(fileStore), std::move(procedural),
+                        Toolkit::Content::WriteThrough::CacheBaselineReady);
                 }
+                streamer.emplace(*chunkStore, root);
+                streamer->setOnChunkPrepare(
+                    [&voxelMaterial](Voxel3D &v, IVec3) { v.setMaterial(voxelMaterial); });
+                const IVec3 cb = kWorld.chunkBrickDims;
+                streamer->setOnChunkPlaced([&renderer, cb](IVec3 c, Voxel3D &v) {
+                    renderer.worldGridWriteChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
+                                                 *v.voxelData());
+                });
+                streamer->setOnChunkEvicted([&renderer, cb](IVec3 c, Voxel3D &v) {
+                    renderer.worldGridClearChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
+                                                 v.voxelData()->brickDims());
+                });
+                renderer.setWorldGridStreaming(true);
+                addSpinners();
+                addFallingProps();
+                // The .vox statue rides the streamed scene as a free-standing volume.
+                auto statue = stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(4.0f, 6.0f, -6.0f));
+                statue->setRenderKind(VoxelRenderKind::FreeStanding);
+                root.add(std::move(statue));
+                camera.setPosition(Vec3(0.0f, 4.0f, 8.0f));
             };
             buildScene();
 
