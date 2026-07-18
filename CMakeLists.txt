@@ -168,9 +168,12 @@ add_custom_target(sample_assets ALL DEPENDS ${SAMPLE_VOX_OUTPUTS})
 # --- App (temporary test executable) ---
 
 add_executable(RAGE
+    src/app/async_vox_loader.cpp
+    src/app/debug_panel.cpp
     src/app/debug_ui.cpp
     src/app/free_fly_controller.cpp
     src/app/main.cpp
+    src/app/player_controller.cpp
     src/app/profiler.cpp
     src/app/tracy_alloc_hooks.cpp
     src/app/window.cpp

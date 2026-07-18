@@ -15,26 +15,23 @@
 #include <thread>
 #include <vector>
 #include <GLFW/glfw3.h>
-#include "app/build_paths.hpp"
-#include "debug_ui.hpp"
+#include "async_vox_loader.hpp"
+#include "debug_panel.hpp"
 #include "engine/toolkit/content/chunk_generators.hpp"
 #include "engine/toolkit/content/chunk_store_factory.hpp"
 #include "engine/toolkit/content/chunk_streamer.hpp"
-#include "engine/toolkit/content/vox_loader.hpp"
 #include "engine/toolkit/entity/kinematic_body.hpp"
 #include "engine/materials/material.hpp"
 #include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/renderer.hpp"
-#include "platform/process_memory.hpp"
-#include "shared/histogram.hpp"
 #include "profiler.hpp"
+#include "shared/profiling.hpp"
 #include "engine/scene/camera.hpp"
 #include "engine/scene/directional_light.hpp"
 #include "engine/scene/node3d.hpp"
-#include "engine/scene/svdag.hpp"
 #include "engine/scene/voxel3d.hpp"
 #include "engine/toolkit/pipeline/voxel_pipeline.hpp"
-#include "free_fly_controller.hpp"
+#include "player_controller.hpp"
 #include "math/color.hpp"
 #include "math/ivec.hpp"
 #include "math/vec.hpp"
@@ -148,13 +145,7 @@ int main(int argc, char **argv) {
 
         const std::filesystem::path assetsDir = executableDir(argv[0]) / "assets";
 
-        struct VoxelLoadJob {
-            std::string label;
-            Toolkit::Content::VoxModel model;
-            Voxel3D *target = nullptr;
-            std::atomic<float> loadProgress{ 0.0f };
-        };
-        std::vector<std::unique_ptr<VoxelLoadJob>> loadJobs;
+        App::AsyncVoxLoader loader;
 
         const auto [initW, initH] = window.framebufferExtent();
         // The camera is a child of a standalone entity node (design sheet Q5-A:
@@ -171,21 +162,6 @@ int main(int argc, char **argv) {
             Renderer &renderer = pipeline.renderer();
             Toolkit::CollisionWorld collisionWorld(renderer.worldBrickGrid(),
                                                    renderer.brickPool(), kVoxelSize);
-
-            const auto stageVoxelFromFile = [&](const std::filesystem::path &voxPath, Vec3 position) {
-                auto job = std::make_unique<VoxelLoadJob>();
-                job->label = voxPath.filename().string();
-                job->model = Toolkit::Content::loadVox(voxPath);
-                auto v = std::make_unique<Voxel3D>(renderer.brickPool(), job->model.dims, kVoxelSize);
-                job->target = v.get();
-                v->setMaterial(voxelMaterial);
-                v->setPosition(position);
-                v->onLoadProgress([&jobRef = *job](float p) { jobRef.loadProgress.store(p); });
-                std::fprintf(stdout, "Staged %s (%dx%dx%d)\n", voxPath.string().c_str(), job->model.dims.x,
-                             job->model.dims.y, job->model.dims.z);
-                loadJobs.push_back(std::move(job));
-                return v;
-            };
 
             Node3D root;
 
@@ -287,274 +263,47 @@ int main(int argc, char **argv) {
                 addSpinners();
                 addFallingProps();
                 // The .vox statue rides the streamed scene as a free-standing volume.
-                auto statue = stageVoxelFromFile(assetsDir / "sphere.vox", Vec3(4.0f, 6.0f, -6.0f));
+                auto statue = loader.stage(assetsDir / "sphere.vox", renderer.brickPool(),
+                                           kVoxelSize);
+                statue->setMaterial(voxelMaterial);
+                statue->setPosition(Vec3(4.0f, 6.0f, -6.0f));
                 statue->setRenderKind(VoxelRenderKind::FreeStanding);
                 root.add(std::move(statue));
                 camera.setPosition(Vec3(0.0f, 4.0f, 8.0f));
             };
             buildScene();
-
-            std::atomic<bool> loaderDone{ false };
-
-            std::atomic<bool> loaderCancel{ false };
-
-            const auto wireCancelHooks = [&]() {
-                for (const auto &job : loadJobs) {
-                    job->target->onLoadShouldCancel([&loaderCancel]() { return loaderCancel.load(); });
-                }
-            };
-            wireCancelHooks();
-
-            std::string loaderError;
-            std::mutex loaderErrorMutex;
-            const auto recordError = [&](const std::string &what) {
-                std::lock_guard lock(loaderErrorMutex);
-                loaderError = what;
-                std::fprintf(stderr, "[scene] %s\n", what.c_str());
-            };
-
-            const auto runLoader = [&]() {
-                profiler.setThreadName("AssetLoader");
-                App::Profiler::Zone outerZone(profiler, "LoaderThread");
-                try {
-                    for (const auto &job : loadJobs) {
-                        if (loaderCancel.load()) {
-                            break;
-                        }
-                        App::Profiler::Zone perFileZone(profiler, "VoxelData::fillFromPackedRGBA8");
-                        job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
-                        job->model.voxels.clear();
-                        job->model.voxels.shrink_to_fit();
-                    }
-                } catch (const std::exception &e) {
-                    recordError(std::string("loader: ") + e.what());
-                }
-                loaderDone.store(true);
-            };
-            std::thread loaderThread(runLoader);
+            loader.start();
 
             // Step order is RAII-load-bearing: brick handles must be released back to
             // their issuing pool BEFORE the pool itself is replaced.
             const auto resetScene = [&](bool enableDedup) {
-                loaderCancel.store(true);
-                if (loaderThread.joinable()) {
-                    loaderThread.join();
-                }
+                loader.cancelAndJoin();
                 streamer.reset();
                 chunkStore.reset();
                 collisionWorld.clearVolumes();
                 props.clear();
                 spinners.clear();
                 root.clearChildren();
-                loadJobs.clear();
+                loader.reset();
                 renderer.recreateBrickPool(enableDedup);
-                loaderCancel.store(false);
-                loaderDone.store(false);
-                {
-                    std::lock_guard lock(loaderErrorMutex);
-                    loaderError.clear();
-                }
                 try {
                     buildScene();
                 } catch (const std::exception &e) {
-                    recordError(std::string("buildScene: ") + e.what());
+                    std::fprintf(stderr, "[scene] buildScene: %s\n", e.what());
                 }
-                wireCancelHooks();
-                loaderThread = std::thread(runLoader);
+                loader.start();
             };
 
-            App::DebugUi debugUi(pipeline.context(), window.glfwHandle());
-            debugUi.attach(renderer);
-
-            App::FreeFlyController controller(camera, window);
-            controller.setMouseVeto([&debugUi]() { return debugUi.wantsMouse(); });
-            // Walk mode: the kinematic body drives the entity, the fly controller keeps
-            // mouse-look only (keyboard vetoed), and the camera rides at eye height.
             constexpr Toolkit::KinematicBodyConfig kPlayerBody{};
-            constexpr float kEyeHeight = 1.62f;
-            constexpr float kWalkSpeed = 4.0f;
-            bool walkMode = false;
-            bool prevWalkKey = false;
             Toolkit::KinematicBody playerBody(playerEntity, collisionWorld, kPlayerBody);
-
-            controller.setKeyboardVeto(
-                [&debugUi, &walkMode]() { return walkMode || debugUi.wantsKeyboard(); });
-
-            bool mipSkipEnabled = renderer.mipSkipEnabled();
-            int heatmapMode = renderer.heatmapMode();
-            int heatmapMaxSteps = renderer.heatmapMaxSteps();
-            bool useSvdag = renderer.useSvdag();
-            bool gridTexture = renderer.useGridTexture();
-            bool brickDedup = renderer.brickPool().isDedupEnabled();
-
-            Core::Histogram<float, 128> frameMsHistory;
-            Core::Histogram<float, 128> renderMsHistory;
-            Core::Histogram<float, 128> brickmapMBHistory;
-            Core::Histogram<float, 128> gpuMemoryMBHistory;
-            Core::Histogram<float, 128> processRSSMBHistory;
-            double uiFps = 0.0;
-            double uiFrameMs = 0.0;
-            debugUi.setBuilder([&]() {
-                debugUi.beginPanel("RAGE Debug");
-                if (!loaderDone.load()) {
-                    debugUi.text("Loading assets...");
-                    for (const auto &job : loadJobs) {
-                        debugUi.text("  %s: load %.0f%%", job->label.c_str(),
-                                     job->loadProgress.load() * 100.0f);
-                    }
-                }
-                {
-                    std::lock_guard lock(loaderErrorMutex);
-                    if (!loaderError.empty()) {
-                        debugUi.text("! %s", loaderError.c_str());
-                    }
-                }
-
-                std::array<char, 64> header{};
-                std::snprintf(header.data(), header.size(), "FPS %.0f  (%.2f ms)###fps", uiFps,
-                              uiFrameMs);
-                if (debugUi.collapsingHeader(header.data())) {
-                    debugUi.plot("Frame", frameMsHistory.data(), frameMsHistory.capacity(),
-                                 frameMsHistory.size(), frameMsHistory.oldestOffset(), "%.2f ms",
-                                 0.0f, FLT_MAX);
-                    debugUi.plot("Render", renderMsHistory.data(), renderMsHistory.capacity(),
-                                 renderMsHistory.size(), renderMsHistory.oldestOffset(), "%.2f ms",
-                                 0.0f, FLT_MAX);
-                }
-
-                const double rssMB = static_cast<double>(Platform::processResidentBytes())
-                                     / (1024.0 * 1024.0);
-                std::snprintf(header.data(), header.size(), "Memory %.0f MB###mem", rssMB);
-                if (debugUi.collapsingHeader(header.data())) {
-                    debugUi.text("Brick dedup:    %s", brickDedup ? "on" : "off");
-                    if (debugUi.button(brickDedup ? "Restart with no dedup" : "Restart with dedup")) {
-                        resetScene(!brickDedup);
-                        brickDedup = !brickDedup;
-                    }
-                    const auto bricksUnique = renderer.brickPool().allocated();
-                    const auto bricksLogical = renderer.brickPool().logicalBricks();
-                    const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())
-                                          / (1024.0 * 1024.0);
-                    size_t handleGridBytes = 0;
-                    size_t denseBytes = 0;
-                    std::function<void(const Node3D &)> walkScene = [&](const Node3D &node) {
-                        if (const auto *v = dynamic_cast<const Voxel3D *>(&node)) {
-                            if (const VoxelData *vd = v->voxelData()) {
-                                handleGridBytes += vd->handleGridBytes();
-                                denseBytes += vd->denseEquivalentBytes();
-                            }
-                        }
-                        for (const auto &child : node.children()) {
-                            walkScene(*child);
-                        }
-                    };
-                    walkScene(root);
-                    const double handleGridKB = static_cast<double>(handleGridBytes) / 1024.0;
-                    const double brickmapTotalMB = poolMB + (handleGridKB / 1024.0);
-                    const double denseMB = static_cast<double>(denseBytes) / (1024.0 * 1024.0);
-                    const double savingsMB = denseMB - brickmapTotalMB;
-                    const double savingsPct = denseMB > 0.0 ? (savingsMB / denseMB) * 100.0 : 0.0;
-                    const double dedupRatio = bricksUnique > 0
-                        ? static_cast<double>(bricksLogical) / static_cast<double>(bricksUnique)
-                        : 1.0;
-
-                    debugUi.text("Pool:           %.2f MB", poolMB);
-                    debugUi.text("Handle grids:   %.2f KB", handleGridKB);
-                    debugUi.text("Bricks unique:  %zu / %zu", bricksUnique,
-                                 renderer.brickPool().maxBricks());
-                    debugUi.text("Bricks logical: %zu", bricksLogical);
-                    debugUi.text("Dedup ratio:    %.2fx", dedupRatio);
-                    debugUi.text("Dense:          %.2f MB", denseMB);
-                    debugUi.separator();
-                    debugUi.text("Total:          %.2f MB  (saved %.2f MB / %.0f%%)",
-                                 brickmapTotalMB, savingsMB, savingsPct);
-                    debugUi.plot("Brickmap", brickmapMBHistory.data(), brickmapMBHistory.capacity(),
-                                 brickmapMBHistory.size(), brickmapMBHistory.oldestOffset(),
-                                 "%.2f MB", 0.0f, FLT_MAX);
-                    debugUi.plot("Process RSS", processRSSMBHistory.data(),
-                                 processRSSMBHistory.capacity(), processRSSMBHistory.size(),
-                                 processRSSMBHistory.oldestOffset(), "%.0f MB", 0.0f, FLT_MAX);
-                }
-
-                const double gpuMB = static_cast<double>(pipeline.gpuMemoryUsedBytes())
-                                     / (1024.0 * 1024.0);
-                std::snprintf(header.data(), header.size(), "GPU %.0f MB###gpu", gpuMB);
-                if (debugUi.collapsingHeader(header.data())) {
-                    debugUi.plot("GPU memory", gpuMemoryMBHistory.data(),
-                                 gpuMemoryMBHistory.capacity(), gpuMemoryMBHistory.size(),
-                                 gpuMemoryMBHistory.oldestOffset(), "%.1f MB", 0.0f, FLT_MAX);
-                    if (renderer.useSvdag() && !renderer.svdag().nodes.empty()) {
-                        debugUi.separatorText("SVDAG (live)");
-                        const Svdag &sv = renderer.svdag();
-                        const size_t flatGridBytes =
-                            renderer.worldBrickGrid().handles().size() * sizeof(BrickHandle);
-                        const double svdagMB =
-                            static_cast<double>(svdagBytes(sv)) / (1024.0 * 1024.0);
-                        const double flatGridMB =
-                            static_cast<double>(flatGridBytes) / (1024.0 * 1024.0);
-                        const double svdagSavedMB = flatGridMB - svdagMB;
-                        const double svdagSavedPct =
-                            flatGridMB > 0.0 ? (svdagSavedMB / flatGridMB) * 100.0 : 0.0;
-                        debugUi.text("Nodes:          %zu", sv.nodes.size());
-                        debugUi.text("Levels:         %d (paddedDim=%d)", sv.levels, sv.paddedDim);
-                        debugUi.text("SVDAG size:     %.3f MB", svdagMB);
-                        debugUi.text("Flat grid:      %.3f MB", flatGridMB);
-                        debugUi.text("Saved vs grid:  %.3f MB (%.0f%%)", svdagSavedMB,
-                                     svdagSavedPct);
-                    }
-                }
-
-                if (streamer.has_value()) {
-                    std::snprintf(header.data(), header.size(), "Streaming  %zu chunks###stream",
-                                  streamer->loadedCount());
-                    if (debugUi.collapsingHeader(header.data())) {
-                        debugUi.text("Loaded:  %zu chunks", streamer->loadedCount());
-                        debugUi.text("Skipped: %zu chunks", streamer->skippedCount());
-                        debugUi.text("Radius:  h=%d  Y=[%d,%d]", kStreamHRadius, kTerrainYRange.min,
-                                     kTerrainYRange.max);
-                    }
-                }
-
-                if (debugUi.collapsingHeader("Controls")) {
-                    if constexpr (App::kIsDevBuild) {
-                        if (App::Profiler::isLinked()) {
-                            if (profiler.isProfilerGuiRunning()) {
-                                debugUi.text("Tracy: running (close to relaunch)");
-                            } else if (debugUi.button("Launch Tracy")) {
-                                profiler.launchProfilerGui();
-                            }
-                        }
-                    }
-                    if (debugUi.checkbox("Mip skip", &mipSkipEnabled)) {
-                        renderer.setMipSkipEnabled(mipSkipEnabled);
-                    }
-                    if (debugUi.checkbox("SVDAG traversal", &useSvdag)) {
-                        renderer.setUseSvdag(useSvdag);
-                    }
-                    if (debugUi.checkbox("Grid 3D texture", &gridTexture)) {
-                        renderer.setUseGridTexture(gridTexture);
-                    }
-                    static const char *const kHeatmapOpts[] = { "Off", "Step count" };
-                    if (debugUi.radio("Heatmap", &heatmapMode,
-                                      std::span<const char *const>(kHeatmapOpts,
-                                                                   std::size(kHeatmapOpts)))) {
-                        renderer.setHeatmapMode(heatmapMode);
-                    }
-                    if (heatmapMode != 0
-                        && debugUi.sliderInt("Heatmap max steps", &heatmapMaxSteps, 32, 4096)) {
-                        renderer.setHeatmapMaxSteps(heatmapMaxSteps);
-                    }
-                    debugUi.separatorText("Camera");
-                    debugUi.text("Walk mode (V): %s%s", walkMode ? "on" : "off",
-                                 (walkMode && playerBody.grounded()) ? " - grounded" : "");
-                    float speedMult = controller.speedMultiplier();
-                    if (debugUi.sliderFloat("Speed (x)", &speedMult, 0.1f, 10.0f)) {
-                        controller.setSpeedMultiplier(speedMult);
-                    }
-                }
-
-                debugUi.endPanel();
-            });
+            App::PlayerController player(window, camera, playerEntity, playerBody);
+            App::DebugPanel debug(pipeline, window, profiler, loader, player, root, streamer,
+                                  App::DebugPanel::StreamInfo{ .hRadius = kStreamHRadius,
+                                                               .yRange = kTerrainYRange },
+                                  resetScene);
+            player.setUiFocus([&debug]() { return debug.wantsMouse(); },
+                              [&debug]() { return debug.wantsKeyboard(); });
+            player.setScrollSource([&debug]() { return debug.scrollDelta(); });
 
             auto sun = std::make_shared<DirectionalLight>(Vec3(-1.0f, -1.0f, -1.0f),
                                                           Color(1.0f, 0.95f, 0.85f), 1.2f);
@@ -572,52 +321,9 @@ int main(int argc, char **argv) {
                 const auto dt = static_cast<float>(now - lastTime);
                 lastTime = now;
 
-                frameMsHistory.push(dt * 1000.0f);
-                gpuMemoryMBHistory.push(static_cast<float>(pipeline.gpuMemoryUsedBytes())
-                                        / (1024.0f * 1024.0f));
-                const float brickPoolMB =
-                    static_cast<float>(renderer.brickPool().allocatedBytes()) / (1024.0f * 1024.0f);
-                const float handleGridMB = static_cast<float>(renderer.worldBrickGrid().handles().size()
-                                                              * sizeof(BrickHandle))
-                                           / (1024.0f * 1024.0f);
-                brickmapMBHistory.push(brickPoolMB + handleGridMB);
-                const uint64_t rss = Platform::processResidentBytes();
-                if (rss > 0) {
-                    processRSSMBHistory.push(static_cast<float>(rss) / (1024.0f * 1024.0f));
-                }
+                debug.frame(dt);
 
-                fpsAccumDt += dt;
-                ++fpsAccumFrames;
-                if (now - fpsLastUpdate > 0.25) {
-                    const double avgMs = (fpsAccumDt / static_cast<double>(fpsAccumFrames)) * 1000.0;
-                    const double fps = static_cast<double>(fpsAccumFrames) / (now - fpsLastUpdate);
-                    uiFps = fps;
-                    uiFrameMs = avgMs;
-                    std::array<char, 128> titleBuf{};
-                    std::snprintf(titleBuf.data(), titleBuf.size(), "RAGE Smoke | FPS %.1f | %.2f ms", fps, avgMs);
-                    window.setTitle(titleBuf.data());
-                    profiler.plot("fps", fps);
-                    profiler.plot("frame_ms", avgMs);
-                    profiler.plot("brick_count",
-                                  static_cast<double>(renderer.brickPool().allocated()));
-                    profiler.plot("brick_pool_mb",
-                                  static_cast<double>(renderer.brickPool().allocatedBytes())
-                                      / (1024.0 * 1024.0));
-                    if (streamer.has_value()) {
-                        profiler.plot("chunks_loaded",
-                                      static_cast<double>(streamer->loadedCount()));
-                        profiler.plot("chunks_pending",
-                                      static_cast<double>(streamer->pendingCount()));
-                    }
-                    fpsLastUpdate = now;
-                    fpsAccumDt = 0.0;
-                    fpsAccumFrames = 0;
-                }
-
-                if (!walkMode) {
-                    controller.applyScrollDelta(debugUi.scrollDelta());
-                }
-                controller.update(dt);
+                player.update(dt);
 
                 for (size_t i = 0; i < spinners.size(); ++i) {
                     const float speed = 0.4f + (0.3f * static_cast<float>(i));
@@ -628,60 +334,14 @@ int main(int argc, char **argv) {
                         Quat::fromAxisAngle(axis, static_cast<float>(now) * speed));
                 }
                 {
-                    const App::Profiler::Zone physicsZone(profiler, "Physics.Bodies");
+                    const Core::ProfileZone physicsZone("Physics.Bodies");
                     for (Prop &prop : props) {
                         prop.body->update(Toolkit::MoveInput{}, dt);
                     }
                 }
 
-                const bool walkKey = !debugUi.wantsKeyboard()
-                                     && glfwGetKey(window.glfwHandle(), GLFW_KEY_V) == GLFW_PRESS;
-                if (walkKey && !prevWalkKey) {
-                    walkMode = !walkMode;
-                    const Vec3 camWorld = camera.worldMatrix().transformPoint(Vec3::zero());
-                    if (walkMode) {
-                        playerEntity.setPosition(camWorld - Vec3(0.0f, kEyeHeight, 0.0f));
-                        camera.setPosition(Vec3(0.0f, kEyeHeight, 0.0f));
-                    } else {
-                        playerEntity.setPosition(Vec3::zero());
-                        camera.setPosition(camWorld);
-                    }
-                }
-                prevWalkKey = walkKey;
-
-                if (walkMode) {
-                    GLFWwindow *gw = window.glfwHandle();
-                    const Mat4 camWorldM = camera.worldMatrix();
-                    Vec3 fwd = camWorldM.transformDirection(Vec3(0.0f, 0.0f, -1.0f));
-                    fwd.y = 0.0f;
-                    Vec3 right = camWorldM.transformDirection(Vec3(1.0f, 0.0f, 0.0f));
-                    right.y = 0.0f;
-                    Vec3 walk(0.0f, 0.0f, 0.0f);
-                    if (!debugUi.wantsKeyboard()) {
-                        float f = 0.0f;
-                        float r = 0.0f;
-                        if (glfwGetKey(gw, GLFW_KEY_W) == GLFW_PRESS) { f += 1.0f; }
-                        if (glfwGetKey(gw, GLFW_KEY_S) == GLFW_PRESS) { f -= 1.0f; }
-                        if (glfwGetKey(gw, GLFW_KEY_D) == GLFW_PRESS) { r += 1.0f; }
-                        if (glfwGetKey(gw, GLFW_KEY_A) == GLFW_PRESS) { r -= 1.0f; }
-                        const Vec3 dir = (fwd * f) + (right * r);
-                        if (dir.length() > 1e-3f) {
-                            walk = dir.normalized() * kWalkSpeed;
-                        }
-                    }
-                    const Toolkit::MoveInput moveIn{
-                        .walk = walk,
-                        .jump = !debugUi.wantsKeyboard()
-                                && glfwGetKey(gw, GLFW_KEY_SPACE) == GLFW_PRESS,
-                    };
-                    {
-                        const App::Profiler::Zone playerZone(profiler, "Physics.Player");
-                        playerBody.update(moveIn, dt);
-                    }
-                }
-
                 if (streamer.has_value()) {
-                    const App::Profiler::Zone streamerZone(profiler, "ChunkStreamer.Update");
+                    const Core::ProfileZone streamerZone("ChunkStreamer.Update");
                     const float chunkWorldExtent =
                         static_cast<float>(chunkStore->chunkBrickDims().x) * 8.0f * kVoxelSize;
                     const Vec3 camPos = camera.worldMatrix().transformPoint(Vec3::zero());
@@ -708,7 +368,7 @@ int main(int argc, char **argv) {
 
                 GLFWwindow *gw = window.glfwHandle();
                 const bool rightDown =
-                    !debugUi.wantsMouse() && (glfwGetMouseButton(gw, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+                    !debug.wantsMouse() && (glfwGetMouseButton(gw, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
                 if (rightDown && !prevRight) {
                     const int cursorMode = glfwGetInputMode(gw, GLFW_CURSOR);
                     int32_t px = static_cast<int32_t>(w) / 2;
@@ -726,7 +386,7 @@ int main(int argc, char **argv) {
 
                 const double renderStart = glfwGetTime();
                 pipeline.render(root, camera);
-                renderMsHistory.push(static_cast<float>((glfwGetTime() - renderStart) * 1000.0));
+                debug.pushRenderMs(static_cast<float>((glfwGetTime() - renderStart) * 1000.0));
 
                 PixelDebug pd;
                 if (renderer.tryReadPick(pd)) {
@@ -748,10 +408,7 @@ int main(int argc, char **argv) {
                     std::fflush(stdout);
                 }
             }
-            loaderCancel.store(true);
-            if (loaderThread.joinable()) {
-                loaderThread.join();
-            }
+            loader.cancelAndJoin();
         }
     } catch (const std::exception &e) {
         std::fprintf(stderr, "fatal: %s\n", e.what());
