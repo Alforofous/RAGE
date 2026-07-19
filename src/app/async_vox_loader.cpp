@@ -8,12 +8,13 @@ namespace RAGE::App {
     AsyncVoxLoader::~AsyncVoxLoader() { cancelAndJoin(); }
 
     std::unique_ptr<Voxel3D> AsyncVoxLoader::stage(const std::filesystem::path &voxPath,
-                                                   BrickPool &pool, float voxelSize) {
+                                                   float voxelSize) {
         auto job = std::make_unique<Job>();
         job->label = voxPath.filename().string();
         job->model = Toolkit::Content::loadVox(voxPath);
-        auto volume = std::make_unique<Voxel3D>(pool, job->model.dims, voxelSize);
+        auto volume = std::make_unique<Voxel3D>(job->model.dims, voxelSize);
         job->target = volume.get();
+        volume->voxelData()->beginBulkLoad();
         volume->onLoadProgress([&jobRef = *job](float p) { jobRef.progress.store(p); });
         volume->onLoadShouldCancel([this]() { return cancel_.load(); });
         std::fprintf(stdout, "Staged %s (%dx%dx%d)\n", voxPath.string().c_str(),
@@ -63,11 +64,15 @@ namespace RAGE::App {
                     break;
                 }
                 job->target->fillFromPackedRGBA8(job->model.voxels.data(), job->model.dims);
+                job->target->voxelData()->endBulkLoad();
                 job->model.voxels.clear();
                 job->model.voxels.shrink_to_fit();
             }
         } catch (const std::exception &e) {
             recordError_(std::string("loader: ") + e.what());
+        }
+        for (const auto &job : jobs_) {
+            job->target->voxelData()->endBulkLoad();
         }
         done_.store(true);
     }

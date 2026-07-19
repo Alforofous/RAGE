@@ -35,6 +35,14 @@ namespace RAGE {
      */
     class Voxel3D : public RenderableNode3D<VulkanShaderModule> {
     public:
+        /**
+         * @brief The one-primitive constructor (api-north-star): voxels stage
+         *        CPU-side; the render pipeline adopts the volume into its shared
+         *        brick pool on first sight. No engine handles needed at the call site.
+         */
+        Voxel3D(IVec3 dims, float voxelSize);
+
+        /// Pool-backed construction — internal machinery (chunk stores, tests).
         Voxel3D(BrickPool &pool, IVec3 dims, float voxelSize);
 
         void setVoxel(IVec3 c, Color rgba);

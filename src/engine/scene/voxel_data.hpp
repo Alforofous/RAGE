@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <span>
@@ -41,6 +42,15 @@ namespace RAGE {
     class VoxelData {
     public:
         VoxelData(BrickPool &pool, IVec3 voxelDims);
+
+        /**
+         * @brief Pool-less staging construction (api-north-star N8): voxels live in
+         *        internal CPU bricks until a pipeline adopts the volume into its
+         *        shared pool on first sight. Reads/writes work identically before
+         *        and after adoption.
+         */
+        explicit VoxelData(IVec3 voxelDims);
+
         ~VoxelData();
 
         VoxelData(const VoxelData &) = delete;
@@ -75,6 +85,27 @@ namespace RAGE {
          *        it to detect "did this volume change since I last uploaded it".
          */
         uint64_t version() const { return version_; }
+
+        /// True once brick handles reference a shared pool (constructed with one, or
+        /// adopted). Consumers that read pool bricks directly must check this first.
+        bool isAdopted() const { return pool_ != nullptr; }
+
+        /// False while a bulk fill is running on another thread — the pipeline must
+        /// not adopt (or read) the volume until the load completes.
+        bool isAdoptable() const { return !bulkLoading_.load(std::memory_order_acquire); }
+
+        /// Bracket a worker-thread bulk fill; begin on the owning thread BEFORE the
+        /// worker starts, end on the worker when the fill is done.
+        void beginBulkLoad() { bulkLoading_.store(true, std::memory_order_release); }
+        void endBulkLoad() { bulkLoading_.store(false, std::memory_order_release); }
+
+        /**
+         * @brief Move every staged brick into `pool` (through the dedup path) and
+         *        switch this volume to pool-backed handles. Throws if already
+         *        adopted. Called by the render pipeline on first sight; tests may
+         *        call it directly.
+         */
+        void adoptInto(BrickPool &pool);
 
         /**
          * @brief Transfer every occupied brick from `source` into this volume, placed
@@ -118,7 +149,9 @@ namespace RAGE {
         void convertToWindowed_();
         void releaseBrickAt_(IVec3 brickCoord);
 
-        BrickPool *pool_;
+        BrickPool *pool_ = nullptr;
+        std::vector<Brick> staging_;
+        std::atomic<bool> bulkLoading_{ false };
         IVec3 voxelDims_;
         IVec3 brickDims_;
         IVec3 storageDims_{ 0, 0, 0 };

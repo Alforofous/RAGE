@@ -63,9 +63,8 @@ namespace RAGE {
         }
     }
 
-    VoxelData::VoxelData(BrickPool &pool, IVec3 voxelDims)
-        : pool_(&pool)
-        , voxelDims_(voxelDims) {
+    VoxelData::VoxelData(IVec3 voxelDims)
+        : voxelDims_(voxelDims) {
         if (voxelDims.x <= 0 || voxelDims.y <= 0 || voxelDims.z <= 0) {
             throw std::invalid_argument("VoxelData: voxelDims must be positive on all axes");
         }
@@ -76,7 +75,36 @@ namespace RAGE {
         handles_.assign(total, kEmptyBrick);
     }
 
+    VoxelData::VoxelData(BrickPool &pool, IVec3 voxelDims)
+        : VoxelData(voxelDims) {
+        pool_ = &pool;
+    }
+
+    void VoxelData::adoptInto(BrickPool &pool) {
+        if (pool_ != nullptr) {
+            throw std::logic_error("VoxelData::adoptInto: already pool-backed");
+        }
+        if (!isAdoptable()) {
+            throw std::logic_error("VoxelData::adoptInto: bulk load in progress");
+        }
+        pool_ = &pool;
+        for (BrickHandle &h : handles_) {
+            if (h == kEmptyBrick) {
+                continue;
+            }
+            // Staged handle ids are staging index + 1; re-acquire through the pool
+            // so adoption rides the dedup path.
+            h = pool.acquireBrick(staging_[h.id - 1]);
+        }
+        staging_.clear();
+        staging_.shrink_to_fit();
+        ++version_;
+    }
+
     VoxelData::~VoxelData() {
+        if (pool_ == nullptr) {
+            return;   // staged bricks die with staging_
+        }
         for (BrickHandle h : handles_) {
             if (h != kEmptyBrick) {
                 pool_->release(h);
@@ -133,8 +161,10 @@ namespace RAGE {
     void VoxelData::releaseBrickAt_(IVec3 brickCoord) {
         const size_t flat = brickFlatIndex(brickCoord);
         if (handles_[flat] != kEmptyBrick) {
-            pool_->release(handles_[flat]);
-            handles_[flat] = kEmptyBrick;
+            if (pool_ != nullptr) {
+                pool_->release(handles_[flat]);
+            }
+            handles_[flat] = kEmptyBrick;   // staged bricks are dropped at adoption
         }
     }
 
@@ -194,7 +224,9 @@ namespace RAGE {
         const int32_t lx = floorModBrick(c.x);
         const int32_t ly = floorModBrick(c.y);
         const int32_t lz = floorModBrick(c.z);
-        return pool_->brick(h).voxels[brickVoxelIndex(lx, ly, lz)];
+        // Staged handle ids are staging index + 1 (0 is the empty sentinel).
+        const Brick &brick = pool_ != nullptr ? pool_->brick(h) : staging_[h.id - 1];
+        return brick.voxels[brickVoxelIndex(lx, ly, lz)];
     }
 
     void VoxelData::setVoxel(IVec3 c, uint32_t packed) {
@@ -209,6 +241,22 @@ namespace RAGE {
         }
         const size_t flat = brickFlatIndex(brickCoord);
         BrickHandle h = handles_[flat];
+        const int32_t lx = floorModBrick(c.x);
+        const int32_t ly = floorModBrick(c.y);
+        const int32_t lz = floorModBrick(c.z);
+        if (pool_ == nullptr) {
+            if (h == kEmptyBrick) {
+                if (packed == 0u) {
+                    return;
+                }
+                h = BrickHandle{ static_cast<uint32_t>(staging_.size()) + 1u };
+                staging_.emplace_back();
+                handles_[flat] = h;
+            }
+            staging_[h.id - 1].voxels[brickVoxelIndex(lx, ly, lz)] = packed;
+            ++version_;
+            return;
+        }
         if (h == kEmptyBrick) {
             if (packed == 0u) {
                 return;
@@ -222,9 +270,6 @@ namespace RAGE {
                 h = writable;
             }
         }
-        const int32_t lx = floorModBrick(c.x);
-        const int32_t ly = floorModBrick(c.y);
-        const int32_t lz = floorModBrick(c.z);
         pool_->writeVoxel(h, brickVoxelIndex(lx, ly, lz), packed);
         ++version_;
     }
@@ -291,6 +336,15 @@ namespace RAGE {
                         }
                     }
                     const size_t flat = brickFlatIndex({ bx, by, bz });
+                    if (pool_ == nullptr) {
+                        if (handles_[flat] == kEmptyBrick) {
+                            handles_[flat] =
+                                BrickHandle{ static_cast<uint32_t>(staging_.size()) + 1u };
+                            staging_.emplace_back();
+                        }
+                        staging_[handles_[flat].id - 1] = local;
+                        continue;
+                    }
                     if (handles_[flat] != kEmptyBrick) {
                         pool_->release(handles_[flat]);
                     }
@@ -302,6 +356,10 @@ namespace RAGE {
     }
 
     void VoxelData::adoptBricksFrom(VoxelData &source, IVec3 dstMinBrick) {
+        if (pool_ == nullptr || source.pool_ == nullptr) {
+            throw std::logic_error(
+                "VoxelData::adoptBricksFrom: both volumes must be pool-backed (adopted)");
+        }
         if (source.pool_ != pool_) {
             throw std::invalid_argument("VoxelData::adoptBricksFrom: pools differ");
         }

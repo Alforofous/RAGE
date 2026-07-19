@@ -297,3 +297,82 @@ TEST(VoxelDataWindow, FillFromPackedThrowsOnceWindowed) {
     std::vector<uint32_t> src(16 * 16 * 16, 0u);
     EXPECT_THROW(d.fillFromPackedRGBA8(src.data(), IVec3{ 16, 16, 16 }), std::logic_error);
 }
+
+// ---- Staging + adoption (api-north-star N8) -----------------------------------
+
+TEST(VoxelDataStaging, PoolLessVolumeStagesAndReadsBack) {
+    VoxelData d(IVec3{ 16, 16, 16 });
+    EXPECT_FALSE(d.isAdopted());
+    d.setVoxel(IVec3{ 1, 2, 3 }, 0xAABBCCDDu);
+    d.setVoxel(IVec3{ 15, 15, 15 }, 0x11223344u);
+    EXPECT_EQ(d.voxel(IVec3{ 1, 2, 3 }), 0xAABBCCDDu);
+    EXPECT_EQ(d.voxel(IVec3{ 15, 15, 15 }), 0x11223344u);
+    EXPECT_EQ(d.voxel(IVec3{ 8, 8, 8 }), 0u);
+}
+
+TEST(VoxelDataStaging, AdoptionMovesBricksIntoPoolAndPreservesContent) {
+    BrickPool pool;
+    VoxelData d(IVec3{ 16, 16, 16 });
+    d.setVoxel(IVec3{ 1, 2, 3 }, 0xAABBCCDDu);
+    d.setVoxel(IVec3{ 15, 15, 15 }, 0x11223344u);
+    EXPECT_EQ(pool.allocated(), 0u);
+
+    d.adoptInto(pool);
+    EXPECT_TRUE(d.isAdopted());
+    EXPECT_EQ(pool.allocated(), 2u);
+    EXPECT_EQ(d.voxel(IVec3{ 1, 2, 3 }), 0xAABBCCDDu);
+    EXPECT_EQ(d.voxel(IVec3{ 15, 15, 15 }), 0x11223344u);
+    d.setVoxel(IVec3{ 1, 15, 1 }, 0xFF0000FFu);   // fresh brick {0,1,0}: post-adoption
+    EXPECT_EQ(pool.allocated(), 3u);              // writes allocate from the pool
+}
+
+TEST(VoxelDataStaging, DoubleAdoptionThrows) {
+    BrickPool pool;
+    VoxelData d(IVec3{ 8, 8, 8 });
+    d.adoptInto(pool);
+    EXPECT_THROW(d.adoptInto(pool), std::logic_error);
+}
+
+TEST(VoxelDataStaging, BulkLoadFlagBlocksAdoption) {
+    BrickPool pool;
+    VoxelData d(IVec3{ 8, 8, 8 });
+    d.beginBulkLoad();
+    EXPECT_FALSE(d.isAdoptable());
+    EXPECT_THROW(d.adoptInto(pool), std::logic_error);
+    d.endBulkLoad();
+    EXPECT_TRUE(d.isAdoptable());
+    d.adoptInto(pool);
+    EXPECT_TRUE(d.isAdopted());
+}
+
+TEST(VoxelDataStaging, AdoptionGoesThroughAcquireBrick) {
+    BrickPool pool;
+    VoxelData d(IVec3{ 16, 8, 8 });   // two bricks side by side, identical content
+    d.setVoxel(IVec3{ 0, 0, 0 }, 0xDEADBEEFu);
+    d.setVoxel(IVec3{ 8, 0, 0 }, 0xDEADBEEFu);
+    d.adoptInto(pool);
+    // acquireBrick counts logical bricks; identical content dedups when enabled.
+    EXPECT_EQ(pool.logicalBricks(), 2u);
+    EXPECT_LE(pool.allocated(), 2u);
+    EXPECT_EQ(d.voxel(IVec3{ 0, 0, 0 }), d.voxel(IVec3{ 8, 0, 0 }));
+}
+
+TEST(VoxelDataStaging, StagingDestructionLeaksNothingFromPool) {
+    BrickPool pool;
+    {
+        VoxelData d(IVec3{ 16, 16, 16 });
+        d.setVoxel(IVec3{ 0, 0, 0 }, 0xFFFFFFFFu);
+    }
+    EXPECT_EQ(pool.allocated(), 0u);
+}
+
+TEST(VoxelDataStaging, WindowSlideWorksBeforeAdoption) {
+    BrickPool pool;
+    VoxelData d(IVec3{ 32, 32, 32 });
+    d.setVoxel(IVec3{ 1, 1, 1 }, 0xAA0000FFu);
+    d.setWindowCenterBrick(IVec3{ 2, 2, 2 });   // origin stays {0,0,0}
+    EXPECT_EQ(d.voxel(IVec3{ 1, 1, 1 }), 0xAA0000FFu);
+    d.adoptInto(pool);
+    EXPECT_EQ(d.voxel(IVec3{ 1, 1, 1 }), 0xAA0000FFu);
+    EXPECT_EQ(pool.allocated(), 1u);
+}

@@ -4,6 +4,19 @@
 #include "engine/scene/brick_pool.hpp"
 
 namespace RAGE {
+    Voxel3D::Voxel3D(IVec3 dims, float voxelSize)
+        : dims_(dims)
+        , voxelSize_(voxelSize) {
+        if (dims.x <= 0 || dims.y <= 0 || dims.z <= 0) {
+            throw std::runtime_error("Voxel3D: dimensions must be positive");
+        }
+        if (voxelSize <= 0.0f) {
+            throw std::runtime_error("Voxel3D: voxelSize must be positive");
+        }
+        data_ = std::make_unique<VoxelData>(dims);
+        setTransformBumpsTreeVersion(false);
+    }
+
     Voxel3D::Voxel3D(BrickPool &pool, IVec3 dims, float voxelSize)
         : dims_(dims)
         , voxelSize_(voxelSize) {

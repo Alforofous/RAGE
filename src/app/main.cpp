@@ -103,8 +103,7 @@ int main(int argc, char **argv) {
 
             // The world: one windowed Voxel3D. The streamer slides its storage
             // window and fills it; the renderer marches it; collision reads it.
-            Voxel3D &world =
-                root.add<Voxel3D>(renderer.brickPool(), kWorld.worldVoxelDims(), kVoxelSize);
+            Voxel3D &world = root.add<Voxel3D>(kWorld.worldVoxelDims(), kVoxelSize);
             world.setMaterial(voxelMaterial);
 
             Toolkit::CollisionWorld collisionWorld(*world.voxelData(), renderer.brickPool(),
@@ -127,8 +126,7 @@ int main(int argc, char **argv) {
                 const std::array<uint32_t, 3> palette{ 0xFF4A6FE3u, 0xFF3DB57Bu, 0xFFD1583Fu };
                 for (size_t i = 0; i < palette.size(); ++i) {
                     auto v = std::make_unique<Voxel3D>(
-                        renderer.brickPool(), IVec3{ kSpinnerDim, kSpinnerDim, kSpinnerDim },
-                        kVoxelSize);
+                        IVec3{ kSpinnerDim, kSpinnerDim, kSpinnerDim }, kVoxelSize);
                     const uint32_t color = palette[i];
                     v->fill([color](IVec3 c) {
                         const bool checker = (((c.x / 6) + (c.y / 6) + (c.z / 6)) & 1) == 0;
@@ -158,8 +156,8 @@ int main(int argc, char **argv) {
                     { .color = 0xFFB4E8B0u, .mass = 2000.0f },   // heavy — immovable-ish
                 } };
                 for (size_t i = 0; i < specs.size(); ++i) {
-                    auto v = std::make_unique<Voxel3D>(
-                        renderer.brickPool(), IVec3{ kPropDim, kPropDim, kPropDim }, kVoxelSize);
+                    auto v = std::make_unique<Voxel3D>(IVec3{ kPropDim, kPropDim, kPropDim },
+                                                       kVoxelSize);
                     v->fillSolid(Color::fromRGBA8(specs[i].color));
                     v->setMaterial(voxelMaterial);
                     v->setPosition(Vec3(1.8f + (0.9f * static_cast<float>(i)),
@@ -194,8 +192,7 @@ int main(int argc, char **argv) {
                 addSpinners();
                 addFallingProps();
                 // The .vox statue rides the streamed scene as a free-standing volume.
-                auto statue = loader.stage(assetsDir / "sphere.vox", renderer.brickPool(),
-                                           kVoxelSize);
+                auto statue = loader.stage(assetsDir / "sphere.vox", kVoxelSize);
                 statue->setMaterial(voxelMaterial);
                 statue->setPosition(Vec3(4.0f, 6.0f, -6.0f));
                 root.add(std::move(statue));

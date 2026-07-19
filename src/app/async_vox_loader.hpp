@@ -38,8 +38,7 @@ namespace RAGE::App {
          *        the model's dimensions, wired for progress + cancellation. The fill
          *        itself is deferred to the worker; call before start().
          */
-        std::unique_ptr<Voxel3D> stage(const std::filesystem::path &voxPath, BrickPool &pool,
-                                       float voxelSize);
+        std::unique_ptr<Voxel3D> stage(const std::filesystem::path &voxPath, float voxelSize);
 
         /// Launch the worker over everything staged so far.
         void start();

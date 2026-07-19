@@ -280,7 +280,24 @@ namespace RAGE {
             collectVolumes(root);
         }
 
-        if (worldVolume_ != nullptr
+        // Adopt-on-render (api-north-star N8): pool-less volumes join the shared
+        // pool the first frame they are visible and not mid-bulk-load.
+        {
+            const auto adoptIfReady = [this](Voxel3D *v) {
+                VoxelData *data = v->voxelData();
+                if (!data->isAdopted() && data->isAdoptable()) {
+                    data->adoptInto(*brickPool_);
+                }
+            };
+            if (worldVolume_ != nullptr) {
+                adoptIfReady(worldVolume_);
+            }
+            for (Voxel3D *v : freeVolumes_) {
+                adoptIfReady(v);
+            }
+        }
+
+        if (worldVolume_ != nullptr && worldVolume_->voxelData()->isAdopted()
             && worldVolume_->voxelData()->version() != lastWorldVolumeVersion_) {
             lastWorldVolumeVersion_ = worldVolume_->voxelData()->version();
             worldGridGpuDirty_ = true;
@@ -400,7 +417,14 @@ namespace RAGE {
                  && (worldGridSync_.textureValid() || worldGridSync_.textureUploadArmed()))
                     ? 1
                     : 0;
-            uniforms.freeVolumeCount = static_cast<int32_t>(freeVolumeSync_.upload(freeVolumes_));
+            adoptedFreeVolumesScratch_.clear();
+            for (Voxel3D *v : freeVolumes_) {
+                if (v->voxelData()->isAdopted()) {
+                    adoptedFreeVolumesScratch_.push_back(v);
+                }
+            }
+            uniforms.freeVolumeCount =
+                static_cast<int32_t>(freeVolumeSync_.upload(adoptedFreeVolumesScratch_));
 
             std::memcpy(frameUniformBuffer_->mappedData(), &uniforms, sizeof(uniforms));
         }

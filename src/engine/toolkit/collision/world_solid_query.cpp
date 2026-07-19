@@ -37,6 +37,9 @@ namespace RAGE::Toolkit {
     }
 
     bool WorldSolidQuery::latticeSolid_(IVec3 worldVoxel) const {
+        if (!lattice_.isAdopted()) {
+            return false;   // staging volumes have no pool handles to read yet
+        }
         const IVec3 brickCoord{ worldVoxel.x >> 3, worldVoxel.y >> 3, worldVoxel.z >> 3 };
         const BrickHandle h = lattice_.handleAt(brickCoord);
         if (h == kEmptyBrick) {

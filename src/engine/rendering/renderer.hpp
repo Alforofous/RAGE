@@ -266,6 +266,7 @@ namespace RAGE {
         uint64_t lastWorldVolumeVersion_ = ~0ull;
         uint64_t lastSceneTreeVersion_ = UINT64_MAX;
         std::vector<Voxel3D *> freeVolumes_;
+        std::vector<Voxel3D *> adoptedFreeVolumesScratch_;
         std::optional<BrickPool> brickPool_;
         std::vector<BrickHandle> svdagScratch_;
 
