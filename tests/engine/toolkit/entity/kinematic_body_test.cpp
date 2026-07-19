@@ -59,7 +59,8 @@ TEST_F(KinematicBodyTest, FallsAndLandsOnFloor) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 1.6f, 0.4f));
     CollisionWorld world(world_, pool_, kVs);
-    KinematicBody body(entity, world, smallBody());
+    KinematicBody body(entity, smallBody());
+    world.add(body);
 
     EXPECT_FALSE(body.grounded());
     settle(body);
@@ -72,7 +73,8 @@ TEST_F(KinematicBodyTest, JumpRisesThenLandsAgain) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     CollisionWorld world(world_, pool_, kVs);
-    KinematicBody body(entity, world, smallBody());
+    KinematicBody body(entity, smallBody());
+    world.add(body);
     settle(body);
     ASSERT_TRUE(body.grounded());
 
@@ -89,7 +91,8 @@ TEST_F(KinematicBodyTest, WalksAndStepsUpLowLedge) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     CollisionWorld world(world_, pool_, kVs);
-    KinematicBody body(entity, world, smallBody());
+    KinematicBody body(entity, smallBody());
+    world.add(body);
     settle(body);
 
     for (int32_t i = 0; i < 90; ++i) {
@@ -106,7 +109,8 @@ TEST_F(KinematicBodyTest, TallLedgeBlocksWhenStepUpDisabled) {
     KinematicBodyConfig cfg = smallBody();
     cfg.stepUpHeight = 0.0f;
     CollisionWorld world(world_, pool_, kVs);
-    KinematicBody body(entity, world, cfg);
+    KinematicBody body(entity, cfg);
+    world.add(body);
     settle(body);
 
     for (int32_t i = 0; i < 120; ++i) {
@@ -131,7 +135,8 @@ TEST_F(KinematicBodyTest, CeilingCancelsAscent) {
     KinematicBodyConfig cfg = smallBody();
     cfg.jumpSpeed = 5.0f;
     CollisionWorld world(world_, pool_, kVs);
-    KinematicBody body(entity, world, cfg);
+    KinematicBody body(entity, cfg);
+    world.add(body);
     settle(body);
 
     body.update(MoveInput{ .walk = Vec3(0.0f, 0.0f, 0.0f), .jump = true }, 1.0f / 60.0f);
@@ -157,8 +162,10 @@ TEST_F(KinematicBodyTest, HeavierBodyMovesLessInMutualOverlap) {
     lightCfg.mass = 10.0f;
     KinematicBodyConfig heavyCfg = smallBody();
     heavyCfg.mass = 1000.0f;
-    KinematicBody lightBody(light, world, lightCfg);
-    KinematicBody heavyBody(heavy, world, heavyCfg);
+    KinematicBody lightBody(light, lightCfg);
+    world.add(lightBody);
+    KinematicBody heavyBody(heavy, heavyCfg);
+    world.add(heavyBody);
     EXPECT_EQ(world.bodyCount(), 2u);
 
     const float lightStart = light.position().x;
@@ -178,7 +185,8 @@ TEST_F(KinematicBodyTest, DepenetrationPushesBodyOutOfSolid) {
     Node3D entity;
     // Feet 0.05 below the floor top (0.8): overlapping the floor by half a voxel.
     entity.setPosition(Vec3(0.4f, 0.75f, 0.4f));
-    KinematicBody body(entity, world, smallBody());
+    KinematicBody body(entity, smallBody());
+    world.add(body);
 
     body.update(MoveInput{}, 1.0f / 60.0f);
     EXPECT_GE(entity.position().y, 0.8f - 1e-3f);

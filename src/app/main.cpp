@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
                     v->setPosition(Vec3(-3.0f + (3.0f * static_cast<float>(i)), 3.0f, -4.0f));
                     spinners.push_back(v.get());
                     root.add(std::move(v));
-                    collisionWorld.registerVolume(*spinners.back());
+                    collisionWorld.add(*spinners.back());
                 }
             };
 
@@ -241,9 +241,9 @@ int main(int argc, char **argv) {
                     };
                     props.push_back(Prop{
                         .volume = raw,
-                        .body = std::make_unique<Toolkit::KinematicBody>(*raw, collisionWorld,
-                                                                         propCfg, raw),
+                        .body = std::make_unique<Toolkit::KinematicBody>(*raw, propCfg, raw),
                     });
+                    collisionWorld.add(*props.back().body);
                 }
             };
 
@@ -270,7 +270,8 @@ int main(int argc, char **argv) {
             loader.start();
 
             constexpr Toolkit::KinematicBodyConfig kPlayerBody{};
-            Toolkit::KinematicBody playerBody(playerEntity, collisionWorld, kPlayerBody);
+            Toolkit::KinematicBody playerBody(playerEntity, kPlayerBody);
+            collisionWorld.add(playerBody);   // the player is just another collidable
             App::PlayerController player(window, camera, playerEntity, playerBody);
             App::DebugPanel debug(pipeline, window, profiler, loader, player, root, streamer,
                                   App::DebugPanel::StreamInfo{ .hRadius = kStreamHRadius,

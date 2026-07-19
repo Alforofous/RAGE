@@ -2,6 +2,7 @@
 #include "shared/profiling.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <cmath>
 
 namespace RAGE::Toolkit {
@@ -11,16 +12,25 @@ namespace RAGE::Toolkit {
         }
     }
 
-    KinematicBody::KinematicBody(Node3D &node, CollisionWorld &world,
-                                 KinematicBodyConfig config, const Voxel3D *selfVolume)
+    KinematicBody::KinematicBody(Node3D &node, KinematicBodyConfig config,
+                                 const Voxel3D *selfVolume)
         : node_(node)
-        , world_(world)
         , config_(config)
-        , selfVolume_(selfVolume) {
-        bodyId_ = world_.addBody(boxAt_(node_.position()), config_.mass, selfVolume_);
+        , selfVolume_(selfVolume) {}
+
+    KinematicBody::~KinematicBody() {
+        if (world_ != nullptr) {
+            world_->removeBody(bodyId_);
+        }
     }
 
-    KinematicBody::~KinematicBody() { world_.removeBody(bodyId_); }
+    void KinematicBody::bindWorld_(CollisionWorld &world) {
+        if (world_ != nullptr) {
+            throw std::logic_error("KinematicBody: already added to a CollisionWorld");
+        }
+        world_ = &world;
+        bodyId_ = world_->addBody(boxAt_(node_.position()), config_.mass, selfVolume_);
+    }
 
     SweepBox KinematicBody::boxAt_(Vec3 feet) const {
         const Vec3 half{ config_.size.x * 0.5f, 0.0f, config_.size.z * 0.5f };
@@ -31,16 +41,19 @@ namespace RAGE::Toolkit {
     }
 
     void KinematicBody::update(const MoveInput &input, float dt) {
+        if (world_ == nullptr) {
+            return;
+        }
         const Core::ProfileZone zone("KinematicBody.Update");
         // 1. Positional response: solid geometry that moved into us (infinite mass,
         //    full push), then our mass share of overlap with other bodies.
         Vec3 corrected(0.0f, 0.0f, 0.0f);
         if (config_.maxDepenetration > 0.0f) {
             corrected = corrected
-                        + world_.depenetrate(boxAt_(node_.position() + corrected),
+                        + world_->depenetrate(boxAt_(node_.position() + corrected),
                                              config_.maxDepenetration, selfVolume_);
         }
-        corrected = corrected + world_.separationFor(bodyId_);
+        corrected = corrected + world_->separationFor(bodyId_);
         if (corrected.y > 0.0f) {
             // Pushed upward = something solid rose beneath us: treat as ground contact.
             grounded_ = true;
@@ -58,7 +71,7 @@ namespace RAGE::Toolkit {
 
         const Vec3 delta = velocity_ * dt;
         const SweepBox box = boxAt_(node_.position());
-        SweepResult r = world_.sweepAABB(box, delta, selfVolume_);
+        SweepResult r = world_->sweepAABB(box, delta, selfVolume_);
 
         // Step-up: a grounded horizontal hit retries the blocked remainder from one
         // ledge higher (up → forward → back down), and wins only if it gets farther.
@@ -67,14 +80,14 @@ namespace RAGE::Toolkit {
             const Vec3 remainder{ delta.x - r.moved.x, 0.0f, delta.z - r.moved.z };
             const SweepBox atClip = translated(box, r.moved);
             const SweepResult up =
-                world_.sweepAABB(atClip, Vec3(0.0f, config_.stepUpHeight, 0.0f), selfVolume_);
+                world_->sweepAABB(atClip, Vec3(0.0f, config_.stepUpHeight, 0.0f), selfVolume_);
             const SweepResult fwd =
-                world_.sweepAABB(translated(atClip, up.moved), remainder, selfVolume_);
+                world_->sweepAABB(translated(atClip, up.moved), remainder, selfVolume_);
             const float gained = std::sqrt((fwd.moved.x * fwd.moved.x) + (fwd.moved.z * fwd.moved.z));
             if (gained > 1e-4f) {
                 const SweepBox atFwd = translated(atClip, up.moved + fwd.moved);
                 const SweepResult down =
-                    world_.sweepAABB(atFwd, Vec3(0.0f, -up.moved.y, 0.0f), selfVolume_);
+                    world_->sweepAABB(atFwd, Vec3(0.0f, -up.moved.y, 0.0f), selfVolume_);
                 r.moved = r.moved + up.moved + fwd.moved + down.moved;
                 r.hitX = fwd.hitX;
                 r.hitZ = fwd.hitZ;
@@ -97,6 +110,6 @@ namespace RAGE::Toolkit {
             velocity_.z = 0.0f;
         }
 
-        world_.updateBodyBox(bodyId_, boxAt_(node_.position()));
+        world_->updateBodyBox(bodyId_, boxAt_(node_.position()));
     }
 }

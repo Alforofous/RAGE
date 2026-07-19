@@ -35,8 +35,9 @@ namespace RAGE::Toolkit {
      *        "a player"; attach a camera child and it is one, attach a Voxel3D child
      *        and it's a mob. Deterministic and render-free.
      *
-     * Registers itself with the world for its lifetime (non-copyable, non-movable).
-     * Tick order: depenetrate from solid geometry (infinite mass — full push), take
+     * Constructed standalone (node + config); `CollisionWorld::add(body)` binds the
+     * world and registers the body for its lifetime (non-copyable, non-movable) —
+     * the player is just another collidable. Tick order: depenetrate from solid geometry (infinite mass — full push), take
      * this body's mass share of separation from overlapping bodies, then integrate
      * gravity and sweep. Upward pushes count as ground contact so bodies can stand
      * on each other. `selfVolume` is this body's visual Voxel3D (if any); body-owned
@@ -44,7 +45,7 @@ namespace RAGE::Toolkit {
      */
     class KinematicBody {
     public:
-        KinematicBody(Node3D &node, CollisionWorld &world, KinematicBodyConfig config,
+        KinematicBody(Node3D &node, KinematicBodyConfig config,
                       const Voxel3D *selfVolume = nullptr);
         ~KinematicBody();
 
@@ -53,6 +54,7 @@ namespace RAGE::Toolkit {
         KinematicBody(KinematicBody &&) = delete;
         KinematicBody &operator=(KinematicBody &&) = delete;
 
+        /// No-op until CollisionWorld::add(*this) has bound a world.
         void update(const MoveInput &input, float dt);
 
         bool grounded() const { return grounded_; }
@@ -60,10 +62,14 @@ namespace RAGE::Toolkit {
         const KinematicBodyConfig &config() const { return config_; }
 
     private:
+        friend class CollisionWorld;
+        /// Called by CollisionWorld::add — registers the body box with the registry.
+        void bindWorld_(CollisionWorld &world);
+
         SweepBox boxAt_(Vec3 feet) const;
 
         Node3D &node_;
-        CollisionWorld &world_;
+        CollisionWorld *world_ = nullptr;
         KinematicBodyConfig config_;
         const Voxel3D *selfVolume_ = nullptr;
         BodyId bodyId_{};

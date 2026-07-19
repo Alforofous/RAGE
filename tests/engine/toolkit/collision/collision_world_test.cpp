@@ -134,7 +134,7 @@ TEST_F(CollisionWorldTest, RegisteredVolumeBlocksSweepAndIgnoreExcludesIt) {
     prop.setPosition(Vec3(1.0f, 0.8f, 0.3f));      // sitting on the floor top
 
     CollisionWorld world(world_, pool_, kVs);
-    world.registerVolume(prop);
+    world.add(prop);
     ASSERT_EQ(world.volumeCount(), 1u);
 
     // Walking +x into the prop must clip; ignoring it must pass.
@@ -147,7 +147,7 @@ TEST_F(CollisionWorldTest, RegisteredVolumeBlocksSweepAndIgnoreExcludesIt) {
     EXPECT_FALSE(ignored.hitX);
     EXPECT_FLOAT_EQ(ignored.moved.x, 0.8f);
 
-    world.unregisterVolume(prop);
+    world.remove(prop);
     const SweepResult after = world.sweepAABB(box, Vec3(0.8f, 0.0f, 0.0f));
     EXPECT_FALSE(after.hitX);
 }
@@ -159,7 +159,7 @@ TEST_F(CollisionWorldTest, RotatedVolumeCollidesAtSampledCenters) {
     prop.setRotation(Quat::fromAxisAngle(Vec3(0.0f, 1.0f, 0.0f), 0.7f));
 
     CollisionWorld world(world_, pool_, kVs);
-    world.registerVolume(prop);
+    world.add(prop);
 
     // A voxel whose center lies inside the rotated prop must read solid: the prop's
     // local center point in world space.

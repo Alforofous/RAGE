@@ -7,6 +7,8 @@
 #include "math/vec.hpp"
 
 namespace RAGE::Toolkit {
+    class KinematicBody;
+
     /**
      * @brief The one collision authority (design sheet Q2-A): a thin facade over the
      *        static-world side (`WorldSolidQuery` — lattice + registered volumes) and
@@ -23,9 +25,13 @@ namespace RAGE::Toolkit {
         CollisionWorld(const VoxelData &lattice, const BrickPool &pool, float voxelSize)
             : query_(lattice, pool, voxelSize) {}
 
-        // --- static-world volumes -------------------------------------------------
-        void registerVolume(const Voxel3D &volume) { query_.registerVolume(volume); }
-        void unregisterVolume(const Voxel3D &volume) { query_.unregisterVolume(volume); }
+        // --- registration (api-north-star N9): volumes and bodies alike ------------
+        /// Register a volume as solid world geometry (scripted movers, the world).
+        void add(const Voxel3D &volume) { query_.registerVolume(volume); }
+        /// Bind a standalone KinematicBody to this world; the body stays registered
+        /// for its lifetime.
+        void add(KinematicBody &body);
+        void remove(const Voxel3D &volume) { query_.unregisterVolume(volume); }
         void clearVolumes() { query_.clearVolumes(); }
         size_t volumeCount() const { return query_.volumeCount(); }
 
