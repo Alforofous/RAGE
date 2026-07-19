@@ -71,10 +71,20 @@ namespace RAGE {
 
         /**
          * @brief Monotonic mutation stamp: bumped by every voxel write, bulk fill,
-         *        and window move. Consumers (renderer GPU sync) poll it to detect
-         *        "did this volume change since I last uploaded it".
+         *        window move, and brick adoption. Consumers (renderer GPU sync) poll
+         *        it to detect "did this volume change since I last uploaded it".
          */
         uint64_t version() const { return version_; }
+
+        /**
+         * @brief Transfer every occupied brick from `source` into this volume, placed
+         *        at `dstMinBrick + sourceBrickCoord`. Handle values move — brick
+         *        contents never copy, and `source` is left empty (its destructor will
+         *        release nothing). Destination cells that already held bricks release
+         *        them; source bricks that would land outside this volume's window are
+         *        released instead of adopted. Both volumes must share one pool.
+         */
+        void adoptBricksFrom(VoxelData &source, IVec3 dstMinBrick);
 
         /// Window minimum in brick coordinates ({0,0,0} until the window first moves).
         IVec3 windowOriginBrick() const { return windowOriginBrick_; }

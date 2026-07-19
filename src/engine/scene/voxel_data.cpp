@@ -301,6 +301,37 @@ namespace RAGE {
         ++version_;
     }
 
+    void VoxelData::adoptBricksFrom(VoxelData &source, IVec3 dstMinBrick) {
+        if (source.pool_ != pool_) {
+            throw std::invalid_argument("VoxelData::adoptBricksFrom: pools differ");
+        }
+        const IVec3 srcOrigin = source.windowOriginBrick_;
+        for (int32_t bz = srcOrigin.z; bz < srcOrigin.z + source.brickDims_.z; ++bz) {
+            for (int32_t by = srcOrigin.y; by < srcOrigin.y + source.brickDims_.y; ++by) {
+                for (int32_t bx = srcOrigin.x; bx < srcOrigin.x + source.brickDims_.x; ++bx) {
+                    const size_t srcFlat = source.brickFlatIndex(IVec3{ bx, by, bz });
+                    const BrickHandle h = source.handles_[srcFlat];
+                    if (h == kEmptyBrick) {
+                        continue;
+                    }
+                    source.handles_[srcFlat] = kEmptyBrick;
+                    const IVec3 dst = dstMinBrick + (IVec3{ bx, by, bz } - srcOrigin);
+                    if (!brickInWindow_(dst)) {
+                        pool_->release(h);
+                        continue;
+                    }
+                    const size_t dstFlat = brickFlatIndex(dst);
+                    if (handles_[dstFlat] != kEmptyBrick) {
+                        pool_->release(handles_[dstFlat]);
+                    }
+                    handles_[dstFlat] = h;
+                }
+            }
+        }
+        ++version_;
+        ++source.version_;
+    }
+
     void VoxelData::forEachOccupiedBrick(
         const std::function<void(IVec3, BrickHandle)> &fn) const {
         const IVec3 o = windowOriginBrick_;

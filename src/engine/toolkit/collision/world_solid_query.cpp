@@ -20,9 +20,9 @@ namespace RAGE::Toolkit {
         }
     }
 
-    WorldSolidQuery::WorldSolidQuery(const WorldBrickGrid &grid, const BrickPool &pool,
+    WorldSolidQuery::WorldSolidQuery(const VoxelData &lattice, const BrickPool &pool,
                                      float voxelSize)
-        : grid_(grid)
+        : lattice_(lattice)
         , pool_(pool)
         , voxelSize_(voxelSize) {}
 
@@ -38,7 +38,7 @@ namespace RAGE::Toolkit {
 
     bool WorldSolidQuery::latticeSolid_(IVec3 worldVoxel) const {
         const IVec3 brickCoord{ worldVoxel.x >> 3, worldVoxel.y >> 3, worldVoxel.z >> 3 };
-        const BrickHandle h = grid_.handleAt(brickCoord);
+        const BrickHandle h = lattice_.handleAt(brickCoord);
         if (h == kEmptyBrick) {
             return false;
         }

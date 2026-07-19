@@ -16,7 +16,7 @@ namespace RAGE::App {
     DebugPanel::DebugPanel(Toolkit::VoxelPipeline &pipeline, Window &window, Profiler &profiler,
                            AsyncVoxLoader &loader, PlayerController &player, Node3D &root,
                            std::optional<Toolkit::Content::ChunkStreamer> &streamer,
-                           StreamInfo info, std::function<void(bool)> resetScene)
+                           StreamInfo info)
         : pipeline_(pipeline)
         , window_(window)
         , profiler_(profiler)
@@ -25,7 +25,6 @@ namespace RAGE::App {
         , root_(root)
         , streamer_(streamer)
         , info_(info)
-        , resetScene_(std::move(resetScene))
         , ui_(pipeline.context(), window.glfwHandle()) {
         Renderer &renderer = pipeline_.renderer();
         ui_.attach(renderer);
@@ -116,10 +115,6 @@ namespace RAGE::App {
         std::snprintf(header.data(), header.size(), "Memory %.0f MB###mem", rssMB);
         if (ui_.collapsingHeader(header.data())) {
             ui_.text("Brick dedup:    %s", brickDedup_ ? "on" : "off");
-            if (ui_.button(brickDedup_ ? "Restart with no dedup" : "Restart with dedup")) {
-                resetScene_(!brickDedup_);
-                brickDedup_ = !brickDedup_;
-            }
             const auto bricksUnique = renderer.brickPool().allocated();
             const auto bricksLogical = renderer.brickPool().logicalBricks();
             const double poolMB = static_cast<double>(renderer.brickPool().allocatedBytes())

@@ -4,7 +4,7 @@
 #include <span>
 #include <vector>
 #include "engine/scene/brick_pool.hpp"
-#include "engine/scene/world_brick_grid.hpp"
+#include "engine/scene/voxel_data.hpp"
 #include "math/ivec.hpp"
 #include "math/mat.hpp"
 #include "math/vec.hpp"
@@ -43,7 +43,8 @@ namespace RAGE::Toolkit {
      *        Knows nothing about dynamic bodies or mass — `excluded` lets a caller
      *        (the `CollisionWorld` facade) mask out body-owned volumes.
      *
-     * Reads the same `WorldBrickGrid` + shared `BrickPool` the rays traverse.
+     * Reads the same world lattice (the windowed volume's `VoxelData`) + shared
+     * `BrickPool` the rays traverse.
      * Free-standing volumes are sampled at probed-cell centers transformed into their
      * object space (voxel-resolution approximation). Every query gathers the volumes
      * whose world AABB touches the queried region ONCE (with cached inverse
@@ -54,7 +55,7 @@ namespace RAGE::Toolkit {
      */
     class WorldSolidQuery {
     public:
-        WorldSolidQuery(const WorldBrickGrid &grid, const BrickPool &pool, float voxelSize);
+        WorldSolidQuery(const VoxelData &lattice, const BrickPool &pool, float voxelSize);
 
         /// Register a free-standing Voxel3D as collidable. No-op if already registered.
         void registerVolume(const Voxel3D &volume);
@@ -98,7 +99,7 @@ namespace RAGE::Toolkit {
         float sweepAxis_(SweepBox box, int32_t axis, float delta,
                          std::span<const VolumeScratch> scope, bool &hit) const;
 
-        const WorldBrickGrid &grid_;
+        const VoxelData &lattice_;
         const BrickPool &pool_;
         float voxelSize_ = 0.0f;
         std::vector<const Voxel3D *> volumes_;

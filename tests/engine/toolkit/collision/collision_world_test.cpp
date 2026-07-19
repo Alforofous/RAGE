@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include "engine/scene/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/voxel_data.hpp"
 #include "engine/scene/voxel3d.hpp"
@@ -18,7 +17,7 @@ namespace {
     class CollisionWorldTest : public ::testing::Test {
     protected:
         CollisionWorldTest()
-            : grid_(IVec3{ 16, 8, 16 })
+            : world_(pool_, IVec3{ 16, 32, 16 })   // 2x4x2-brick lattice, window at origin
             , floor_(pool_, IVec3{ 16, 16, 16 }) {
             for (int32_t z = 0; z < 16; ++z) {
                 for (int32_t y = 0; y < 8; ++y) {
@@ -27,14 +26,13 @@ namespace {
                     }
                 }
             }
-            grid_.setWindow({ 0, 0, 0 }, { 2, 4, 2 });
-            grid_.writeChunk({ 0, 0, 0 }, floor_);
+            world_.adoptBricksFrom(floor_, IVec3{ 0, 0, 0 });
         }
 
-        CollisionWorld query() const { return { grid_, pool_, kVs }; }
+        CollisionWorld query() const { return { world_, pool_, kVs }; }
 
         BrickPool pool_;
-        WorldBrickGrid grid_;
+        VoxelData world_;
         VoxelData floor_;
     };
 }
@@ -104,7 +102,7 @@ TEST_F(CollisionWorldTest, WallClipsHorizontalMotion) {
             }
         }
     }
-    grid_.writeChunk({ 0, 1, 0 }, wall);   // occupies world voxels y in [8,24), x in [8,16)
+    world_.adoptBricksFrom(wall, IVec3{ 0, 1, 0 });   // occupies world voxels y in [8,24), x in [8,16)
 
     const CollisionWorld q = query();
     // Box above the floor at x ~0.5, moving +x toward the wall face at x = 0.8.
@@ -121,7 +119,7 @@ TEST_F(CollisionWorldTest, LargeDeltaCannotTunnelThroughThinWall) {
             wall.setVoxel({ 8, y, z }, kStone);   // one-voxel-thick wall at world x = 8
         }
     }
-    grid_.writeChunk({ 0, 1, 0 }, wall);
+    world_.adoptBricksFrom(wall, IVec3{ 0, 1, 0 });
 
     const CollisionWorld q = query();
     const SweepBox box{ .min = Vec3(0.1f, 0.9f, 0.5f), .max = Vec3(0.2f, 1.1f, 0.56f) };
@@ -135,7 +133,7 @@ TEST_F(CollisionWorldTest, RegisteredVolumeBlocksSweepAndIgnoreExcludesIt) {
     prop.fillSolid(Color(0.5f, 0.5f, 0.5f, 1.0f));
     prop.setPosition(Vec3(1.0f, 0.8f, 0.3f));      // sitting on the floor top
 
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     world.registerVolume(prop);
     ASSERT_EQ(world.volumeCount(), 1u);
 
@@ -160,7 +158,7 @@ TEST_F(CollisionWorldTest, RotatedVolumeCollidesAtSampledCenters) {
     prop.setPosition(Vec3(1.0f, 1.0f, 0.3f));
     prop.setRotation(Quat::fromAxisAngle(Vec3(0.0f, 1.0f, 0.0f), 0.7f));
 
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     world.registerVolume(prop);
 
     // A voxel whose center lies inside the rotated prop must read solid: the prop's

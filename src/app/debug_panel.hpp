@@ -31,8 +31,7 @@ namespace RAGE::App {
 
         DebugPanel(Toolkit::VoxelPipeline &pipeline, Window &window, Profiler &profiler,
                    AsyncVoxLoader &loader, PlayerController &player, Node3D &root,
-                   std::optional<Toolkit::Content::ChunkStreamer> &streamer, StreamInfo info,
-                   std::function<void(bool enableDedup)> resetScene);
+                   std::optional<Toolkit::Content::ChunkStreamer> &streamer, StreamInfo info);
 
         DebugPanel(const DebugPanel &) = delete;
         DebugPanel &operator=(const DebugPanel &) = delete;
@@ -59,7 +58,6 @@ namespace RAGE::App {
         Node3D &root_;
         std::optional<Toolkit::Content::ChunkStreamer> &streamer_;
         StreamInfo info_;
-        std::function<void(bool)> resetScene_;
         DebugUi ui_;
 
         // Renderer-toggle mirrors (ImGui needs mutable state between frames).

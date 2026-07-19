@@ -20,8 +20,8 @@ namespace RAGE::Toolkit {
      */
     class CollisionWorld {
     public:
-        CollisionWorld(const WorldBrickGrid &grid, const BrickPool &pool, float voxelSize)
-            : query_(grid, pool, voxelSize) {}
+        CollisionWorld(const VoxelData &lattice, const BrickPool &pool, float voxelSize)
+            : query_(lattice, pool, voxelSize) {}
 
         // --- static-world volumes -------------------------------------------------
         void registerVolume(const Voxel3D &volume) { query_.registerVolume(volume); }

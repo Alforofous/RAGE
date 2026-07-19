@@ -3,50 +3,39 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
-#include <functional>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include "engine/toolkit/content/chunk_store.hpp"
 #include "math/ivec.hpp"
 
 namespace RAGE {
-    class Node3D;
     class Voxel3D;
 }
 
 namespace RAGE::Toolkit::Content {
     /**
-     * @brief Maintains a cylinder of loaded chunks around a focus point. XZ extent is set by
-     *        `horizontalRadius` (Euclidean), Y extent comes from `store.yRange()`. Chunk
-     *        generation runs on an internal worker thread; `update()` is near-free.
+     * @brief Keeps a world `Voxel3D` filled around a focus point: drives the
+     *        volume's storage window from the focus, loads missing chunks inside a
+     *        cylinder (XZ radius Euclidean, Y from `store.yRange()`) on an internal
+     *        worker thread, and adopts finished chunks' bricks into the volume.
+     *        Cells the window leaves behind are freed by the volume itself; chunks
+     *        are plain data passing through — never scene nodes.
+     *
+     * The world volume's `brickDims` must equal the cylinder's bounding box
+     * ((2·radius+1)·chunkBricks XZ, yRange·chunkBricks Y); update() throws
+     * otherwise (capacity injection: the app derives both from one config).
      */
     class ChunkStreamer {
     public:
-        using ChunkPrepareHook = std::function<void(Voxel3D &, IVec3 chunkCoord)>;
-
-        /**
-         * @brief Placement events, fired on the `update()` caller's thread. `Placed`
-         *        fires after the chunk is attached to the scene tree; `Evicted` fires
-         *        while the chunk is still alive, just before it is destroyed. Consumers
-         *        (e.g. an incremental world grid) patch instead of re-deriving the world.
-         */
-        using ChunkPlacedHook = std::function<void(IVec3 chunkCoord, Voxel3D &chunk)>;
-        using ChunkEvictedHook = std::function<void(IVec3 chunkCoord, Voxel3D &chunk)>;
-
-        ChunkStreamer(ChunkStore &store, Node3D &parent);
+        ChunkStreamer(ChunkStore &store, Voxel3D &world);
         ~ChunkStreamer();
 
         ChunkStreamer(const ChunkStreamer &) = delete;
         ChunkStreamer &operator=(const ChunkStreamer &) = delete;
         ChunkStreamer(ChunkStreamer &&) = delete;
         ChunkStreamer &operator=(ChunkStreamer &&) = delete;
-
-        void setOnChunkPrepare(ChunkPrepareHook hook) { onPrepare_ = std::move(hook); }
-        void setOnChunkPlaced(ChunkPlacedHook hook) { onPlaced_ = std::move(hook); }
-        void setOnChunkEvicted(ChunkEvictedHook hook) { onEvicted_ = std::move(hook); }
 
         void update(IVec3 focusChunk, int32_t horizontalRadius);
 
@@ -68,17 +57,15 @@ namespace RAGE::Toolkit::Content {
         };
 
         void workerMain_();
-        void evictOutOfRange_(IVec3 focusChunk, int32_t hRadius);
+        void slideWindow_(IVec3 focusChunk, int32_t hRadius);
+        void pruneOutOfWindow_(IVec3 focusChunk, int32_t hRadius);
         void repopulatePending_(IVec3 focusChunk, int32_t hRadius);
         void applyResult_(IVec3 coord, ChunkResult result);
 
         ChunkStore &store_;
-        Node3D &parent_;
-        ChunkPrepareHook onPrepare_;
-        ChunkPlacedHook onPlaced_;
-        ChunkEvictedHook onEvicted_;
+        Voxel3D &world_;
 
-        std::unordered_map<IVec3, Voxel3D *, IVec3Hash> loaded_;
+        std::unordered_set<IVec3, IVec3Hash> loaded_;
         std::unordered_map<IVec3, ChunkStatus, IVec3Hash> skipped_;
         std::unordered_set<IVec3, IVec3Hash> deferred_;
         IVec3 lastFocus_{};

@@ -160,10 +160,20 @@ int main(int argc, char **argv) {
 
         {
             Renderer &renderer = pipeline.renderer();
-            Toolkit::CollisionWorld collisionWorld(renderer.worldBrickGrid(),
-                                                   renderer.brickPool(), kVoxelSize);
 
             Node3D root;
+
+            // The world: one windowed Voxel3D. The streamer slides its storage
+            // window and fills it; the renderer marches it; collision reads it.
+            const IVec3 kWorldVoxelDims{ kWorld.windowBrickExtent().x * 8,
+                                         kWorld.windowBrickExtent().y * 8,
+                                         kWorld.windowBrickExtent().z * 8 };
+            Voxel3D &world =
+                root.add<Voxel3D>(renderer.brickPool(), kWorldVoxelDims, kVoxelSize);
+            world.setMaterial(voxelMaterial);
+
+            Toolkit::CollisionWorld collisionWorld(*world.voxelData(), renderer.brickPool(),
+                                                   kVoxelSize);
 
             std::unique_ptr<Toolkit::Content::ChunkStore> chunkStore;
             std::optional<Toolkit::Content::ChunkStreamer> streamer;
@@ -247,19 +257,7 @@ int main(int argc, char **argv) {
                 }
                 chunkStore = Toolkit::Content::chunkStore(std::move(gen), renderer.brickPool(),
                                                           kVoxelSize, kTerrainYRange, worldDir);
-                streamer.emplace(*chunkStore, root);
-                streamer->setOnChunkPrepare(
-                    [&voxelMaterial](Voxel3D &v, IVec3) { v.setMaterial(voxelMaterial); });
-                const IVec3 cb = kWorld.chunkBrickDims;
-                streamer->setOnChunkPlaced([&renderer, cb](IVec3 c, Voxel3D &v) {
-                    renderer.worldGridWriteChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
-                                                 *v.voxelData());
-                });
-                streamer->setOnChunkEvicted([&renderer, cb](IVec3 c, Voxel3D &v) {
-                    renderer.worldGridClearChunk(IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z },
-                                                 v.voxelData()->brickDims());
-                });
-                renderer.setWorldGridStreaming(true);
+                streamer.emplace(*chunkStore, world);
                 addSpinners();
                 addFallingProps();
                 // The .vox statue rides the streamed scene as a free-standing volume.
@@ -274,33 +272,12 @@ int main(int argc, char **argv) {
             buildScene();
             loader.start();
 
-            // Step order is RAII-load-bearing: brick handles must be released back to
-            // their issuing pool BEFORE the pool itself is replaced.
-            const auto resetScene = [&](bool enableDedup) {
-                loader.cancelAndJoin();
-                streamer.reset();
-                chunkStore.reset();
-                collisionWorld.clearVolumes();
-                props.clear();
-                spinners.clear();
-                root.clearChildren();
-                loader.reset();
-                renderer.recreateBrickPool(enableDedup);
-                try {
-                    buildScene();
-                } catch (const std::exception &e) {
-                    std::fprintf(stderr, "[scene] buildScene: %s\n", e.what());
-                }
-                loader.start();
-            };
-
             constexpr Toolkit::KinematicBodyConfig kPlayerBody{};
             Toolkit::KinematicBody playerBody(playerEntity, collisionWorld, kPlayerBody);
             App::PlayerController player(window, camera, playerEntity, playerBody);
             App::DebugPanel debug(pipeline, window, profiler, loader, player, root, streamer,
                                   App::DebugPanel::StreamInfo{ .hRadius = kStreamHRadius,
-                                                               .yRange = kTerrainYRange },
-                                  resetScene);
+                                                               .yRange = kTerrainYRange });
             player.setUiFocus([&debug]() { return debug.wantsMouse(); },
                               [&debug]() { return debug.wantsKeyboard(); });
             player.setScrollSource([&debug]() { return debug.scrollDelta(); });

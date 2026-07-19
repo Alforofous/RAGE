@@ -3,9 +3,9 @@
 
 #include <algorithm>
 #include <exception>
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include "engine/scene/node3d.hpp"
 #include "engine/scene/voxel3d.hpp"
 #include "shared/logger.hpp"
 
@@ -19,9 +19,9 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    ChunkStreamer::ChunkStreamer(ChunkStore &store, Node3D &parent)
+    ChunkStreamer::ChunkStreamer(ChunkStore &store, Voxel3D &world)
         : store_(store)
-        , parent_(parent) {
+        , world_(world) {
         worker_ = std::thread([this] { workerMain_(); });
     }
 
@@ -71,6 +71,28 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
+    void ChunkStreamer::slideWindow_(IVec3 focusChunk, int32_t hRadius) {
+        const ChunkStore::YRange y = store_.yRange();
+        const IVec3 cb = store_.chunkBrickDims();
+        const IVec3 windowBricks = world_.voxelData()->brickDims();
+        const IVec3 expected{ ((2 * hRadius) + 1) * cb.x, (y.max - y.min + 1) * cb.y,
+                              ((2 * hRadius) + 1) * cb.z };
+        if (windowBricks != expected) {
+            throw std::invalid_argument(
+                "ChunkStreamer: world volume window does not match radius/yRange "
+                "(capacity injection mismatch)");
+        }
+        // Window min lands exactly on the cylinder's bounding box; Y is anchored to
+        // the store's fixed vertical range, not the focus height.
+        const IVec3 windowMinBrick{ (focusChunk.x - hRadius) * cb.x, y.min * cb.y,
+                                    (focusChunk.z - hRadius) * cb.z };
+        const IVec3 centerBrick = windowMinBrick
+                                  + IVec3{ windowBricks.x / 2, windowBricks.y / 2,
+                                           windowBricks.z / 2 };
+        world_.setWindowCenter(
+            IVec3{ centerBrick.x * 8, centerBrick.y * 8, centerBrick.z * 8 });
+    }
+
     void ChunkStreamer::update(IVec3 focusChunk, int32_t horizontalRadius) {
         std::deque<ReadyEntry> drained;
         bool queuesIdle = false;
@@ -92,6 +114,10 @@ namespace RAGE::Toolkit::Content {
             return;
         }
 
+        // Window first: adoption below must land inside the window, and departing
+        // cells free their bricks during this call.
+        slideWindow_(focusChunk, horizontalRadius);
+
         deferred_.clear();
         {
             const Core::ProfileZone drainZone("ChunkStreamer.Drain");
@@ -105,7 +131,7 @@ namespace RAGE::Toolkit::Content {
         }
         {
             const Core::ProfileZone evictZone("ChunkStreamer.Evict");
-            evictOutOfRange_(focusChunk, horizontalRadius);
+            pruneOutOfWindow_(focusChunk, horizontalRadius);
         }
         {
             const Core::ProfileZone repopZone("ChunkStreamer.Repopulate");
@@ -118,15 +144,12 @@ namespace RAGE::Toolkit::Content {
             return;
         }
         if (result.status == ChunkStatus::Ready && result.chunk) {
-            if (onPrepare_) {
-                onPrepare_(*result.chunk, coord);
-            }
-            Voxel3D *raw = result.chunk.get();
-            parent_.add(std::move(result.chunk));
-            loaded_.emplace(coord, raw);
-            if (onPlaced_) {
-                onPlaced_(coord, *raw);
-            }
+            const IVec3 cb = store_.chunkBrickDims();
+            world_.voxelData()->adoptBricksFrom(
+                *result.chunk->voxelData(),
+                IVec3{ coord.x * cb.x, coord.y * cb.y, coord.z * cb.z });
+            loaded_.insert(coord);
+            // result.chunk is brickless now; it dies here, releasing nothing.
         } else if (result.status == ChunkStatus::Empty || result.status == ChunkStatus::Missing) {
             skipped_.emplace(coord, result.status);
         } else if (result.status == ChunkStatus::Pending) {
@@ -134,23 +157,19 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void ChunkStreamer::evictOutOfRange_(IVec3 focusChunk, int32_t hRadius) {
+    void ChunkStreamer::pruneOutOfWindow_(IVec3 focusChunk, int32_t hRadius) {
+        // The volume already freed departing cells during the window slide; this only
+        // reconciles the bookkeeping. Content between the cylinder and the window box
+        // stays resident until the window passes it — harmless and re-adoptable.
         const ChunkStore::YRange y = store_.yRange();
-        std::unordered_set<const Node3D *> evicted;
+        const IVec3 minChunk{ focusChunk.x - hRadius, y.min, focusChunk.z - hRadius };
+        const IVec3 maxChunk{ focusChunk.x + hRadius, y.max, focusChunk.z + hRadius };
+        const auto inWindowBox = [&](IVec3 c) {
+            return c.x >= minChunk.x && c.x <= maxChunk.x && c.y >= minChunk.y
+                   && c.y <= maxChunk.y && c.z >= minChunk.z && c.z <= maxChunk.z;
+        };
         for (auto it = loaded_.begin(); it != loaded_.end();) {
-            if (!inCylinder(it->first, focusChunk, hRadius, y)) {
-                if (onEvicted_) {
-                    onEvicted_(it->first, *it->second);
-                }
-                evicted.insert(it->second);
-                it = loaded_.erase(it);
-            } else {
-                ++it;
-            }
-        }
-        if (!evicted.empty()) {
-            parent_.removeChildrenIf(
-                [&evicted](const Node3D &c) { return evicted.contains(&c); });
+            it = inWindowBox(*it) ? std::next(it) : loaded_.erase(it);
         }
         for (auto it = skipped_.begin(); it != skipped_.end();) {
             if (!inCylinder(it->first, focusChunk, hRadius, y)) {

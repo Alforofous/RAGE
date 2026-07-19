@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include "engine/scene/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/node3d.hpp"
 #include "engine/scene/voxel_data.hpp"
@@ -19,7 +18,7 @@ namespace {
     class KinematicBodyTest : public ::testing::Test {
     protected:
         KinematicBodyTest()
-            : grid_(IVec3{ 16, 8, 16 })
+            : world_(pool_, IVec3{ 16, 32, 16 })   // 2x4x2-brick lattice, window at origin
             , terrain_(pool_, IVec3{ 16, 16, 16 }) {
             for (int32_t z = 0; z < 16; ++z) {
                 for (int32_t x = 0; x < 16; ++x) {
@@ -32,8 +31,7 @@ namespace {
                     }
                 }
             }
-            grid_.setWindow({ 0, 0, 0 }, { 2, 4, 2 });
-            grid_.writeChunk({ 0, 0, 0 }, terrain_);
+            world_.adoptBricksFrom(terrain_, IVec3{ 0, 0, 0 });
         }
 
 
@@ -46,7 +44,7 @@ namespace {
         }
 
         BrickPool pool_;
-        WorldBrickGrid grid_;
+        VoxelData world_;
         VoxelData terrain_;
     };
 
@@ -60,7 +58,7 @@ namespace {
 TEST_F(KinematicBodyTest, FallsAndLandsOnFloor) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 1.6f, 0.4f));
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     KinematicBody body(entity, world, smallBody());
 
     EXPECT_FALSE(body.grounded());
@@ -73,7 +71,7 @@ TEST_F(KinematicBodyTest, FallsAndLandsOnFloor) {
 TEST_F(KinematicBodyTest, JumpRisesThenLandsAgain) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     KinematicBody body(entity, world, smallBody());
     settle(body);
     ASSERT_TRUE(body.grounded());
@@ -90,7 +88,7 @@ TEST_F(KinematicBodyTest, JumpRisesThenLandsAgain) {
 TEST_F(KinematicBodyTest, WalksAndStepsUpLowLedge) {
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     KinematicBody body(entity, world, smallBody());
     settle(body);
 
@@ -107,7 +105,7 @@ TEST_F(KinematicBodyTest, TallLedgeBlocksWhenStepUpDisabled) {
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     KinematicBodyConfig cfg = smallBody();
     cfg.stepUpHeight = 0.0f;
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     KinematicBody body(entity, world, cfg);
     settle(body);
 
@@ -126,13 +124,13 @@ TEST_F(KinematicBodyTest, CeilingCancelsAscent) {
             ceiling.setVoxel({ x, 4, z }, kStone);   // world y = 1.2..1.3
         }
     }
-    grid_.writeChunk({ 0, 1, 0 }, ceiling);
+    world_.adoptBricksFrom(ceiling, IVec3{ 0, 1, 0 });
 
     Node3D entity;
     entity.setPosition(Vec3(0.4f, 0.9f, 0.4f));
     KinematicBodyConfig cfg = smallBody();
     cfg.jumpSpeed = 5.0f;
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     KinematicBody body(entity, world, cfg);
     settle(body);
 
@@ -148,7 +146,7 @@ TEST_F(KinematicBodyTest, CeilingCancelsAscent) {
 }
 
 TEST_F(KinematicBodyTest, HeavierBodyMovesLessInMutualOverlap) {
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
 
     Node3D light;
     Node3D heavy;
@@ -176,7 +174,7 @@ TEST_F(KinematicBodyTest, HeavierBodyMovesLessInMutualOverlap) {
 }
 
 TEST_F(KinematicBodyTest, DepenetrationPushesBodyOutOfSolid) {
-    CollisionWorld world(grid_, pool_, kVs);
+    CollisionWorld world(world_, pool_, kVs);
     Node3D entity;
     // Feet 0.05 below the floor top (0.8): overlapping the floor by half a voxel.
     entity.setPosition(Vec3(0.4f, 0.75f, 0.4f));
