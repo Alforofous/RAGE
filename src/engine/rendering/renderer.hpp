@@ -16,7 +16,6 @@
 #include "engine/rendering/free_volume_gpu_sync.hpp"
 #include "engine/rendering/gpu_svdag_cache.hpp"
 #include "engine/rendering/world_grid_gpu_sync.hpp"
-#include "engine/scene/world_brick_grid.hpp"
 #include "engine/scene/brick_pool.hpp"
 #include "engine/scene/svdag.hpp"
 #include "engine/scene/renderable_node3d.hpp"
@@ -157,25 +156,6 @@ namespace RAGE {
          */
         void recreateBrickPool(bool enableDedup);
 
-        /**
-         * Top-level toroidal grid mapping world brick coords to handles into the brick
-         * pool. Non-streamed scenes re-derive it from scene placements on change;
-         * streamed scenes patch it through the calls below.
-         */
-        const WorldBrickGrid &worldBrickGrid() const { return worldBrickGrid_; }
-
-        /**
-         * @brief Streamed-world grid path: when enabled, render() stops re-deriving the
-         *        grid from the scene tree; the app patches it from streamer placement
-         *        events and slides the window with the camera. GPU re-upload happens on
-         *        the next frame after any patch.
-         */
-        void setWorldGridStreaming(bool enabled) { worldGridStreaming_ = enabled; }
-        void worldGridWriteChunk(IVec3 worldBrickOrigin, const VoxelData &data);
-        void worldGridClearChunk(IVec3 worldBrickOrigin, IVec3 brickDims);
-        /// No-op when the window is unchanged, so it is safe to call every frame.
-        void setWorldGridWindow(IVec3 windowMinBrick, IVec3 windowExtent);
-
         // Debug-only: pick a single pixel for shader-side introspection. setPickTarget queues
         // the request for the next render(); tryReadPick consumes the result after that frame
         // completes. See engine/rendering/pixel_debug.hpp.
@@ -217,7 +197,7 @@ namespace RAGE {
         using Renderable = RenderableNode3D<VulkanShaderModule>;
 
         void rebuildFrameResources(FrameExtent extent);
-        void collectShadowCasters(Node3D &node);
+        void collectVolumes(Node3D &node);
         void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapImageIndex,
                          uint32_t swapW, uint32_t swapH, const FrameContext &frame);
         void recordPass(VulkanRecorder<queue_kind::Graphics> &rec, VulkanRenderTarget &target,
@@ -279,18 +259,14 @@ namespace RAGE {
         Svdag svdagBuildResult_;
         bool prevUseSvdag_ = false;
         bool prevUseGridTexture_ = false;
-        bool worldGridStreaming_ = false;
         bool worldGridGpuDirty_ = false;
         /// The scene's windowed volume, when one exists (api-north-star N7b): its
-        /// VoxelData IS the world grid; the legacy WorldBrickGrid path idles.
+        /// VoxelData IS the world grid.
         Voxel3D *worldVolume_ = nullptr;
         uint64_t lastWorldVolumeVersion_ = ~0ull;
         uint64_t lastSceneTreeVersion_ = UINT64_MAX;
-        std::vector<Voxel3D *> shadowCasters_;
         std::vector<Voxel3D *> freeVolumes_;
         std::optional<BrickPool> brickPool_;
-        WorldBrickGrid worldBrickGrid_;
-        std::vector<VoxelDataWorldPlacement> brickPlacementsScratch_;
         std::vector<BrickHandle> svdagScratch_;
 
         SwapchainRebuiltHook swapchainRebuilt_;

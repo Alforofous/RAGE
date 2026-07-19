@@ -85,7 +85,6 @@ set(ENGINE_SOURCES
     src/engine/scene/svdag.cpp
     src/engine/scene/voxel3d.cpp
     src/engine/scene/voxel_data.cpp
-    src/engine/scene/world_brick_grid.cpp
 )
 
 add_library(rage_engine STATIC ${ENGINE_SOURCES})

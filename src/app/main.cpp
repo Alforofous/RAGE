@@ -200,7 +200,6 @@ int main(int argc, char **argv) {
                         return Color::fromRGBA8(checker ? color : 0xFFE8E4DCu);
                     });
                     v->setMaterial(voxelMaterial);
-                    v->setRenderKind(VoxelRenderKind::FreeStanding);
                     v->setPosition(Vec3(-3.0f + (3.0f * static_cast<float>(i)), 3.0f, -4.0f));
                     spinners.push_back(v.get());
                     root.add(std::move(v));
@@ -228,7 +227,6 @@ int main(int argc, char **argv) {
                         renderer.brickPool(), IVec3{ kPropDim, kPropDim, kPropDim }, kVoxelSize);
                     v->fillSolid(Color::fromRGBA8(specs[i].color));
                     v->setMaterial(voxelMaterial);
-                    v->setRenderKind(VoxelRenderKind::FreeStanding);
                     v->setPosition(Vec3(1.8f + (0.9f * static_cast<float>(i)),
                                         5.0f + (0.8f * static_cast<float>(i)), 1.8f));
                     Voxel3D *raw = v.get();
@@ -265,7 +263,6 @@ int main(int argc, char **argv) {
                                            kVoxelSize);
                 statue->setMaterial(voxelMaterial);
                 statue->setPosition(Vec3(4.0f, 6.0f, -6.0f));
-                statue->setRenderKind(VoxelRenderKind::FreeStanding);
                 root.add(std::move(statue));
                 camera.setPosition(Vec3(0.0f, 4.0f, 8.0f));
             };
@@ -327,13 +324,6 @@ int main(int argc, char **argv) {
                         static_cast<int32_t>(std::floor(camPos.y / chunkWorldExtent)),
                         static_cast<int32_t>(std::floor(camPos.z / chunkWorldExtent)),
                     };
-                    // Window first: placement events fired by update() must land inside
-                    // the window the grid asserts against.
-                    const IVec3 cb = kWorld.chunkBrickDims;
-                    renderer.setWorldGridWindow(
-                        IVec3{ (focus.x - kStreamHRadius) * cb.x, kTerrainYRange.min * cb.y,
-                               (focus.z - kStreamHRadius) * cb.z },
-                        kWorld.windowBrickExtent());
                     streamer->update(focus, kStreamHRadius);
                 }
 

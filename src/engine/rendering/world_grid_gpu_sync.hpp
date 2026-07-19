@@ -1,6 +1,7 @@
 #pragma once
 
-#include "engine/scene/world_brick_grid.hpp"
+#include "engine/scene/brick.hpp"
+#include <span>
 #include "gpu/gpu_queue_kind.hpp"
 #include "gpu/vulkan/vulkan_allocator.hpp"
 #include "gpu/vulkan/vulkan_buffer.hpp"
@@ -13,9 +14,8 @@ namespace RAGE {
     class VoxelData;
 
     /**
-     * @brief What the GPU sync needs to know about a toroidal grid, regardless of
-     *        who owns it — the legacy renderer `WorldBrickGrid` or a windowed
-     *        `Voxel3D`'s `VoxelData` (api-north-star N7b).
+     * @brief What the GPU sync needs to know about the world grid: the windowed
+     *        `Voxel3D`'s `VoxelData` storage (api-north-star N7).
      */
     struct WorldGridView {
         IVec3 windowMinBrick{ 0, 0, 0 };
@@ -24,7 +24,6 @@ namespace RAGE {
         std::span<const BrickHandle> handles;
     };
 
-    WorldGridView gridView(const WorldBrickGrid &grid);
     /// Precondition: `data.isWindowed()` — a dense volume is not a world grid.
     WorldGridView gridView(const VoxelData &data);
 

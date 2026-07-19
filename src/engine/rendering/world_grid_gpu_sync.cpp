@@ -47,13 +47,6 @@ namespace RAGE {
         std::memset(handlesBuffer_.mappedData(), 0, cellCount(gridDims) * sizeof(BrickHandle));
     }
 
-    WorldGridView gridView(const WorldBrickGrid &grid) {
-        return WorldGridView{ .windowMinBrick = grid.windowMinBrick(),
-                              .windowExtent = grid.windowExtent(),
-                              .storageDims = grid.fixedDims(),
-                              .handles = grid.handles() };
-    }
-
     WorldGridView gridView(const VoxelData &data) {
         if (!data.isWindowed()) {
             throw std::logic_error("gridView: volume storage is dense, not a world grid");

@@ -37,8 +37,7 @@ namespace RAGE {
         , pipelineCache_(ctx.vkDevice())
         , svdagCache_(allocator)
         , worldGridSync_(allocator, ctx.vkDevice(), limits.worldGridDims)
-        , freeVolumeSync_(allocator, limits.maxFreeVolumes, limits.maxFreeVolumeHandleCells)
-        , worldBrickGrid_(limits.worldGridDims) {
+        , freeVolumeSync_(allocator, limits.maxFreeVolumes, limits.maxFreeVolumeHandleCells) {
         brickPool_.emplace(limits_.brickPool);
     }
 
@@ -65,25 +64,6 @@ namespace RAGE {
             std::move(*inFlight_).wait();
             inFlight_.reset();
         }
-    }
-
-    void Renderer::worldGridWriteChunk(IVec3 worldBrickOrigin, const VoxelData &data) {
-        worldBrickGrid_.writeChunk(worldBrickOrigin, data);
-        worldGridGpuDirty_ = true;
-    }
-
-    void Renderer::worldGridClearChunk(IVec3 worldBrickOrigin, IVec3 brickDims) {
-        worldBrickGrid_.clearChunk(worldBrickOrigin, brickDims);
-        worldGridGpuDirty_ = true;
-    }
-
-    void Renderer::setWorldGridWindow(IVec3 windowMinBrick, IVec3 windowExtent) {
-        if (windowMinBrick == worldBrickGrid_.windowMinBrick()
-            && windowExtent == worldBrickGrid_.windowExtent()) {
-            return;
-        }
-        worldBrickGrid_.setWindow(windowMinBrick, windowExtent);
-        worldGridGpuDirty_ = true;
     }
 
     void Renderer::addLight(std::shared_ptr<DirectionalLight> light) { directionalLights_.push_back(std::move(light)); }
@@ -203,7 +183,7 @@ namespace RAGE {
         }
     }
 
-    void Renderer::collectShadowCasters(Node3D &node) {
+    void Renderer::collectVolumes(Node3D &node) {
         // M3+M4: no fixed cap. World brick grid scales with the union of placements; the
         // brick pool deduplicates identical content. Previously had a `kMaxSceneCasters`
         // ceiling of 16 from the pre-M3 SceneCasters UBO — gone with that descriptor.
@@ -215,14 +195,13 @@ namespace RAGE {
                     throw std::logic_error("Renderer: multiple windowed volumes in one scene");
                 }
                 worldVolume_ = v;
-            } else if (v->renderKind() == VoxelRenderKind::FreeStanding) {
-                freeVolumes_.push_back(v);
             } else {
-                shadowCasters_.push_back(v);
+                // Every dense volume traces per-object with its full transform.
+                freeVolumes_.push_back(v);
             }
         }
         for (const auto &child : node.children()) {
-            collectShadowCasters(*child);
+            collectVolumes(*child);
         }
     }
 
@@ -296,10 +275,9 @@ namespace RAGE {
 
         if (sceneChanged) {
             const Core::ProfileZone collect("Render.Collect");
-            shadowCasters_.clear();
             freeVolumes_.clear();
             worldVolume_ = nullptr;
-            collectShadowCasters(root);
+            collectVolumes(root);
         }
 
         if (worldVolume_ != nullptr
@@ -308,40 +286,13 @@ namespace RAGE {
             worldGridGpuDirty_ = true;
         }
 
-        if (sceneChanged && worldVolume_ == nullptr && !worldGridStreaming_) {
-            const Core::ProfileZone brickRebuild("Render.WorldBrickGridRebuild");
-            brickPlacementsScratch_.clear();
-            brickPlacementsScratch_.reserve(shadowCasters_.size());
-            float placeBrickWorldSize = 0.0f;
-            for (const Voxel3D *v : shadowCasters_) {
-                if (placeBrickWorldSize == 0.0f) {
-                    placeBrickWorldSize = v->voxelSize() * static_cast<float>(Brick::kDim);
-                }
-                const Vec3 p = v->worldMatrix().transformPoint(Vec3::zero());
-                const IVec3 worldBrickOrigin{
-                    static_cast<int32_t>(std::floor(p.x / placeBrickWorldSize)),
-                    static_cast<int32_t>(std::floor(p.y / placeBrickWorldSize)),
-                    static_cast<int32_t>(std::floor(p.z / placeBrickWorldSize)),
-                };
-                brickPlacementsScratch_.push_back(
-                    VoxelDataWorldPlacement{ .data = v->voxelData(), .worldBrickOrigin = worldBrickOrigin });
-            }
-            worldBrickGrid_.rebuild(brickPlacementsScratch_);
-            worldGridGpuDirty_ = true;
-        }
-
-        const bool haveGridSource = worldVolume_ != nullptr || !shadowCasters_.empty();
-        if (worldGridGpuDirty_ && haveGridSource) {
+        if (worldGridGpuDirty_ && worldVolume_ != nullptr) {
             worldGridGpuDirty_ = false;
             const Core::ProfileZone gridUpload("Render.WorldGridUpload");
-            const Voxel3D *sizeSource =
-                worldVolume_ != nullptr ? worldVolume_ : shadowCasters_[0];
             const float brickWorldSize =
-                sizeSource->voxelSize() * static_cast<float>(Brick::kDim);
-            const WorldGridView view = worldVolume_ != nullptr
-                ? gridView(*worldVolume_->voxelData())
-                : gridView(worldBrickGrid_);
-            worldGridSync_.upload(view, brickWorldSize, useGridTexture_);
+                worldVolume_->voxelSize() * static_cast<float>(Brick::kDim);
+            worldGridSync_.upload(gridView(*worldVolume_->voxelData()), brickWorldSize,
+                                  useGridTexture_);
             svdagFresh_ = false;
             gridQuietFrames_ = 0;
             ++gridChangeStamp_;
@@ -367,16 +318,12 @@ namespace RAGE {
                 svdagFresh_ = true;
             }
         }
-        if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && haveGridSource
+        if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && worldVolume_ != nullptr
             && (gridQuietFrames_ >= kSvdagQuietFrames || svdagJustEnabled)) {
             const Core::ProfileZone svdagKick("Render.SvdagKickoff");
-            const Voxel3D *sizeSource =
-                worldVolume_ != nullptr ? worldVolume_ : shadowCasters_[0];
             const float brickWorldSize =
-                sizeSource->voxelSize() * static_cast<float>(Brick::kDim);
-            const WorldGridView view = worldVolume_ != nullptr
-                ? gridView(*worldVolume_->voxelData())
-                : gridView(worldBrickGrid_);
+                worldVolume_->voxelSize() * static_cast<float>(Brick::kDim);
+            const WorldGridView view = gridView(*worldVolume_->voxelData());
             const IVec3 origBrick = view.windowMinBrick;
             svdagBuildStamp_ = gridChangeStamp_;
             svdagBuildStorage_.assign(view.handles.begin(), view.handles.end());
@@ -525,11 +472,8 @@ namespace RAGE {
         rec.pipelineBarrier(clearToCompute);
 
         // Pipeline/material source: the world volume when present, else any
-        // grid-resident caster, else any free-standing volume.
+        // free-standing volume.
         Voxel3D *anyCaster = worldVolume_;
-        if (anyCaster == nullptr && !shadowCasters_.empty()) {
-            anyCaster = shadowCasters_[0];
-        }
         if (anyCaster == nullptr && !freeVolumes_.empty()) {
             anyCaster = freeVolumes_[0];
         }

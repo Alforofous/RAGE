@@ -58,7 +58,7 @@ namespace RAGE {
      * Build an SVDAG from a flat brick-handle grid.
      *
      * `gridHandles` is a `gridDims.x * gridDims.y * gridDims.z` array (z-major, y-mid,
-     * x-fastest — matches `WorldBrickGrid::handles()`). The grid is padded with
+     * x-fastest — matches the world volume's de-wrapped handle order). The grid is padded with
      * `kEmptyBrick` to the smallest power-of-two cube enclosing it before octree
      * construction; the padded regions dedup down to a single "empty subtree" node at
      * every level.

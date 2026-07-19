@@ -14,6 +14,10 @@ namespace RAGE {
             throw std::runtime_error("Voxel3D: voxelSize must be positive");
         }
         data_ = std::make_unique<VoxelData>(pool, dims);
+        // Voxel3D transforms never dirty the scene tree: dense volumes re-upload
+        // their transform every frame anyway, and content changes are tracked by
+        // VoxelData::version(). Structural scene changes still bump normally.
+        setTransformBumpsTreeVersion(false);
     }
 
     void Voxel3D::setVoxel(IVec3 c, Color rgba) { data_->setVoxel(c, rgba.toRGBA8()); }

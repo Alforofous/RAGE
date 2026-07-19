@@ -45,10 +45,7 @@ namespace RAGE::App {
                                  / (1024.0f * 1024.0f));
         const float brickPoolMB =
             static_cast<float>(renderer.brickPool().allocatedBytes()) / (1024.0f * 1024.0f);
-        const float handleGridMB = static_cast<float>(renderer.worldBrickGrid().handles().size()
-                                                      * sizeof(BrickHandle))
-                                   / (1024.0f * 1024.0f);
-        brickmapMBHistory_.push(brickPoolMB + handleGridMB);
+        brickmapMBHistory_.push(brickPoolMB);
         const uint64_t rss = Platform::processResidentBytes();
         if (rss > 0) {
             processRSSMBHistory_.push(static_cast<float>(rss) / (1024.0f * 1024.0f));
@@ -169,8 +166,19 @@ namespace RAGE::App {
             if (renderer.useSvdag() && !renderer.svdag().nodes.empty()) {
                 ui_.separatorText("SVDAG (live)");
                 const Svdag &sv = renderer.svdag();
-                const size_t flatGridBytes =
-                    renderer.worldBrickGrid().handles().size() * sizeof(BrickHandle);
+                size_t flatGridBytes = 0;
+                std::function<void(const Node3D &)> findWorld = [&](const Node3D &node) {
+                    if (const auto *v = const_cast<Node3D &>(node).asVoxel3D()) {
+                        if (v->voxelData() != nullptr && v->voxelData()->isWindowed()) {
+                            flatGridBytes = v->voxelData()->handles().size() * sizeof(BrickHandle);
+                            return;
+                        }
+                    }
+                    for (const auto &child : node.children()) {
+                        findWorld(*child);
+                    }
+                };
+                findWorld(root_);
                 const double svdagMB = static_cast<double>(svdagBytes(sv)) / (1024.0 * 1024.0);
                 const double flatGridMB = static_cast<double>(flatGridBytes) / (1024.0 * 1024.0);
                 const double svdagSavedMB = flatGridMB - svdagMB;

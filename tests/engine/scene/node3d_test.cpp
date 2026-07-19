@@ -281,24 +281,21 @@ TEST(Node3DRemoveChildrenIf, DestroysMatchesInOnePassAndBumpsVersion) {
     EXPECT_EQ(root.removeChildrenIf([](const Node3D &) { return false; }), 0u);
 }
 
-TEST(Node3DTreeVersion, FreeStandingVoxelTransformsDoNotBumpVersion) {
+TEST(Node3DTreeVersion, VoxelTransformsNeverBumpVersion) {
+    // Voxel3D transforms are consumed outside change detection (dense volumes
+    // re-upload per frame; content changes ride VoxelData::version()), so
+    // animating them must not dirty the scene. Structural changes still bump.
     BrickPool pool;
     Node3D root;
-    auto vox = std::make_unique<Voxel3D>(pool, IVec3{ 8, 8, 8 }, 0.05f);
-    Voxel3D &v = static_cast<Voxel3D &>(root.add(std::move(vox)));
-
-    v.setRenderKind(VoxelRenderKind::FreeStanding);
+    Voxel3D &v = root.add<Voxel3D>(pool, IVec3{ 8, 8, 8 }, 0.05f);
     const uint64_t after = root.treeVersion();
 
     v.setPosition(Vec3(1.0f, 2.0f, 3.0f));
     v.setRotation(Quat::fromAxisAngle(Vec3(0.0f, 1.0f, 0.0f), 0.5f));
     EXPECT_EQ(root.treeVersion(), after);
 
-    v.setRenderKind(VoxelRenderKind::GridResident);
+    root.add<Node3D>();
     EXPECT_GT(root.treeVersion(), after);
-    const uint64_t back = root.treeVersion();
-    v.setPosition(Vec3(4.0f, 5.0f, 6.0f));
-    EXPECT_GT(root.treeVersion(), back);
 }
 
 namespace {
