@@ -524,12 +524,16 @@ namespace RAGE {
                                                                     .dstAccess = AccessFlags::ShaderWrite } } };
         rec.pipelineBarrier(clearToCompute);
 
-        if (shadowCasters_.empty()) {
-            return;
+        // Pipeline/material source: the world volume when present, else any
+        // grid-resident caster, else any free-standing volume.
+        Voxel3D *anyCaster = worldVolume_;
+        if (anyCaster == nullptr && !shadowCasters_.empty()) {
+            anyCaster = shadowCasters_[0];
         }
-
-        Voxel3D *anyCaster = shadowCasters_[0];
-        if (!anyCaster->hasMaterial()) {
+        if (anyCaster == nullptr && !freeVolumes_.empty()) {
+            anyCaster = freeVolumes_[0];
+        }
+        if (anyCaster == nullptr || !anyCaster->hasMaterial()) {
             return;
         }
         VulkanPipeline *pipelinePtr = nullptr;
