@@ -170,3 +170,130 @@ TEST(VoxelData, DestroyingSharedDedupedBrickDoesNotDoubleReleaseOrLeak) {
     EXPECT_EQ(pool.allocated(), 0u);
     EXPECT_EQ(pool.logicalBricks(), 0u);
 }
+
+// ---- Window contract (api-north-star N7a) ------------------------------------
+
+TEST(VoxelDataWindow, DefaultWindowIsStationaryAtOrigin) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 24, 24, 24 });
+    EXPECT_FALSE(d.isWindowed());
+    EXPECT_EQ(d.windowOriginBrick(), (IVec3{ 0, 0, 0 }));
+    EXPECT_EQ(d.storageBrickDims(), d.brickDims());
+}
+
+TEST(VoxelDataWindow, FirstCenterCallConvertsAndReportsWholeWindowMinusOverlap) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 32, 32, 32 });   // 4x4x4 bricks
+    const auto entered = d.setWindowCenterBrick(IVec3{ 100, 0, 100 });
+    EXPECT_TRUE(d.isWindowed());
+    EXPECT_EQ(d.windowOriginBrick(), (IVec3{ 98, -2, 98 }));
+    // Teleport far from the default window: everything entered.
+    size_t enteredCells = 0;
+    for (const auto &r : entered) {
+        enteredCells += static_cast<size_t>(r.brickDims.x) * static_cast<size_t>(r.brickDims.y)
+                        * static_cast<size_t>(r.brickDims.z);
+    }
+    EXPECT_EQ(enteredCells, 64u);
+}
+
+TEST(VoxelDataWindow, ConversionKeepsExistingVoxelsAddressable) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 32, 32, 32 });
+    d.setVoxel(IVec3{ 5, 6, 7 }, 0xAABBCCDDu);
+    d.setVoxel(IVec3{ 30, 30, 30 }, 0x11223344u);
+    // Center that keeps origin at {0,0,0}: center == brickDims/2.
+    const auto entered = d.setWindowCenterBrick(IVec3{ 2, 2, 2 });
+    EXPECT_TRUE(d.isWindowed());
+    EXPECT_TRUE(entered.empty());
+    EXPECT_EQ(d.voxel(IVec3{ 5, 6, 7 }), 0xAABBCCDDu);
+    EXPECT_EQ(d.voxel(IVec3{ 30, 30, 30 }), 0x11223344u);
+}
+
+TEST(VoxelDataWindow, SlideFreesDepartingBricksAndKeepsSurvivors) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 32, 32, 32 });   // 4^3 bricks, window [0,4)^3
+    d.setVoxel(IVec3{ 1, 1, 1 }, 0xFFFF0000u);     // brick {0,0,0} — will depart
+    d.setVoxel(IVec3{ 25, 25, 25 }, 0xFF00FF00u);  // brick {3,3,3} — survives
+    EXPECT_EQ(pool.allocated(), 2u);
+
+    // Slide +1 brick on every axis: window becomes [1,5)^3.
+    const auto entered = d.setWindowCenterBrick(IVec3{ 3, 3, 3 });
+    EXPECT_EQ(d.windowOriginBrick(), (IVec3{ 1, 1, 1 }));
+    EXPECT_EQ(pool.allocated(), 1u);                     // departing brick freed
+    EXPECT_EQ(d.voxel(IVec3{ 1, 1, 1 }), 0u);            // outside window now
+    EXPECT_EQ(d.voxel(IVec3{ 25, 25, 25 }), 0xFF00FF00u);  // survivor intact
+
+    // Entered = window minus overlap = 4^3 - 3^3 = 37 cells.
+    size_t enteredCells = 0;
+    for (const auto &r : entered) {
+        enteredCells += static_cast<size_t>(r.brickDims.x) * static_cast<size_t>(r.brickDims.y)
+                        * static_cast<size_t>(r.brickDims.z);
+    }
+    EXPECT_EQ(enteredCells, 37u);
+}
+
+TEST(VoxelDataWindow, ReenteredRegionReadsEmptyAndIsWritable) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 32, 32, 32 });
+    d.setVoxel(IVec3{ 1, 1, 1 }, 0xDEADBEEFu);
+    d.setWindowCenterBrick(IVec3{ 12, 2, 2 });   // far slide: brick {0,0,0} departs
+    d.setWindowCenterBrick(IVec3{ 2, 2, 2 });    // slide back to origin
+    EXPECT_EQ(d.voxel(IVec3{ 1, 1, 1 }), 0u);    // volume forgot — by contract
+    d.setVoxel(IVec3{ 1, 1, 1 }, 0x0000FFFFu);   // and the slot is reusable
+    EXPECT_EQ(d.voxel(IVec3{ 1, 1, 1 }), 0x0000FFFFu);
+}
+
+TEST(VoxelDataWindow, WritesOutsideWindowAreIgnored) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 32, 32, 32 });
+    d.setWindowCenterBrick(IVec3{ 100, 100, 100 });
+    d.setVoxel(IVec3{ 0, 0, 0 }, 0xFFFFFFFFu);   // way outside the window
+    EXPECT_EQ(pool.allocated(), 0u);
+    EXPECT_EQ(d.voxel(IVec3{ 0, 0, 0 }), 0u);
+}
+
+TEST(VoxelDataWindow, NegativeCoordinatesWork) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 32, 32, 32 });
+    d.setWindowCenterBrick(IVec3{ 0, 0, 0 });    // window [-2,2)^3 bricks
+    d.setVoxel(IVec3{ -5, -6, -7 }, 0x12345678u);
+    EXPECT_EQ(d.voxel(IVec3{ -5, -6, -7 }), 0x12345678u);
+    EXPECT_EQ(d.handleAt(IVec3{ -1, -1, -1 }), d.handleAt(IVec3{ -1, -1, -1 }));
+}
+
+TEST(VoxelDataWindow, NonPow2DimsRoundStorageUp) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 24, 24, 24 });      // 3^3 bricks
+    d.setWindowCenterBrick(IVec3{ 50, 0, 0 });
+    EXPECT_EQ(d.storageBrickDims(), (IVec3{ 4, 4, 4 }));
+    EXPECT_EQ(d.brickDims(), (IVec3{ 3, 3, 3 }));  // window extent unchanged
+}
+
+TEST(VoxelDataWindow, DestructorReleasesWindowedBricks) {
+    BrickPool pool;
+    {
+        VoxelData d(pool, IVec3{ 32, 32, 32 });
+        d.setWindowCenterBrick(IVec3{ 40, 40, 40 });
+        d.setVoxel(IVec3{ 40 * 8, 40 * 8, 40 * 8 }, 0xFFFFFFFFu);
+        EXPECT_EQ(pool.allocated(), 1u);
+    }
+    EXPECT_EQ(pool.allocated(), 0u);
+}
+
+TEST(VoxelDataWindow, RepeatedSameCenterIsNoOp) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 32, 32, 32 });
+    d.setWindowCenterBrick(IVec3{ 10, 10, 10 });
+    d.setVoxel(IVec3{ 80, 80, 80 }, 0xAA0000FFu);
+    const auto entered = d.setWindowCenterBrick(IVec3{ 10, 10, 10 });
+    EXPECT_TRUE(entered.empty());
+    EXPECT_EQ(d.voxel(IVec3{ 80, 80, 80 }), 0xAA0000FFu);
+}
+
+TEST(VoxelDataWindow, FillFromPackedThrowsOnceWindowed) {
+    BrickPool pool;
+    VoxelData d(pool, IVec3{ 16, 16, 16 });
+    d.setWindowCenterBrick(IVec3{ 5, 5, 5 });
+    std::vector<uint32_t> src(16 * 16 * 16, 0u);
+    EXPECT_THROW(d.fillFromPackedRGBA8(src.data(), IVec3{ 16, 16, 16 }), std::logic_error);
+}

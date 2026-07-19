@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <vector>
 #include "engine/rendering/frame_context.hpp"
 #include "engine/scene/renderable_node3d.hpp"
 #include "engine/scene/voxel_data.hpp"
@@ -63,6 +64,25 @@ namespace RAGE {
 
         IVec3 dimensions() const { return dims_; }
         float voxelSize() const { return voxelSize_; }
+
+        /**
+         * @brief Slide this volume's storage window so it is centered on
+         *        `centerVoxel` (snapped to bricks). The ONLY operation that ever
+         *        drops voxels: departing cells free their bricks; the returned
+         *        regions are what entered, empty and awaiting content — the caller
+         *        is by definition the re-feeder. A volume that never calls this
+         *        keeps every voxel forever (api-north-star one-primitive contract).
+         */
+        std::vector<BrickRegion> setWindowCenter(IVec3 centerVoxel) {
+            return data_->setWindowCenterBrick(IVec3{ centerVoxel.x >> 3, centerVoxel.y >> 3,
+                                                      centerVoxel.z >> 3 });
+        }
+
+        /// Window minimum in voxel coordinates ({0,0,0} until the window first moves).
+        IVec3 windowOriginVoxel() const {
+            const IVec3 b = data_->windowOriginBrick();
+            return IVec3{ b.x * 8, b.y * 8, b.z * 8 };
+        }
 
         Voxel3D *asVoxel3D() override { return this; }
 

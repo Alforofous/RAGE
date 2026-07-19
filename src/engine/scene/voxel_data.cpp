@@ -10,6 +10,57 @@ namespace RAGE {
         IVec3 ceilDivBy(IVec3 a, int32_t b) {
             return IVec3{ (a.x + b - 1) / b, (a.y + b - 1) / b, (a.z + b - 1) / b };
         }
+
+        int32_t floorDivBrick(int32_t v) {
+            return (v >= 0) ? (v / Brick::kDim) : (-(((-v) + Brick::kDim - 1) / Brick::kDim));
+        }
+
+        int32_t floorModBrick(int32_t v) {
+            const int32_t m = v % Brick::kDim;
+            return m < 0 ? m + Brick::kDim : m;
+        }
+
+        int32_t nextPow2(int32_t v) {
+            int32_t p = 1;
+            while (p < v) {
+                p *= 2;
+            }
+            return p;
+        }
+
+        bool boxContains(IVec3 boxMin, IVec3 boxDims, IVec3 c) {
+            return c.x >= boxMin.x && c.x < boxMin.x + boxDims.x && c.y >= boxMin.y
+                   && c.y < boxMin.y + boxDims.y && c.z >= boxMin.z && c.z < boxMin.z + boxDims.z;
+        }
+
+        /// newBox minus oldBox as disjoint BrickRegions (whole newBox when disjoint).
+        void subtractBox(IVec3 newMin, IVec3 dims, IVec3 oldMin, IVec3 oldDims,
+                         std::vector<BrickRegion> &out) {
+            IVec3 remMin = newMin;
+            IVec3 remMax = newMin + dims;
+            const IVec3 oldMax = oldMin + oldDims;
+            for (int32_t axis = 0; axis < 3; ++axis) {
+                if (remMin[axis] >= remMax[axis]) {
+                    return;
+                }
+                if (oldMin[axis] > remMin[axis]) {
+                    IVec3 sliceMax = remMax;
+                    sliceMax[axis] = std::min(remMax[axis], oldMin[axis]);
+                    out.push_back(BrickRegion{ .minBrick = remMin, .brickDims = sliceMax - remMin });
+                    remMin[axis] = sliceMax[axis];
+                }
+                if (oldMax[axis] < remMax[axis]) {
+                    IVec3 sliceMin = remMin;
+                    sliceMin[axis] = std::max(remMin[axis], oldMax[axis]);
+                    out.push_back(BrickRegion{ .minBrick = sliceMin, .brickDims = remMax - sliceMin });
+                    remMax[axis] = sliceMin[axis];
+                }
+                if (remMin[axis] >= remMax[axis]) {
+                    return;
+                }
+            }
+            // What remains overlaps oldBox on every axis: fully covered, emit nothing.
+        }
     }
 
     VoxelData::VoxelData(BrickPool &pool, IVec3 voxelDims)
@@ -19,6 +70,7 @@ namespace RAGE {
             throw std::invalid_argument("VoxelData: voxelDims must be positive on all axes");
         }
         brickDims_ = ceilDivBy(voxelDims, Brick::kDim);
+        storageDims_ = brickDims_;
         const size_t total = static_cast<size_t>(brickDims_.x) * static_cast<size_t>(brickDims_.y)
                              * static_cast<size_t>(brickDims_.z);
         handles_.assign(total, kEmptyBrick);
@@ -33,42 +85,127 @@ namespace RAGE {
     }
 
     size_t VoxelData::brickFlatIndex(IVec3 brickCoord) const {
+        if (windowed_) {
+            const IVec3 slot{ brickCoord.x & wrapMask_.x, brickCoord.y & wrapMask_.y,
+                              brickCoord.z & wrapMask_.z };
+            return (static_cast<size_t>(slot.z) * static_cast<size_t>(storageDims_.x)
+                    * static_cast<size_t>(storageDims_.y))
+                   + (static_cast<size_t>(slot.y) * static_cast<size_t>(storageDims_.x))
+                   + static_cast<size_t>(slot.x);
+        }
         return (static_cast<size_t>(brickCoord.z) * static_cast<size_t>(brickDims_.x)
                 * static_cast<size_t>(brickDims_.y))
                + (static_cast<size_t>(brickCoord.y) * static_cast<size_t>(brickDims_.x))
                + static_cast<size_t>(brickCoord.x);
     }
 
+    bool VoxelData::brickInWindow_(IVec3 brickCoord) const {
+        return boxContains(windowOriginBrick_, brickDims_, brickCoord);
+    }
+
+    void VoxelData::convertToWindowed_() {
+        storageDims_ = IVec3{ nextPow2(brickDims_.x), nextPow2(brickDims_.y),
+                              nextPow2(brickDims_.z) };
+        wrapMask_ = IVec3{ storageDims_.x - 1, storageDims_.y - 1, storageDims_.z - 1 };
+        std::vector<BrickHandle> linear = std::move(handles_);
+        handles_.assign(static_cast<size_t>(storageDims_.x) * static_cast<size_t>(storageDims_.y)
+                            * static_cast<size_t>(storageDims_.z),
+                        kEmptyBrick);
+        windowed_ = true;
+        // Relocate handle values into wrapped slots; origin is still {0,0,0} here, so
+        // world brick == old linear coord. Brick contents never move.
+        for (int32_t bz = 0; bz < brickDims_.z; ++bz) {
+            for (int32_t by = 0; by < brickDims_.y; ++by) {
+                for (int32_t bx = 0; bx < brickDims_.x; ++bx) {
+                    const size_t oldFlat =
+                        (static_cast<size_t>(bz) * static_cast<size_t>(brickDims_.x)
+                         * static_cast<size_t>(brickDims_.y))
+                        + (static_cast<size_t>(by) * static_cast<size_t>(brickDims_.x))
+                        + static_cast<size_t>(bx);
+                    if (linear[oldFlat] != kEmptyBrick) {
+                        handles_[brickFlatIndex(IVec3{ bx, by, bz })] = linear[oldFlat];
+                    }
+                }
+            }
+        }
+    }
+
+    void VoxelData::releaseBrickAt_(IVec3 brickCoord) {
+        const size_t flat = brickFlatIndex(brickCoord);
+        if (handles_[flat] != kEmptyBrick) {
+            pool_->release(handles_[flat]);
+            handles_[flat] = kEmptyBrick;
+        }
+    }
+
+    std::vector<BrickRegion> VoxelData::setWindowCenterBrick(IVec3 centerBrick) {
+        if (!windowed_) {
+            convertToWindowed_();
+        }
+        const IVec3 newOrigin = IVec3{ centerBrick.x - (brickDims_.x / 2),
+                                       centerBrick.y - (brickDims_.y / 2),
+                                       centerBrick.z - (brickDims_.z / 2) };
+        if (newOrigin == windowOriginBrick_) {
+            return {};
+        }
+        const IVec3 oldOrigin = windowOriginBrick_;
+
+        // Free every cell that left BEFORE moving the origin, so wrapped slots are
+        // clean when their world meaning changes.
+        for (int32_t bz = oldOrigin.z; bz < oldOrigin.z + brickDims_.z; ++bz) {
+            for (int32_t by = oldOrigin.y; by < oldOrigin.y + brickDims_.y; ++by) {
+                for (int32_t bx = oldOrigin.x; bx < oldOrigin.x + brickDims_.x; ++bx) {
+                    const IVec3 c{ bx, by, bz };
+                    if (!boxContains(newOrigin, brickDims_, c)) {
+                        releaseBrickAt_(c);
+                    }
+                }
+            }
+        }
+        windowOriginBrick_ = newOrigin;
+
+        std::vector<BrickRegion> entered;
+        subtractBox(newOrigin, brickDims_, oldOrigin, brickDims_, entered);
+        return entered;
+    }
+
     BrickHandle VoxelData::handleAt(IVec3 brickCoord) const {
-        if (brickCoord.x < 0 || brickCoord.x >= brickDims_.x || brickCoord.y < 0
-            || brickCoord.y >= brickDims_.y || brickCoord.z < 0 || brickCoord.z >= brickDims_.z) {
+        if (!brickInWindow_(brickCoord)) {
             return kEmptyBrick;
         }
         return handles_[brickFlatIndex(brickCoord)];
     }
 
     uint32_t VoxelData::voxel(IVec3 c) const {
-        if (c.x < 0 || c.x >= voxelDims_.x || c.y < 0 || c.y >= voxelDims_.y || c.z < 0
-            || c.z >= voxelDims_.z) {
+        if (!windowed_
+            && (c.x < 0 || c.x >= voxelDims_.x || c.y < 0 || c.y >= voxelDims_.y || c.z < 0
+                || c.z >= voxelDims_.z)) {
             return 0u;
         }
-        const IVec3 brickCoord{ c.x / Brick::kDim, c.y / Brick::kDim, c.z / Brick::kDim };
+        const IVec3 brickCoord{ floorDivBrick(c.x), floorDivBrick(c.y), floorDivBrick(c.z) };
+        if (windowed_ && !brickInWindow_(brickCoord)) {
+            return 0u;
+        }
         const BrickHandle h = handles_[brickFlatIndex(brickCoord)];
         if (h == kEmptyBrick) {
             return 0u;
         }
-        const int32_t lx = c.x % Brick::kDim;
-        const int32_t ly = c.y % Brick::kDim;
-        const int32_t lz = c.z % Brick::kDim;
+        const int32_t lx = floorModBrick(c.x);
+        const int32_t ly = floorModBrick(c.y);
+        const int32_t lz = floorModBrick(c.z);
         return pool_->brick(h).voxels[brickVoxelIndex(lx, ly, lz)];
     }
 
     void VoxelData::setVoxel(IVec3 c, uint32_t packed) {
-        if (c.x < 0 || c.x >= voxelDims_.x || c.y < 0 || c.y >= voxelDims_.y || c.z < 0
-            || c.z >= voxelDims_.z) {
+        if (!windowed_
+            && (c.x < 0 || c.x >= voxelDims_.x || c.y < 0 || c.y >= voxelDims_.y || c.z < 0
+                || c.z >= voxelDims_.z)) {
             return;
         }
-        const IVec3 brickCoord{ c.x / Brick::kDim, c.y / Brick::kDim, c.z / Brick::kDim };
+        const IVec3 brickCoord{ floorDivBrick(c.x), floorDivBrick(c.y), floorDivBrick(c.z) };
+        if (windowed_ && !brickInWindow_(brickCoord)) {
+            return;
+        }
         const size_t flat = brickFlatIndex(brickCoord);
         BrickHandle h = handles_[flat];
         if (h == kEmptyBrick) {
@@ -84,15 +221,19 @@ namespace RAGE {
                 h = writable;
             }
         }
-        const int32_t lx = c.x % Brick::kDim;
-        const int32_t ly = c.y % Brick::kDim;
-        const int32_t lz = c.z % Brick::kDim;
+        const int32_t lx = floorModBrick(c.x);
+        const int32_t ly = floorModBrick(c.y);
+        const int32_t lz = floorModBrick(c.z);
         pool_->writeVoxel(h, brickVoxelIndex(lx, ly, lz), packed);
     }
 
     void VoxelData::fillFromPackedRGBA8(const uint32_t *src, IVec3 srcDims, const FillProgressFn &onProgress,
                                         const FillCancelFn &onCancel) {
         const Core::ProfileZone zone("VoxelData.Fill");
+        if (windowed_) {
+            throw std::logic_error(
+                "VoxelData::fillFromPackedRGBA8: unsupported after the window has moved");
+        }
         if (src == nullptr) {
             throw std::invalid_argument("VoxelData::fillFromPackedRGBA8: src is null");
         }
@@ -159,9 +300,10 @@ namespace RAGE {
 
     void VoxelData::forEachOccupiedBrick(
         const std::function<void(IVec3, BrickHandle)> &fn) const {
-        for (int32_t bz = 0; bz < brickDims_.z; ++bz) {
-            for (int32_t by = 0; by < brickDims_.y; ++by) {
-                for (int32_t bx = 0; bx < brickDims_.x; ++bx) {
+        const IVec3 o = windowOriginBrick_;
+        for (int32_t bz = o.z; bz < o.z + brickDims_.z; ++bz) {
+            for (int32_t by = o.y; by < o.y + brickDims_.y; ++by) {
+                for (int32_t bx = o.x; bx < o.x + brickDims_.x; ++bx) {
                     const BrickHandle h = handles_[brickFlatIndex({ bx, by, bz })];
                     if (h == kEmptyBrick) {
                         continue;
