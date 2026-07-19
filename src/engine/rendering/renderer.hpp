@@ -281,6 +281,10 @@ namespace RAGE {
         bool prevUseGridTexture_ = false;
         bool worldGridStreaming_ = false;
         bool worldGridGpuDirty_ = false;
+        /// The scene's windowed volume, when one exists (api-north-star N7b): its
+        /// VoxelData IS the world grid; the legacy WorldBrickGrid path idles.
+        Voxel3D *worldVolume_ = nullptr;
+        uint64_t lastWorldVolumeVersion_ = ~0ull;
         uint64_t lastSceneTreeVersion_ = UINT64_MAX;
         std::vector<Voxel3D *> shadowCasters_;
         std::vector<Voxel3D *> freeVolumes_;

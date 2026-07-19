@@ -1,5 +1,8 @@
 #include "world_grid_gpu_sync.hpp"
 
+#include <stdexcept>
+#include "engine/scene/voxel_data.hpp"
+
 #include <array>
 #include <cstring>
 #include "engine/scene/brick.hpp"
@@ -44,13 +47,35 @@ namespace RAGE {
         std::memset(handlesBuffer_.mappedData(), 0, cellCount(gridDims) * sizeof(BrickHandle));
     }
 
-    void WorldGridGpuSync::upload(const WorldBrickGrid &grid, float brickWorldSize,
+    WorldGridView gridView(const WorldBrickGrid &grid) {
+        return WorldGridView{ .windowMinBrick = grid.windowMinBrick(),
+                              .windowExtent = grid.windowExtent(),
+                              .storageDims = grid.fixedDims(),
+                              .handles = grid.handles() };
+    }
+
+    WorldGridView gridView(const VoxelData &data) {
+        if (!data.isWindowed()) {
+            throw std::logic_error("gridView: volume storage is dense, not a world grid");
+        }
+        return WorldGridView{ .windowMinBrick = data.windowOriginBrick(),
+                              .windowExtent = data.brickDims(),
+                              .storageDims = data.storageBrickDims(),
+                              .handles = data.handles() };
+    }
+
+    void WorldGridGpuSync::upload(const WorldGridView &grid, float brickWorldSize,
                                   bool wantTexture) {
         // Params UBO: window origin/extent for the DDA, window min brick + wrap mask
         // for toroidal slot addressing.
-        const IVec3 dims = grid.windowExtent();
-        const IVec3 origBrick = grid.windowMinBrick();
-        const IVec3 fixedDims = grid.fixedDims();
+        if (grid.storageDims != gridDims_) {
+            throw std::invalid_argument(
+                "WorldGridGpuSync::upload: view storage dims do not match the injected "
+                "grid capacity");
+        }
+        const IVec3 dims = grid.windowExtent;
+        const IVec3 origBrick = grid.windowMinBrick;
+        const IVec3 fixedDims = grid.storageDims;
         struct WorldBrickGridParamsLayout {
             float originX;
             float originY;
@@ -90,7 +115,7 @@ namespace RAGE {
         };
         std::memcpy(paramsBuffer_.mappedData(), &params, sizeof(params));
 
-        const auto handles = grid.handles();
+        const auto handles = grid.handles;
         std::memcpy(handlesBuffer_.mappedData(), handles.data(),
                     handles.size() * sizeof(BrickHandle));
 

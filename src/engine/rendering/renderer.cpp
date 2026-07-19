@@ -209,7 +209,13 @@ namespace RAGE {
         // ceiling of 16 from the pre-M3 SceneCasters UBO — gone with that descriptor.
         auto *v = node.asVoxel3D();
         if (v != nullptr && v->voxelData() != nullptr) {
-            if (v->renderKind() == VoxelRenderKind::FreeStanding) {
+            if (v->voxelData()->isWindowed()) {
+                // The windowed volume IS the world grid; at most one is supported.
+                if (worldVolume_ != nullptr && worldVolume_ != v) {
+                    throw std::logic_error("Renderer: multiple windowed volumes in one scene");
+                }
+                worldVolume_ = v;
+            } else if (v->renderKind() == VoxelRenderKind::FreeStanding) {
                 freeVolumes_.push_back(v);
             } else {
                 shadowCasters_.push_back(v);
@@ -292,10 +298,17 @@ namespace RAGE {
             const Core::ProfileZone collect("Render.Collect");
             shadowCasters_.clear();
             freeVolumes_.clear();
+            worldVolume_ = nullptr;
             collectShadowCasters(root);
         }
 
-        if (sceneChanged && !worldGridStreaming_) {
+        if (worldVolume_ != nullptr
+            && worldVolume_->voxelData()->version() != lastWorldVolumeVersion_) {
+            lastWorldVolumeVersion_ = worldVolume_->voxelData()->version();
+            worldGridGpuDirty_ = true;
+        }
+
+        if (sceneChanged && worldVolume_ == nullptr && !worldGridStreaming_) {
             const Core::ProfileZone brickRebuild("Render.WorldBrickGridRebuild");
             brickPlacementsScratch_.clear();
             brickPlacementsScratch_.reserve(shadowCasters_.size());
@@ -317,12 +330,18 @@ namespace RAGE {
             worldGridGpuDirty_ = true;
         }
 
-        if (worldGridGpuDirty_ && !shadowCasters_.empty()) {
+        const bool haveGridSource = worldVolume_ != nullptr || !shadowCasters_.empty();
+        if (worldGridGpuDirty_ && haveGridSource) {
             worldGridGpuDirty_ = false;
             const Core::ProfileZone gridUpload("Render.WorldGridUpload");
+            const Voxel3D *sizeSource =
+                worldVolume_ != nullptr ? worldVolume_ : shadowCasters_[0];
             const float brickWorldSize =
-                shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
-            worldGridSync_.upload(worldBrickGrid_, brickWorldSize, useGridTexture_);
+                sizeSource->voxelSize() * static_cast<float>(Brick::kDim);
+            const WorldGridView view = worldVolume_ != nullptr
+                ? gridView(*worldVolume_->voxelData())
+                : gridView(worldBrickGrid_);
+            worldGridSync_.upload(view, brickWorldSize, useGridTexture_);
             svdagFresh_ = false;
             gridQuietFrames_ = 0;
             ++gridChangeStamp_;
@@ -348,18 +367,22 @@ namespace RAGE {
                 svdagFresh_ = true;
             }
         }
-        if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && !shadowCasters_.empty()
+        if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && haveGridSource
             && (gridQuietFrames_ >= kSvdagQuietFrames || svdagJustEnabled)) {
             const Core::ProfileZone svdagKick("Render.SvdagKickoff");
+            const Voxel3D *sizeSource =
+                worldVolume_ != nullptr ? worldVolume_ : shadowCasters_[0];
             const float brickWorldSize =
-                shadowCasters_[0]->voxelSize() * static_cast<float>(Brick::kDim);
-            const IVec3 origBrick = worldBrickGrid_.windowMinBrick();
+                sizeSource->voxelSize() * static_cast<float>(Brick::kDim);
+            const WorldGridView view = worldVolume_ != nullptr
+                ? gridView(*worldVolume_->voxelData())
+                : gridView(worldBrickGrid_);
+            const IVec3 origBrick = view.windowMinBrick;
             svdagBuildStamp_ = gridChangeStamp_;
-            const auto handles = worldBrickGrid_.handles();
-            svdagBuildStorage_.assign(handles.begin(), handles.end());
-            svdagBuildFixedDims_ = worldBrickGrid_.fixedDims();
+            svdagBuildStorage_.assign(view.handles.begin(), view.handles.end());
+            svdagBuildFixedDims_ = view.storageDims;
             svdagBuildWinMin_ = origBrick;
-            svdagBuildWinExtent_ = worldBrickGrid_.windowExtent();
+            svdagBuildWinExtent_ = view.windowExtent;
             svdagBuildOrigin_ = Vec3(static_cast<float>(origBrick.x) * brickWorldSize,
                                      static_cast<float>(origBrick.y) * brickWorldSize,
                                      static_cast<float>(origBrick.z) * brickWorldSize);

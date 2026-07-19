@@ -163,6 +163,7 @@ namespace RAGE {
             }
         }
         windowOriginBrick_ = newOrigin;
+        ++version_;
 
         std::vector<BrickRegion> entered;
         subtractBox(newOrigin, brickDims_, oldOrigin, brickDims_, entered);
@@ -225,6 +226,7 @@ namespace RAGE {
         const int32_t ly = floorModBrick(c.y);
         const int32_t lz = floorModBrick(c.z);
         pool_->writeVoxel(h, brickVoxelIndex(lx, ly, lz), packed);
+        ++version_;
     }
 
     void VoxelData::fillFromPackedRGBA8(const uint32_t *src, IVec3 srcDims, const FillProgressFn &onProgress,
@@ -296,6 +298,7 @@ namespace RAGE {
                 }
             }
         }
+        ++version_;
     }
 
     void VoxelData::forEachOccupiedBrick(

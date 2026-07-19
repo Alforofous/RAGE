@@ -69,6 +69,13 @@ namespace RAGE {
          */
         std::vector<BrickRegion> setWindowCenterBrick(IVec3 centerBrick);
 
+        /**
+         * @brief Monotonic mutation stamp: bumped by every voxel write, bulk fill,
+         *        and window move. Consumers (renderer GPU sync) poll it to detect
+         *        "did this volume change since I last uploaded it".
+         */
+        uint64_t version() const { return version_; }
+
         /// Window minimum in brick coordinates ({0,0,0} until the window first moves).
         IVec3 windowOriginBrick() const { return windowOriginBrick_; }
         /// True once setWindowCenterBrick has converted storage to wrapped addressing.
@@ -107,6 +114,7 @@ namespace RAGE {
         IVec3 storageDims_{ 0, 0, 0 };
         IVec3 wrapMask_{ 0, 0, 0 };
         IVec3 windowOriginBrick_{ 0, 0, 0 };
+        uint64_t version_ = 0;
         bool windowed_ = false;
         std::vector<BrickHandle> handles_;
     };

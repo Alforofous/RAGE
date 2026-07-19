@@ -10,8 +10,26 @@
 #include "math/ivec.hpp"
 
 namespace RAGE {
+    class VoxelData;
+
     /**
-     * @brief CPU→GPU mirror of the toroidal `WorldBrickGrid` (the `GpuSvdagCache`
+     * @brief What the GPU sync needs to know about a toroidal grid, regardless of
+     *        who owns it — the legacy renderer `WorldBrickGrid` or a windowed
+     *        `Voxel3D`'s `VoxelData` (api-north-star N7b).
+     */
+    struct WorldGridView {
+        IVec3 windowMinBrick{ 0, 0, 0 };
+        IVec3 windowExtent{ 0, 0, 0 };
+        IVec3 storageDims{ 0, 0, 0 };
+        std::span<const BrickHandle> handles;
+    };
+
+    WorldGridView gridView(const WorldBrickGrid &grid);
+    /// Precondition: `data.isWindowed()` — a dense volume is not a world grid.
+    WorldGridView gridView(const VoxelData &data);
+
+    /**
+     * @brief CPU→GPU mirror of a toroidal world grid (the `GpuSvdagCache`
      *        model): owns the params UBO, the handle SSBO, and the optional R32_UINT
      *        3D texture with its staging buffer. `upload()` copies the grid into the
      *        mapped buffers; when the texture path is wanted it also fills staging and
@@ -27,7 +45,9 @@ namespace RAGE {
 
         /// Copy params + full handle storage into the mapped buffers. `wantTexture`
         /// additionally fills staging and arms the next `recordTextureUpload`.
-        void upload(const WorldBrickGrid &grid, float brickWorldSize, bool wantTexture);
+        /// The view's storageDims must equal the construction-time gridDims (buffer
+        /// capacity is fixed by capacity injection); throws otherwise.
+        void upload(const WorldGridView &grid, float brickWorldSize, bool wantTexture);
 
         /**
          * @brief Record the armed staging→image copy (with layout transitions), or the
