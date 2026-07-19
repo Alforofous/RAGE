@@ -38,7 +38,8 @@ namespace RAGE::App {
         DebugPanel(DebugPanel &&) = delete;
         DebugPanel &operator=(DebugPanel &&) = delete;
 
-        /// Per-frame sampling: histograms, window-title FPS, profiler plots.
+        /// Per-frame sampling: histograms, window-title FPS, profiler plots,
+        /// right-click pixel-pick handling (queue before render, print results).
         void frame(float dt);
         /// Timing of the render call itself, pushed after pipeline.render().
         void pushRenderMs(float ms);
@@ -49,6 +50,7 @@ namespace RAGE::App {
 
     private:
         void buildPanel_();
+        void pollPixelPick_();
 
         Toolkit::VoxelPipeline &pipeline_;
         Window &window_;
@@ -78,5 +80,6 @@ namespace RAGE::App {
         double fpsAccumDt_ = 0.0;
         uint32_t fpsAccumFrames_ = 0;
         double fpsLastUpdate_ = 0.0;
+        bool prevPickClick_ = false;
     };
 }

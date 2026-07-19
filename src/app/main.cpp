@@ -22,7 +22,6 @@
 #include "engine/toolkit/content/chunk_streamer.hpp"
 #include "engine/toolkit/entity/kinematic_body.hpp"
 #include "engine/materials/material.hpp"
-#include "engine/rendering/pixel_debug.hpp"
 #include "engine/rendering/renderer.hpp"
 #include "profiler.hpp"
 #include "shared/profiling.hpp"
@@ -36,71 +35,10 @@
 #include "math/ivec.hpp"
 #include "math/vec.hpp"
 #include "window.hpp"
+#include "world_config.hpp"
 
 namespace {
     using namespace RAGE;
-
-    int32_t nextPow2(int32_t v) {
-        int32_t p = 1;
-        while (p < v) {
-            p *= 2;
-        }
-        return p;
-    }
-
-    /**
-     * @brief Top-level world sizing — the single place capacities originate. Everything
-     *        below (brick pool size, grid SSBO capacity, grid texture dims) is DERIVED
-     *        here and injected into engine components via constructors; engine code owns
-     *        no capacity constants and validates what it is given at the seams.
-     */
-    struct WorldPipelineConfig {
-        int32_t streamRadius = 30;
-        Toolkit::Content::ChunkStore::YRange yRange{ .min = -1, .max = 2 };
-        IVec3 chunkBrickDims{ 4, 4, 4 };
-
-        /// Bricks per axis the loaded window can span (XZ diameter × chunk, Y from yRange).
-        IVec3 windowBrickExtent() const {
-            const int32_t diameter = (2 * streamRadius) + 1;
-            const int32_t yChunks = yRange.max - yRange.min + 1;
-            return IVec3{ diameter * chunkBrickDims.x, yChunks * chunkBrickDims.y,
-                          diameter * chunkBrickDims.z };
-        }
-
-        /// Grid capacity: window extent rounded to the next power of two per axis —
-        /// headroom now, cheap wrap masks once the grid goes toroidal.
-        IVec3 gridDims() const {
-            const IVec3 w = windowBrickExtent();
-            return IVec3{ nextPow2(w.x), nextPow2(w.y), nextPow2(w.z) };
-        }
-
-        /// Statistical, unlike the geometric bounds above: sized from measured occupancy
-        /// of the streamed terrain (~110K unique bricks at radius 30) plus headroom.
-        /// BrickPool throws loudly on exhaustion.
-        size_t maxBricks() const {
-            const IVec3 w = windowBrickExtent();
-            const size_t windowCells = static_cast<size_t>(w.x) * static_cast<size_t>(w.y)
-                                       * static_cast<size_t>(w.z);
-            return (windowCells * 3) / 20;
-        }
-
-        Renderer::WorldLimits rendererLimits(bool brickDedup) const {
-            return Renderer::WorldLimits{
-                .brickPool = { .maxBricks = maxBricks(), .enableDedup = brickDedup },
-                .worldGridDims = gridDims(),
-            };
-        }
-    };
-
-    std::filesystem::path executableDir(const char *argv0) {
-        std::error_code ec;
-        const std::filesystem::path exePath = std::filesystem::weakly_canonical(argv0, ec);
-        if (ec || exePath.empty()) {
-            return std::filesystem::current_path();
-        }
-
-        return exePath.parent_path();
-    }
 }
 
 int main(int argc, char **argv) {
@@ -131,11 +69,11 @@ int main(int argc, char **argv) {
     try {
         App::Window window(1280, 720, "RAGE Smoke");
 
-        const WorldPipelineConfig kWorld{};
+        const App::WorldPipelineConfig kWorld{};
         Toolkit::VoxelPipeline pipeline(window.vulkanSurfaceSource(),
                                         Toolkit::VoxelPipelineSettings{
                                             .appName = "RAGE Smoke",
-                                            .shaderDir = executableDir(argv[0]) / "shaders",
+                                            .shaderDir = App::executableDir(argv[0]) / "shaders",
                                             .vsync = vsync,
                                             .limits = kWorld.rendererLimits(true),
                                         });
@@ -143,7 +81,7 @@ int main(int argc, char **argv) {
 
         constexpr float kVoxelSize = 0.05f;
 
-        const std::filesystem::path assetsDir = executableDir(argv[0]) / "assets";
+        const std::filesystem::path assetsDir = App::executableDir(argv[0]) / "assets";
 
         App::AsyncVoxLoader loader;
 
@@ -165,11 +103,8 @@ int main(int argc, char **argv) {
 
             // The world: one windowed Voxel3D. The streamer slides its storage
             // window and fills it; the renderer marches it; collision reads it.
-            const IVec3 kWorldVoxelDims{ kWorld.windowBrickExtent().x * 8,
-                                         kWorld.windowBrickExtent().y * 8,
-                                         kWorld.windowBrickExtent().z * 8 };
             Voxel3D &world =
-                root.add<Voxel3D>(renderer.brickPool(), kWorldVoxelDims, kVoxelSize);
+                root.add<Voxel3D>(renderer.brickPool(), kWorld.worldVoxelDims(), kVoxelSize);
             world.setMaterial(voxelMaterial);
 
             Toolkit::CollisionWorld collisionWorld(*world.voxelData(), renderer.brickPool(),
@@ -285,7 +220,6 @@ int main(int argc, char **argv) {
             renderer.addLight(sun);
             renderer.setAmbientLight({ .color = Color(0.4f, 0.5f, 0.8f), .intensity = 0.25f });
 
-            bool prevRight = false;
             double lastTime = glfwGetTime();
             double fpsAccumDt = 0.0;
             uint32_t fpsAccumFrames = 0;
@@ -334,47 +268,10 @@ int main(int argc, char **argv) {
                     camera.setAspect(static_cast<float>(w) / static_cast<float>(h));
                 }
 
-                GLFWwindow *gw = window.glfwHandle();
-                const bool rightDown =
-                    !debug.wantsMouse() && (glfwGetMouseButton(gw, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
-                if (rightDown && !prevRight) {
-                    const int cursorMode = glfwGetInputMode(gw, GLFW_CURSOR);
-                    int32_t px = static_cast<int32_t>(w) / 2;
-                    int32_t py = static_cast<int32_t>(h) / 2;
-                    if (cursorMode == GLFW_CURSOR_NORMAL) {
-                        double mx = 0.0;
-                        double my = 0.0;
-                        glfwGetCursorPos(gw, &mx, &my);
-                        px = static_cast<int32_t>(mx);
-                        py = static_cast<int32_t>(my);
-                    }
-                    renderer.setPickTarget(px, py);
-                }
-                prevRight = rightDown;
-
                 const double renderStart = glfwGetTime();
                 pipeline.render(root, camera);
                 debug.pushRenderMs(static_cast<float>((glfwGetTime() - renderStart) * 1000.0));
 
-                PixelDebug pd;
-                if (renderer.tryReadPick(pd)) {
-                    std::fprintf(stdout,
-                                 "[pick] hit=%d caster=%d voxel=(%d,%d,%d) t=%.4f\n"
-                                 "       camera=(%.4f,%.4f,%.4f) rayDir=(%.4f,%.4f,%.4f)\n"
-                                 "       hitWorld=(%.4f,%.4f,%.4f) normal=(%.3f,%.3f,%.3f)\n"
-                                 "       toLight=(%.3f,%.3f,%.3f) NdotL=%.4f shadowed=%d\n"
-                                 "       blocker: caster=%d voxel=(%d,%d,%d)\n"
-                                 "       finalRGB=(%.3f,%.3f,%.3f) packedRGBA8=0x%08X\n",
-                                 pd.hit, pd.casterIdx, pd.voxelX, pd.voxelY, pd.voxelZ, pd.tHit,
-                                 pd.cameraX, pd.cameraY, pd.cameraZ,
-                                 pd.rayDirX, pd.rayDirY, pd.rayDirZ,
-                                 pd.hitWorldX, pd.hitWorldY, pd.hitWorldZ,
-                                 pd.normalX, pd.normalY, pd.normalZ,
-                                 pd.toLightX, pd.toLightY, pd.toLightZ, pd.NdotL, pd.shadowed,
-                                 pd.blockerCasterIdx, pd.blockerX, pd.blockerY, pd.blockerZ,
-                                 pd.finalR, pd.finalG, pd.finalB, pd.packedColor);
-                    std::fflush(stdout);
-                }
             }
             loader.cancelAndJoin();
         }

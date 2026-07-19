@@ -7,6 +7,7 @@
 #include <span>
 #include <GLFW/glfw3.h>
 #include "app/build_paths.hpp"
+#include "engine/rendering/pixel_debug.hpp"
 #include "engine/scene/svdag.hpp"
 #include "engine/scene/voxel3d.hpp"
 #include "platform/process_memory.hpp"
@@ -40,6 +41,7 @@ namespace RAGE::App {
 
     void DebugPanel::frame(float dt) {
         Renderer &renderer = pipeline_.renderer();
+        pollPixelPick_();
         frameMsHistory_.push(dt * 1000.0f);
         gpuMemoryMBHistory_.push(static_cast<float>(pipeline_.gpuMemoryUsedBytes())
                                  / (1024.0f * 1024.0f));
@@ -80,6 +82,48 @@ namespace RAGE::App {
     }
 
     void DebugPanel::pushRenderMs(float ms) { renderMsHistory_.push(ms); }
+
+    void DebugPanel::pollPixelPick_() {
+        Renderer &renderer = pipeline_.renderer();
+        GLFWwindow *gw = window_.glfwHandle();
+        const bool rightDown = !ui_.wantsMouse()
+                               && (glfwGetMouseButton(gw, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+        if (rightDown && !prevPickClick_) {
+            const auto [w, h] = window_.framebufferExtent();
+            const int cursorMode = glfwGetInputMode(gw, GLFW_CURSOR);
+            int32_t px = static_cast<int32_t>(w) / 2;
+            int32_t py = static_cast<int32_t>(h) / 2;
+            if (cursorMode == GLFW_CURSOR_NORMAL) {
+                double mx = 0.0;
+                double my = 0.0;
+                glfwGetCursorPos(gw, &mx, &my);
+                px = static_cast<int32_t>(mx);
+                py = static_cast<int32_t>(my);
+            }
+            renderer.setPickTarget(px, py);
+        }
+        prevPickClick_ = rightDown;
+
+        PixelDebug pd;
+        if (renderer.tryReadPick(pd)) {
+            std::fprintf(stdout,
+                         "[pick] hit=%d caster=%d voxel=(%d,%d,%d) t=%.4f\n"
+                         "       camera=(%.4f,%.4f,%.4f) rayDir=(%.4f,%.4f,%.4f)\n"
+                         "       hitWorld=(%.4f,%.4f,%.4f) normal=(%.3f,%.3f,%.3f)\n"
+                         "       toLight=(%.3f,%.3f,%.3f) NdotL=%.4f shadowed=%d\n"
+                         "       blocker: caster=%d voxel=(%d,%d,%d)\n"
+                         "       finalRGB=(%.3f,%.3f,%.3f) packedRGBA8=0x%08X\n",
+                         pd.hit, pd.casterIdx, pd.voxelX, pd.voxelY, pd.voxelZ, pd.tHit,
+                         pd.cameraX, pd.cameraY, pd.cameraZ,
+                         pd.rayDirX, pd.rayDirY, pd.rayDirZ,
+                         pd.hitWorldX, pd.hitWorldY, pd.hitWorldZ,
+                         pd.normalX, pd.normalY, pd.normalZ,
+                         pd.toLightX, pd.toLightY, pd.toLightZ, pd.NdotL, pd.shadowed,
+                         pd.blockerCasterIdx, pd.blockerX, pd.blockerY, pd.blockerZ,
+                         pd.finalR, pd.finalG, pd.finalB, pd.packedColor);
+            std::fflush(stdout);
+        }
+    }
 
     void DebugPanel::buildPanel_() {
         Renderer &renderer = pipeline_.renderer();
