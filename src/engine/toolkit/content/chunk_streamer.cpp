@@ -174,22 +174,23 @@ namespace RAGE::Toolkit::Content {
     }
 
     void ChunkStreamer::pruneOutOfWindow_(IVec3 focusChunk) {
-        const int32_t hRadius = hRadius_;
-        // The volume already freed departing cells during the window slide; this only
-        // reconciles the bookkeeping. Content between the cylinder and the window box
-        // stays resident until the window passes it — harmless and re-adoptable.
+        // Eviction matches loading: the cylinder. Cells the window slide already
+        // freed cost nothing to clear again; cells between the cylinder and the
+        // window box are cleared explicitly so unloading looks like loading.
         const ChunkStore::YRange y = store_.yRange();
-        const IVec3 minChunk{ focusChunk.x - hRadius, y.min, focusChunk.z - hRadius };
-        const IVec3 maxChunk{ focusChunk.x + hRadius, y.max, focusChunk.z + hRadius };
-        const auto inWindowBox = [&](IVec3 c) {
-            return c.x >= minChunk.x && c.x <= maxChunk.x && c.y >= minChunk.y
-                   && c.y <= maxChunk.y && c.z >= minChunk.z && c.z <= maxChunk.z;
-        };
+        const IVec3 cb = store_.chunkBrickDims();
         for (auto it = loaded_.begin(); it != loaded_.end();) {
-            it = inWindowBox(*it) ? std::next(it) : loaded_.erase(it);
+            if (!inCylinder(*it, focusChunk, hRadius_, y)) {
+                const IVec3 c = *it;
+                world_.voxelData()->clearBricks(
+                    IVec3{ c.x * cb.x, c.y * cb.y, c.z * cb.z }, cb);
+                it = loaded_.erase(it);
+            } else {
+                ++it;
+            }
         }
         for (auto it = skipped_.begin(); it != skipped_.end();) {
-            if (!inCylinder(it->first, focusChunk, hRadius, y)) {
+            if (!inCylinder(it->first, focusChunk, hRadius_, y)) {
                 it = skipped_.erase(it);
             } else {
                 ++it;

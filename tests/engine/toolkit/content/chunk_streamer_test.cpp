@@ -181,7 +181,7 @@ TEST(ChunkStreamer, RepeatUpdateAtSameFocusDoesNotReQueryLoadedChunks) {
     EXPECT_EQ(pool.allocated(), s.loadedCount());
 }
 
-TEST(ChunkStreamer, FocusShiftDropsDepartedAndLoadsNewSlice) {
+TEST(ChunkStreamer, FocusShiftEvictsOutsideCylinderAndLoadsNewSlice) {
     BrickPool pool;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
@@ -191,15 +191,14 @@ TEST(ChunkStreamer, FocusShiftDropsDepartedAndLoadsNewSlice) {
     s.flushAsync(IVec3{ 0, 0, 0 });
     s.flushAsync(IVec3{ 1, 0, 0 });
 
-    // {-1,0,0} left the window: bookkeeping dropped it and its voxels are gone.
+    // Eviction matches loading: everything outside the new cylinder is cleared,
+    // including chunks still inside the window box ({0,0,±1}).
     EXPECT_FALSE(s.isLoaded(IVec3{ -1, 0, 0 }));
     EXPECT_EQ(markerAt(*world, IVec3{ -1, 0, 0 }), 0u);
+    EXPECT_FALSE(s.isLoaded(IVec3{ 0, 0, 1 }));
+    EXPECT_EQ(markerAt(*world, IVec3{ 0, 0, 1 }), 0u);
     EXPECT_TRUE(s.isLoaded(IVec3{ 2, 0, 0 }));
-    // Chunks between the cylinder and the window box stay resident by design:
-    // old {0,0,±1} remain inside the new window and stay loaded.
-    EXPECT_EQ(s.loadedCount(), 7u);
-    EXPECT_EQ(markerAt(*world, IVec3{ 0, 0, 1 }),
-              Mocks::StreamerMockStore::marker(IVec3{ 0, 0, 1 }));
+    EXPECT_EQ(s.loadedCount(), 5u);
 }
 
 TEST(ChunkStreamer, FlyingUpDoesNotEvictGroundChunks) {

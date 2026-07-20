@@ -117,6 +117,14 @@ namespace RAGE {
          */
         void adoptBricksFrom(VoxelData &source, IVec3 dstMinBrick);
 
+        /**
+         * @brief Free every brick in the box [minBrick, minBrick + brickDims) that
+         *        lies inside the current window; cleared cells read empty. The
+         *        region-shaped counterpart of setVoxel(0) for feeders that evict
+         *        (streamer cylinder eviction).
+         */
+        void clearBricks(IVec3 minBrick, IVec3 brickDims);
+
         /// Window minimum in brick coordinates ({0,0,0} until the window first moves).
         IVec3 windowOriginBrick() const { return windowOriginBrick_; }
         /// True once setWindowCenterBrick has converted storage to wrapped addressing.

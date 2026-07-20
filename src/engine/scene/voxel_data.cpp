@@ -355,6 +355,27 @@ namespace RAGE {
         ++version_;
     }
 
+    void VoxelData::clearBricks(IVec3 minBrick, IVec3 brickDims) {
+        bool any = false;
+        for (int32_t bz = minBrick.z; bz < minBrick.z + brickDims.z; ++bz) {
+            for (int32_t by = minBrick.y; by < minBrick.y + brickDims.y; ++by) {
+                for (int32_t bx = minBrick.x; bx < minBrick.x + brickDims.x; ++bx) {
+                    const IVec3 c{ bx, by, bz };
+                    if (!brickInWindow_(c)) {
+                        continue;
+                    }
+                    if (handles_[brickFlatIndex(c)] != kEmptyBrick) {
+                        releaseBrickAt_(c);
+                        any = true;
+                    }
+                }
+            }
+        }
+        if (any) {
+            ++version_;
+        }
+    }
+
     void VoxelData::adoptBricksFrom(VoxelData &source, IVec3 dstMinBrick) {
         if (pool_ == nullptr || source.pool_ == nullptr) {
             throw std::logic_error(
