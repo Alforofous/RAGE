@@ -158,6 +158,13 @@ namespace RAGE::App {
          */
         void launchProfilerGui();
 
+        /**
+         * @brief Launch the Tracy GUI and block until it connects (or `timeoutMs`
+         *        elapses). Call BEFORE engine allocations: on-demand mode only
+         *        records what happens after the connection. No-op when not linked.
+         */
+        void launchGuiAndWait(int timeoutMs = 5000);
+
         /** True if a previously-spawned Tracy GUI child is still alive. */
         bool isProfilerGuiRunning();
 

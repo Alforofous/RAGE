@@ -1,5 +1,7 @@
 #include "profiler.hpp"
+#include <chrono>
 #include <cstdio>
+#include <thread>
 #include <cstdlib>
 #include <string>
 #include "app/build_paths.hpp"
@@ -226,6 +228,18 @@ namespace RAGE::App {
 #else
         std::fprintf(stderr, "[profiler] launchProfilerGui: not supported on this build/platform.\n");
 #endif
+    }
+
+    void Profiler::launchGuiAndWait(int timeoutMs) {
+        if (!isLinked()) {
+            return;
+        }
+        launchProfilerGui();
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+        while (!isConnected() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
     }
 
     bool Profiler::isProfilerGuiRunning() {

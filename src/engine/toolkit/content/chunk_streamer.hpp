@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include "engine/toolkit/content/chunk_store.hpp"
 #include "math/ivec.hpp"
+#include "math/vec.hpp"
 
 namespace RAGE {
     class Voxel3D;
@@ -29,7 +30,12 @@ namespace RAGE::Toolkit::Content {
      */
     class ChunkStreamer {
     public:
-        ChunkStreamer(ChunkStore &store, Voxel3D &world);
+        /**
+         * @brief Binds a store, a world volume, and the cylinder radius (chunks).
+         *        Throws immediately when the world volume's window does not match
+         *        the radius/yRange-derived extent (capacity injection mismatch).
+         */
+        ChunkStreamer(ChunkStore &store, Voxel3D &world, int32_t horizontalRadius);
         ~ChunkStreamer();
 
         ChunkStreamer(const ChunkStreamer &) = delete;
@@ -37,11 +43,17 @@ namespace RAGE::Toolkit::Content {
         ChunkStreamer(ChunkStreamer &&) = delete;
         ChunkStreamer &operator=(ChunkStreamer &&) = delete;
 
-        void update(IVec3 focusChunk, int32_t horizontalRadius);
+        /// Per-frame driver: derives the focus chunk from a world-space position
+        /// (the camera) and keeps the world volume filled around it.
+        void update(Vec3 worldFocus);
+        /// Chunk-coordinate variant for callers that track focus themselves.
+        void update(IVec3 focusChunk);
 
-        /// Block until the worker finishes every pending and in-flight chunk for the given
-        /// focus/radius, then drain the ready queue. Test helper — production uses `update`.
-        void flushAsync(IVec3 focusChunk, int32_t horizontalRadius);
+        /// Block until the worker finishes every pending and in-flight chunk for the
+        /// current focus, then drain the ready queue. Test helper — production uses `update`.
+        void flushAsync(IVec3 focusChunk);
+
+        int32_t horizontalRadius() const { return hRadius_; }
 
         size_t loadedCount() const { return loaded_.size(); }
         size_t skippedCount() const { return skipped_.size(); }
@@ -57,19 +69,19 @@ namespace RAGE::Toolkit::Content {
         };
 
         void workerMain_();
-        void slideWindow_(IVec3 focusChunk, int32_t hRadius);
-        void pruneOutOfWindow_(IVec3 focusChunk, int32_t hRadius);
-        void repopulatePending_(IVec3 focusChunk, int32_t hRadius);
+        void slideWindow_(IVec3 focusChunk);
+        void pruneOutOfWindow_(IVec3 focusChunk);
+        void repopulatePending_(IVec3 focusChunk);
         void applyResult_(IVec3 coord, ChunkResult result);
 
         ChunkStore &store_;
         Voxel3D &world_;
+        int32_t hRadius_ = 0;
 
         std::unordered_set<IVec3, IVec3Hash> loaded_;
         std::unordered_map<IVec3, ChunkStatus, IVec3Hash> skipped_;
         std::unordered_set<IVec3, IVec3Hash> deferred_;
         IVec3 lastFocus_{};
-        int32_t lastRadius_ = -1;
         bool hasUpdated_ = false;
 
         mutable std::mutex mtx_;

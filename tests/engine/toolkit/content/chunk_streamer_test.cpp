@@ -108,8 +108,8 @@ TEST(ChunkStreamer, EmptyStartLoadsCylinderOfReadyChunks) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
 
     EXPECT_EQ(s.loadedCount(), 5u);
     EXPECT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
@@ -125,8 +125,8 @@ TEST(ChunkStreamer, AdoptedChunksAreReadableInTheWorldVolume) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
 
     EXPECT_EQ(markerAt(*world, IVec3{ 0, 0, 0 }),
               Mocks::StreamerMockStore::marker(IVec3{ 0, 0, 0 }));
@@ -143,8 +143,8 @@ TEST(ChunkStreamer, YRangeStacksLayers) {
     store.setYRange({ .min = -1, .max = 1 });
     auto world = makeWorld(pool, 1, { .min = -1, .max = 1 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
 
     EXPECT_EQ(s.loadedCount(), 15u);
     EXPECT_TRUE(s.isLoaded(IVec3{ 0, 1, 0 }));
@@ -158,8 +158,8 @@ TEST(ChunkStreamer, YRangeIsAbsoluteNotRelativeToFocus) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 0, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 100, 0 }, 0);
+    ChunkStreamer s(store, *world, 0);
+    s.flushAsync(IVec3{ 0, 100, 0 });
 
     EXPECT_EQ(s.loadedCount(), 1u);
     EXPECT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
@@ -172,9 +172,9 @@ TEST(ChunkStreamer, RepeatUpdateAtSameFocusDoesNotReQueryLoadedChunks) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
+    s.flushAsync(IVec3{ 0, 0, 0 });
 
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 1);
     EXPECT_EQ(store.callsFor(IVec3{ 1, 0, 0 }), 1);
@@ -187,9 +187,9 @@ TEST(ChunkStreamer, FocusShiftDropsDepartedAndLoadsNewSlice) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
-    s.flushAsync(IVec3{ 1, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
+    s.flushAsync(IVec3{ 1, 0, 0 });
 
     // {-1,0,0} left the window: bookkeeping dropped it and its voxels are gone.
     EXPECT_FALSE(s.isLoaded(IVec3{ -1, 0, 0 }));
@@ -208,11 +208,11 @@ TEST(ChunkStreamer, FlyingUpDoesNotEvictGroundChunks) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
     EXPECT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
 
-    s.flushAsync(IVec3{ 0, 99, 0 }, 1);
+    s.flushAsync(IVec3{ 0, 99, 0 });
     EXPECT_TRUE(s.isLoaded(IVec3{ 0, 0, 0 }));
     EXPECT_EQ(s.loadedCount(), 5u);
     EXPECT_EQ(markerAt(*world, IVec3{ 0, 0, 0 }),
@@ -225,9 +225,9 @@ TEST(ChunkStreamer, EmptyStatusIsRememberedAndNotReQueried) {
     store.setDefault(ChunkStatus::Empty);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
+    s.flushAsync(IVec3{ 0, 0, 0 });
 
     EXPECT_EQ(s.skippedCount(), 5u);
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 1);
@@ -239,9 +239,9 @@ TEST(ChunkStreamer, MissingStatusIsRememberedAndNotReQueried) {
     store.setDefault(ChunkStatus::Missing);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.flushAsync(IVec3{ 0, 0, 0 });
+    s.flushAsync(IVec3{ 0, 0, 0 });
 
     EXPECT_EQ(s.skippedCount(), 5u);
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 1);
@@ -254,14 +254,14 @@ TEST(ChunkStreamer, PendingStatusIsRetriedOnNextUpdate) {
     store.seed(IVec3{ 0, 0, 0 }, ChunkStatus::Pending);
     auto world = makeWorld(pool, 0, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 0);
+    ChunkStreamer s(store, *world, 0);
+    s.flushAsync(IVec3{ 0, 0, 0 });
     EXPECT_EQ(s.loadedCount(), 0u);
     EXPECT_EQ(s.skippedCount(), 0u);
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 1);
 
     store.seed(IVec3{ 0, 0, 0 }, ChunkStatus::Ready);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 0);
+    s.flushAsync(IVec3{ 0, 0, 0 });
     EXPECT_EQ(s.loadedCount(), 1u);
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 2);
 }
@@ -272,11 +272,11 @@ TEST(ChunkStreamer, ChurningFocusNeverLeaksBricks) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 2, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
+    ChunkStreamer s(store, *world, 2);
     for (int32_t i = 0; i < 500; ++i) {
-        s.update(IVec3{ i % 7, 0, (i * 3) % 5 }, 2);
+        s.update(IVec3{ i % 7, 0, (i * 3) % 5 });
     }
-    s.flushAsync(IVec3{ 0, 0, 0 }, 2);
+    s.flushAsync(IVec3{ 0, 0, 0 });
 
     // Every loaded chunk owns exactly its one marker brick; nothing leaked.
     EXPECT_EQ(pool.allocated(), s.loadedCount());
@@ -288,25 +288,37 @@ TEST(ChunkStreamer, WindowSlideForgetsDepartedContentForReload) {
     store.setDefault(ChunkStatus::Empty);
     auto world = makeWorld(pool, 0, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.flushAsync(IVec3{ 0, 0, 0 }, 0);
+    ChunkStreamer s(store, *world, 0);
+    s.flushAsync(IVec3{ 0, 0, 0 });
     EXPECT_EQ(s.skippedCount(), 1u);
 
-    s.flushAsync(IVec3{ 10, 0, 0 }, 0);
+    s.flushAsync(IVec3{ 10, 0, 0 });
     EXPECT_FALSE(s.isSkipped(IVec3{ 0, 0, 0 }));
 
-    s.flushAsync(IVec3{ 0, 0, 0 }, 0);
+    s.flushAsync(IVec3{ 0, 0, 0 });
     EXPECT_EQ(store.callsFor(IVec3{ 0, 0, 0 }), 2);
 }
 
-TEST(ChunkStreamer, MismatchedWorldWindowThrows) {
+TEST(ChunkStreamer, MismatchedWorldWindowThrowsAtConstruction) {
     BrickPool pool;
     Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });   // sized for radius 1
 
-    ChunkStreamer s(store, *world);
-    EXPECT_THROW(s.update(IVec3{ 0, 0, 0 }, 3), std::invalid_argument);
+    EXPECT_THROW(ChunkStreamer(store, *world, 3), std::invalid_argument);
+}
+
+TEST(ChunkStreamer, WorldPositionUpdateDerivesFocusChunk) {
+    BrickPool pool;
+    Mocks::StreamerMockStore store(pool, kChunkDims, kVoxelSize);
+    store.setDefault(ChunkStatus::Ready);
+    auto world = makeWorld(pool, 0, { .min = 0, .max = 0 });
+
+    ChunkStreamer s(store, *world, 0);
+    // Chunk world extent = 4 bricks * 8 voxels * 0.05 = 1.6; position 5.0 -> chunk 3.
+    s.update(Vec3(5.0f, 0.5f, 5.0f));
+    s.flushAsync(IVec3{ 3, 0, 3 });
+    EXPECT_TRUE(s.isLoaded(IVec3{ 3, 0, 3 }));
 }
 
 TEST(ChunkStreamer, DestructorCleansUpWorkerWhileChunksInFlight) {
@@ -315,6 +327,6 @@ TEST(ChunkStreamer, DestructorCleansUpWorkerWhileChunksInFlight) {
     store.setDefault(ChunkStatus::Ready);
     auto world = makeWorld(pool, 1, { .min = 0, .max = 0 });
 
-    ChunkStreamer s(store, *world);
-    s.update(IVec3{ 0, 0, 0 }, 1);
+    ChunkStreamer s(store, *world, 1);
+    s.update(IVec3{ 0, 0, 0 });
 }

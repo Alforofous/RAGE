@@ -198,6 +198,10 @@ namespace RAGE {
 
         void rebuildFrameResources(FrameExtent extent);
         void collectVolumes(Node3D &node);
+        void adoptPoolLessVolumes_();
+        void syncWorldGridGpu_();
+        void adoptSvdagResultIfDone_();
+        void maybeKickSvdagBuild_(bool svdagJustEnabled);
         void recordFrame(VulkanRecorder<queue_kind::Graphics> &rec, VkImage swapImage, uint32_t swapImageIndex,
                          uint32_t swapW, uint32_t swapH, const FrameContext &frame);
         void recordPass(VulkanRecorder<queue_kind::Graphics> &rec, VulkanRenderTarget &target,

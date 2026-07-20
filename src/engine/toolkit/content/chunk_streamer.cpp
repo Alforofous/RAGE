@@ -2,6 +2,7 @@
 #include "shared/profiling.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <stdexcept>
 #include <string>
@@ -19,9 +20,19 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    ChunkStreamer::ChunkStreamer(ChunkStore &store, Voxel3D &world)
+    ChunkStreamer::ChunkStreamer(ChunkStore &store, Voxel3D &world, int32_t horizontalRadius)
         : store_(store)
-        , world_(world) {
+        , world_(world)
+        , hRadius_(horizontalRadius) {
+        const ChunkStore::YRange y = store_.yRange();
+        const IVec3 cb = store_.chunkBrickDims();
+        const IVec3 expected{ ((2 * hRadius_) + 1) * cb.x, (y.max - y.min + 1) * cb.y,
+                              ((2 * hRadius_) + 1) * cb.z };
+        if (world_.voxelData()->brickDims() != expected) {
+            throw std::invalid_argument(
+                "ChunkStreamer: world volume window does not match radius/yRange "
+                "(capacity injection mismatch)");
+        }
         worker_ = std::thread([this] { workerMain_(); });
     }
 
@@ -71,21 +82,14 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void ChunkStreamer::slideWindow_(IVec3 focusChunk, int32_t hRadius) {
+    void ChunkStreamer::slideWindow_(IVec3 focusChunk) {
         const ChunkStore::YRange y = store_.yRange();
         const IVec3 cb = store_.chunkBrickDims();
         const IVec3 windowBricks = world_.voxelData()->brickDims();
-        const IVec3 expected{ ((2 * hRadius) + 1) * cb.x, (y.max - y.min + 1) * cb.y,
-                              ((2 * hRadius) + 1) * cb.z };
-        if (windowBricks != expected) {
-            throw std::invalid_argument(
-                "ChunkStreamer: world volume window does not match radius/yRange "
-                "(capacity injection mismatch)");
-        }
         // Window min lands exactly on the cylinder's bounding box; Y is anchored to
         // the store's fixed vertical range, not the focus height.
-        const IVec3 windowMinBrick{ (focusChunk.x - hRadius) * cb.x, y.min * cb.y,
-                                    (focusChunk.z - hRadius) * cb.z };
+        const IVec3 windowMinBrick{ (focusChunk.x - hRadius_) * cb.x, y.min * cb.y,
+                                    (focusChunk.z - hRadius_) * cb.z };
         const IVec3 centerBrick = windowMinBrick
                                   + IVec3{ windowBricks.x / 2, windowBricks.y / 2,
                                            windowBricks.z / 2 };
@@ -93,7 +97,21 @@ namespace RAGE::Toolkit::Content {
             IVec3{ centerBrick.x * 8, centerBrick.y * 8, centerBrick.z * 8 });
     }
 
-    void ChunkStreamer::update(IVec3 focusChunk, int32_t horizontalRadius) {
+    void ChunkStreamer::update(Vec3 worldFocus) {
+        // Focus chunk from a world-space position; chunk world extent per axis is
+        // chunkBricks * 8 voxels * voxelSize. (World volume transform is identity
+        // by current contract — see api-north-star known gap.)
+        const IVec3 cb = store_.chunkBrickDims();
+        const float vs = world_.voxelSize();
+        const Vec3 extent{ static_cast<float>(cb.x) * 8.0f * vs,
+                           static_cast<float>(cb.y) * 8.0f * vs,
+                           static_cast<float>(cb.z) * 8.0f * vs };
+        update(IVec3{ static_cast<int32_t>(std::floor(worldFocus.x / extent.x)),
+                      static_cast<int32_t>(std::floor(worldFocus.y / extent.y)),
+                      static_cast<int32_t>(std::floor(worldFocus.z / extent.z)) });
+    }
+
+    void ChunkStreamer::update(IVec3 focusChunk) {
         std::deque<ReadyEntry> drained;
         bool queuesIdle = false;
         {
@@ -105,10 +123,8 @@ namespace RAGE::Toolkit::Content {
         // Settled: nothing arrived, nothing in flight, no Pending retries owed, focus
         // unmoved — the cylinder scan would be a no-op, skip the whole pass.
         const bool quiet = drained.empty() && queuesIdle && deferred_.empty()
-                           && hasUpdated_ && focusChunk == lastFocus_
-                           && horizontalRadius == lastRadius_;
+                           && hasUpdated_ && focusChunk == lastFocus_;
         lastFocus_ = focusChunk;
-        lastRadius_ = horizontalRadius;
         hasUpdated_ = true;
         if (quiet) {
             return;
@@ -116,14 +132,14 @@ namespace RAGE::Toolkit::Content {
 
         // Window first: adoption below must land inside the window, and departing
         // cells free their bricks during this call.
-        slideWindow_(focusChunk, horizontalRadius);
+        slideWindow_(focusChunk);
 
         deferred_.clear();
         {
             const Core::ProfileZone drainZone("ChunkStreamer.Drain");
             const ChunkStore::YRange y = store_.yRange();
             for (auto &entry : drained) {
-                if (!inCylinder(entry.coord, focusChunk, horizontalRadius, y)) {
+                if (!inCylinder(entry.coord, focusChunk, hRadius_, y)) {
                     continue;
                 }
                 applyResult_(entry.coord, std::move(entry.result));
@@ -131,11 +147,11 @@ namespace RAGE::Toolkit::Content {
         }
         {
             const Core::ProfileZone evictZone("ChunkStreamer.Evict");
-            pruneOutOfWindow_(focusChunk, horizontalRadius);
+            pruneOutOfWindow_(focusChunk);
         }
         {
             const Core::ProfileZone repopZone("ChunkStreamer.Repopulate");
-            repopulatePending_(focusChunk, horizontalRadius);
+            repopulatePending_(focusChunk);
         }
     }
 
@@ -157,7 +173,8 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void ChunkStreamer::pruneOutOfWindow_(IVec3 focusChunk, int32_t hRadius) {
+    void ChunkStreamer::pruneOutOfWindow_(IVec3 focusChunk) {
+        const int32_t hRadius = hRadius_;
         // The volume already freed departing cells during the window slide; this only
         // reconciles the bookkeeping. Content between the cylinder and the window box
         // stays resident until the window passes it — harmless and re-adoptable.
@@ -180,7 +197,8 @@ namespace RAGE::Toolkit::Content {
         }
     }
 
-    void ChunkStreamer::repopulatePending_(IVec3 focusChunk, int32_t hRadius) {
+    void ChunkStreamer::repopulatePending_(IVec3 focusChunk) {
+        const int32_t hRadius = hRadius_;
         struct Candidate {
             IVec3 coord;
             int32_t dist2;
@@ -229,9 +247,9 @@ namespace RAGE::Toolkit::Content {
         return pending_.size() + inFlight_.size() + ready_.size();
     }
 
-    void ChunkStreamer::flushAsync(IVec3 focusChunk, int32_t horizontalRadius) {
+    void ChunkStreamer::flushAsync(IVec3 focusChunk) {
         while (true) {
-            update(focusChunk, horizontalRadius);
+            update(focusChunk);
             std::unique_lock lock(mtx_);
             idleCv_.wait(lock, [this] { return pending_.empty() && inFlight_.empty(); });
             if (ready_.empty()) {

@@ -170,6 +170,7 @@ add_custom_target(sample_assets ALL DEPENDS ${SAMPLE_VOX_OUTPUTS})
 add_executable(RAGE
     src/app/async_vox_loader.cpp
     src/app/debug_panel.cpp
+    src/app/demo_scene.cpp
     src/app/debug_ui.cpp
     src/app/free_fly_controller.cpp
     src/app/main.cpp

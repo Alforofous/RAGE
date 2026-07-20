@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <optional>
 #include "async_vox_loader.hpp"
 #include "debug_ui.hpp"
 #include "engine/scene/node3d.hpp"
@@ -31,7 +30,7 @@ namespace RAGE::App {
 
         DebugPanel(Toolkit::VoxelPipeline &pipeline, Window &window, Profiler &profiler,
                    AsyncVoxLoader &loader, PlayerController &player, Node3D &root,
-                   std::optional<Toolkit::Content::ChunkStreamer> &streamer, StreamInfo info);
+                   Toolkit::Content::ChunkStreamer &streamer, StreamInfo info);
 
         DebugPanel(const DebugPanel &) = delete;
         DebugPanel &operator=(const DebugPanel &) = delete;
@@ -51,6 +50,12 @@ namespace RAGE::App {
     private:
         void buildPanel_();
         void pollPixelPick_();
+        void sectionLoader_();
+        void sectionFps_();
+        void sectionMemory_();
+        void sectionGpu_();
+        void sectionStreaming_();
+        void sectionControls_();
 
         Toolkit::VoxelPipeline &pipeline_;
         Window &window_;
@@ -58,7 +63,7 @@ namespace RAGE::App {
         AsyncVoxLoader &loader_;
         PlayerController &player_;
         Node3D &root_;
-        std::optional<Toolkit::Content::ChunkStreamer> &streamer_;
+        Toolkit::Content::ChunkStreamer &streamer_;
         StreamInfo info_;
         DebugUi ui_;
 

@@ -205,6 +205,116 @@ namespace RAGE {
         }
     }
 
+
+    void Renderer::adoptPoolLessVolumes_() {
+        // Adopt-on-render (api-north-star N8): pool-less volumes join the shared
+        // pool the first frame they are visible and not mid-bulk-load.
+        const auto adoptIfReady = [this](Voxel3D *v) {
+            VoxelData *data = v->voxelData();
+            if (!data->isAdopted() && data->isAdoptable()) {
+                data->adoptInto(*brickPool_);
+            }
+        };
+        if (worldVolume_ != nullptr) {
+            adoptIfReady(worldVolume_);
+        }
+        for (Voxel3D *v : freeVolumes_) {
+            adoptIfReady(v);
+        }
+    }
+
+    void Renderer::syncWorldGridGpu_() {
+        if (worldVolume_ != nullptr && worldVolume_->voxelData()->isAdopted()
+            && worldVolume_->voxelData()->version() != lastWorldVolumeVersion_) {
+            lastWorldVolumeVersion_ = worldVolume_->voxelData()->version();
+            worldGridGpuDirty_ = true;
+        }
+
+        if (worldGridGpuDirty_ && worldVolume_ != nullptr) {
+            worldGridGpuDirty_ = false;
+            const Core::ProfileZone gridUpload("Render.WorldGridUpload");
+            const float brickWorldSize =
+                worldVolume_->voxelSize() * static_cast<float>(Brick::kDim);
+            worldGridSync_.upload(gridView(*worldVolume_->voxelData()), brickWorldSize,
+                                  useGridTexture_);
+            svdagFresh_ = false;
+            gridQuietFrames_ = 0;
+            ++gridChangeStamp_;
+        } else {
+            ++gridQuietFrames_;
+        }
+    }
+
+    void Renderer::adoptSvdagResultIfDone_() {
+        // SVDAG builds are debounced AND asynchronous: kicked off only once the grid
+        // settles, built on a worker thread from a wrapped-storage snapshot, adopted
+        // only if the grid hasn't changed since. While stale, frames render through
+        // the flat path (uniforms.useSvdag gates on freshness) — no churn-time hitch.
+        if (svdagBuildDone_.load()) {
+            svdagBuildDone_.store(false);
+            svdagBuildRunning_.store(false);
+            if (svdagBuildStamp_ == gridChangeStamp_ && useSvdag_) {
+                const auto result = svdagCache_.uploadBuilt(std::move(svdagBuildResult_),
+                                                            svdagBuildOrigin_,
+                                                            svdagBuildBrickSize_);
+                if (result.capacityExceeded) {
+                    Core::log(Core::LogLevel::Warn,
+                              "SVDAG node count exceeds GPU buffer capacity — falling back to flat grid");
+                }
+                svdagFresh_ = true;
+            }
+        }
+    }
+
+    void Renderer::maybeKickSvdagBuild_(bool svdagJustEnabled) {
+        if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && worldVolume_ != nullptr
+            && (gridQuietFrames_ >= kSvdagQuietFrames || svdagJustEnabled)) {
+            const Core::ProfileZone svdagKick("Render.SvdagKickoff");
+            const float brickWorldSize =
+                worldVolume_->voxelSize() * static_cast<float>(Brick::kDim);
+            const WorldGridView view = gridView(*worldVolume_->voxelData());
+            const IVec3 origBrick = view.windowMinBrick;
+            svdagBuildStamp_ = gridChangeStamp_;
+            svdagBuildStorage_.assign(view.handles.begin(), view.handles.end());
+            svdagBuildFixedDims_ = view.storageDims;
+            svdagBuildWinMin_ = origBrick;
+            svdagBuildWinExtent_ = view.windowExtent;
+            svdagBuildOrigin_ = Vec3(static_cast<float>(origBrick.x) * brickWorldSize,
+                                     static_cast<float>(origBrick.y) * brickWorldSize,
+                                     static_cast<float>(origBrick.z) * brickWorldSize);
+            svdagBuildBrickSize_ = brickWorldSize;
+            svdagBuildRunning_.store(true);
+            svdagWorker_ = std::jthread([this] {
+                Core::profileThreadName("SvdagBuilder");
+                const Core::ProfileZone buildZone("Svdag.Build");
+                // De-wrap the snapshot into window-linear order, then build the DAG.
+                const IVec3 n = svdagBuildFixedDims_;
+                const IVec3 mn = svdagBuildWinMin_;
+                const IVec3 ext = svdagBuildWinExtent_;
+                std::vector<BrickHandle> linear;
+                linear.reserve(static_cast<size_t>(ext.x) * static_cast<size_t>(ext.y)
+                               * static_cast<size_t>(ext.z));
+                for (int32_t z = 0; z < ext.z; ++z) {
+                    for (int32_t y = 0; y < ext.y; ++y) {
+                        for (int32_t x = 0; x < ext.x; ++x) {
+                            const IVec3 slot{ (mn.x + x) & (n.x - 1), (mn.y + y) & (n.y - 1),
+                                              (mn.z + z) & (n.z - 1) };
+                            const size_t idx =
+                                (static_cast<size_t>(slot.z) * static_cast<size_t>(n.x)
+                                 * static_cast<size_t>(n.y))
+                                + (static_cast<size_t>(slot.y) * static_cast<size_t>(n.x))
+                                + static_cast<size_t>(slot.x);
+                            linear.push_back(svdagBuildStorage_[idx]);
+                        }
+                    }
+                }
+                svdagBuildResult_ = linear.empty() ? Svdag{} : buildSvdag(linear, ext);
+                svdagBuildDone_.store(true);
+            });
+        }
+
+    }
+
     void Renderer::render(Node3D &root, const Camera &camera, FrameExtent extent) {
         if (extent.width == 0 || extent.height == 0) {
             return;
@@ -280,106 +390,11 @@ namespace RAGE {
             collectVolumes(root);
         }
 
-        // Adopt-on-render (api-north-star N8): pool-less volumes join the shared
-        // pool the first frame they are visible and not mid-bulk-load.
-        {
-            const auto adoptIfReady = [this](Voxel3D *v) {
-                VoxelData *data = v->voxelData();
-                if (!data->isAdopted() && data->isAdoptable()) {
-                    data->adoptInto(*brickPool_);
-                }
-            };
-            if (worldVolume_ != nullptr) {
-                adoptIfReady(worldVolume_);
-            }
-            for (Voxel3D *v : freeVolumes_) {
-                adoptIfReady(v);
-            }
-        }
+        adoptPoolLessVolumes_();
+        syncWorldGridGpu_();
 
-        if (worldVolume_ != nullptr && worldVolume_->voxelData()->isAdopted()
-            && worldVolume_->voxelData()->version() != lastWorldVolumeVersion_) {
-            lastWorldVolumeVersion_ = worldVolume_->voxelData()->version();
-            worldGridGpuDirty_ = true;
-        }
-
-        if (worldGridGpuDirty_ && worldVolume_ != nullptr) {
-            worldGridGpuDirty_ = false;
-            const Core::ProfileZone gridUpload("Render.WorldGridUpload");
-            const float brickWorldSize =
-                worldVolume_->voxelSize() * static_cast<float>(Brick::kDim);
-            worldGridSync_.upload(gridView(*worldVolume_->voxelData()), brickWorldSize,
-                                  useGridTexture_);
-            svdagFresh_ = false;
-            gridQuietFrames_ = 0;
-            ++gridChangeStamp_;
-        } else {
-            ++gridQuietFrames_;
-        }
-
-        // SVDAG builds are debounced AND asynchronous: kicked off only once the grid
-        // settles, built on a worker thread from a wrapped-storage snapshot, adopted
-        // only if the grid hasn't changed since. While stale, frames render through
-        // the flat path (uniforms.useSvdag gates on freshness) — no churn-time hitch.
-        if (svdagBuildDone_.load()) {
-            svdagBuildDone_.store(false);
-            svdagBuildRunning_.store(false);
-            if (svdagBuildStamp_ == gridChangeStamp_ && useSvdag_) {
-                const auto result = svdagCache_.uploadBuilt(std::move(svdagBuildResult_),
-                                                            svdagBuildOrigin_,
-                                                            svdagBuildBrickSize_);
-                if (result.capacityExceeded) {
-                    Core::log(Core::LogLevel::Warn,
-                              "SVDAG node count exceeds GPU buffer capacity — falling back to flat grid");
-                }
-                svdagFresh_ = true;
-            }
-        }
-        if (useSvdag_ && !svdagFresh_ && !svdagBuildRunning_.load() && worldVolume_ != nullptr
-            && (gridQuietFrames_ >= kSvdagQuietFrames || svdagJustEnabled)) {
-            const Core::ProfileZone svdagKick("Render.SvdagKickoff");
-            const float brickWorldSize =
-                worldVolume_->voxelSize() * static_cast<float>(Brick::kDim);
-            const WorldGridView view = gridView(*worldVolume_->voxelData());
-            const IVec3 origBrick = view.windowMinBrick;
-            svdagBuildStamp_ = gridChangeStamp_;
-            svdagBuildStorage_.assign(view.handles.begin(), view.handles.end());
-            svdagBuildFixedDims_ = view.storageDims;
-            svdagBuildWinMin_ = origBrick;
-            svdagBuildWinExtent_ = view.windowExtent;
-            svdagBuildOrigin_ = Vec3(static_cast<float>(origBrick.x) * brickWorldSize,
-                                     static_cast<float>(origBrick.y) * brickWorldSize,
-                                     static_cast<float>(origBrick.z) * brickWorldSize);
-            svdagBuildBrickSize_ = brickWorldSize;
-            svdagBuildRunning_.store(true);
-            svdagWorker_ = std::jthread([this] {
-                Core::profileThreadName("SvdagBuilder");
-                const Core::ProfileZone buildZone("Svdag.Build");
-                // De-wrap the snapshot into window-linear order, then build the DAG.
-                const IVec3 n = svdagBuildFixedDims_;
-                const IVec3 mn = svdagBuildWinMin_;
-                const IVec3 ext = svdagBuildWinExtent_;
-                std::vector<BrickHandle> linear;
-                linear.reserve(static_cast<size_t>(ext.x) * static_cast<size_t>(ext.y)
-                               * static_cast<size_t>(ext.z));
-                for (int32_t z = 0; z < ext.z; ++z) {
-                    for (int32_t y = 0; y < ext.y; ++y) {
-                        for (int32_t x = 0; x < ext.x; ++x) {
-                            const IVec3 slot{ (mn.x + x) & (n.x - 1), (mn.y + y) & (n.y - 1),
-                                              (mn.z + z) & (n.z - 1) };
-                            const size_t idx =
-                                (static_cast<size_t>(slot.z) * static_cast<size_t>(n.x)
-                                 * static_cast<size_t>(n.y))
-                                + (static_cast<size_t>(slot.y) * static_cast<size_t>(n.x))
-                                + static_cast<size_t>(slot.x);
-                            linear.push_back(svdagBuildStorage_[idx]);
-                        }
-                    }
-                }
-                svdagBuildResult_ = linear.empty() ? Svdag{} : buildSvdag(linear, ext);
-                svdagBuildDone_.store(true);
-            });
-        }
+        adoptSvdagResultIfDone_();
+        maybeKickSvdagBuild_(svdagJustEnabled);
 
         {
             const Core::ProfileZone writeUbo("Render.FrameUniformsWrite");
