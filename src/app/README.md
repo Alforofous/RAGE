@@ -12,10 +12,15 @@ and drives `Toolkit::VoxelPipeline` — the single Vulkan-aware entry point.
 
 - **window** — GLFW window; `vulkanSurfaceSource()` binds surface/extent callbacks
   for the pipeline so the engine never sees a window type.
+- **options / world_config** — CLI parsing and the capacity-injection config
+  (world sizing derives every engine limit here).
 - **profiler** — the only Tracy-aware translation unit; installs the engine's
   `Core::ProfileHooks` trampoline backends.
-- **debug_ui** — ImGui overlay (stats, heatmap/SVDAG toggles).
-- **free_fly_controller** — mouse-look + fly movement; vetoed by walk mode.
+- **demo_scene** — the game content (spinners, props, statue); a real game
+  replaces this one class.
+- **debug_panel / debug_ui** — the debug overlay: stats, toggles, pixel picking.
+- **player_controller / free_fly_controller** — fly/walk input.
+- **async_vox_loader** — worker-thread .vox fills with cancel/progress.
 
 ## App-only libraries
 
